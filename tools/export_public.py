@@ -140,7 +140,8 @@ LEAK_PATTERNS = [
 ]
 OWNER_WORDS = ("Tunca", "Üçer", "tuncaucer", "kolayik", "Kolay İK", "Kolay IK", "omarchy", "ucer.us")
 # Files where the owner may legitimately appear (docs about this deployment).
-OWNER_ALLOW = ("LICENSE", "_Agent-Context/TRUNK-BASED-DEVELOPMENT.md", "tools/export_public.py")
+# README.md is authored in the owner's voice and reviewed by hand; the rest is code.
+OWNER_ALLOW = ("README.md", "LICENSE", "_Agent-Context/TRUNK-BASED-DEVELOPMENT.md", "tools/export_public.py")
 
 
 def rel(path):
