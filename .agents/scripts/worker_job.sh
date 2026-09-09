@@ -1,5 +1,5 @@
 #!/bin/bash
-# Omarchy generic job runner: nightly ailesi (closeout, nightly, lint,
+# Worker generic job runner: nightly ailesi (closeout, nightly, lint,
 # reconcile, dashboard, resurface) systemd timer'larindan bununla kosar.
 # Once pull (gunun capture'lari gelsin), sonra verilen tool, sonra aninda
 # commit+push (worker_backup) so the primary machine finds the result in the morning.

@@ -208,62 +208,51 @@ Each needs its own credentials in `~/.config/brainless/`.
 
 ---
 
-## Usage example: a full local setup
+## Usage example: our real setup
 
-This is how the whole thing fits together on real machines. Two shapes are shown: the
-one-laptop baseline that everyone starts on, and the two-machine setup we actually run.
-Names and values below are placeholders. Nothing here needs a secret checked into the
-repo; credentials live outside the vault.
+This is the exact deployment I run, on three devices. Nothing here is invented. The only
+edits are to secret values: tokens, keys, relay URLs and the Tailscale address are shown
+as placeholders, because they must never be committed. Everything else, the units, the
+paths, the schedule, is what actually runs.
 
-### Shape 1: one laptop (the baseline)
-
-Everything runs on a single machine. The laptop is the author and the scheduler.
-
-```bash
-# install the engine and answer two questions (name, language)
-curl -fsSL https://raw.githubusercontent.com/ezapmar/brainless-public/main/install.sh | bash
-
-# turn on the hourly compile, the nightly digest and the weekly lint (launchd on macOS)
-bash ~/brainless/install.sh --vault ~/brainless --schedule
-
-# from then on, you mostly do this
-brainless dialectic "We should hire two seniors before the round closes"
-brainless calibrate          # decisions whose review date has passed
-```
-
-When the laptop is asleep, nothing runs. That is the only real limit of this shape, and
-it is fine for months.
-
-### Shape 2: two machines (author plus always-on worker)
-
-One laptop writes. One small Linux box stays on and does the unattended work: the timers,
-the Telegram capture and the Buzz relay. They share a single git repo (the vault).
+- **iPhone 16 Pro.** Capture. A Telegram bot receives voice notes, photos, links and text
+  through the day. Voice is transcribed locally, images are read by Claude vision, and each
+  one lands as a Markdown note in `Thinking/Daily/`.
+- **MacBook Pro (macOS).** The author. I write notes and run the slash commands here. Claude
+  Code signed in with a subscription, no API key. launchd runs the hourly compile, the
+  nightly digest and the weekly lint. This machine pushes when I close it for the night.
+- **A laptop running [Omarchy](https://omarchy.org) (Arch Linux).** The always-on worker.
+  It stays on behind Tailscale and does everything unattended: the systemd timers, the
+  Telegram capture with whisper.cpp, and the Buzz relay that hosts the five personas as
+  live agents. It pulls, runs, commits and pushes so the Mac can sleep.
 
 ```mermaid
 flowchart LR
-  phone["Phone (Telegram)"]
-  you["Laptop: write notes, run slash commands"]
+  iphone["iPhone 16 Pro<br/>Telegram"]
+  mac["MacBook Pro (macOS)<br/>author: Claude Code<br/>launchd timers"]
   vault[("Git repo: the vault")]
-  channel["Buzz channel on your phone"]
+  chan["#dialectic channel"]
 
-  subgraph worker["Worker: always on, behind Tailscale"]
-    capture["Telegram capture (whisper.cpp)"]
-    timers["systemd timers"]
-    relay["Buzz relay: 5 personas"]
+  subgraph omarchy["Laptop running Omarchy (Arch), always on, Tailscale"]
+    cap["Telegram capture<br/>whisper.cpp + ffmpeg"]
+    tmr["systemd user timers"]
+    relay["Buzz relay<br/>5 persona agents (read-only)"]
   end
 
-  phone -->|voice, photo, link| capture
-  you <-->|pull / push| vault
-  worker <-->|pull / commit / push| vault
-  timers -->|dialectic 12:30 and 21:20| relay
-  relay -->|synthesis and bet| channel
+  iphone -->|voice, photo, link| cap
+  cap --> vault
+  mac <-->|git pull / push| vault
+  omarchy <-->|flock: pull, run, commit, push| vault
+  tmr -->|dialectic 12:30 and 21:20| relay
+  relay -->|synthesis and bet| chan
+  chan -.->|you read on the phone| iphone
 ```
 
-Both machines run the same LLM backend (a signed-in `claude` CLI, no API key). The one
-rule that keeps two writers from fighting: one owner per file, append-only for anything
-both machines touch. We learned that the hard way. On 4 September both machines wrote the
-same briefing file and every push failed for 51 hours. `_Agent-Context/TRUNK-BASED-DEVELOPMENT.md`
-has the full convention.
+Both machines run the same `claude` CLI, no API key. The one rule that keeps two writers
+from fighting: one owner per file, append-only for anything both touch. We learned it the
+hard way. On 4 September both machines wrote the same briefing file and every push failed
+for 51 hours. Git operations on the worker are serialised with `flock` against a 30 minute
+backup timer, and `_Agent-Context/TRUNK-BASED-DEVELOPMENT.md` has the full convention.
 
 ### The daily loop
 
@@ -271,20 +260,20 @@ Capture goes in, arguments come out, and yesterday's answers feed today's questi
 
 ```mermaid
 flowchart TD
-  A["Capture: notes, voice, photos land in Thinking/Daily"] --> B["Midday and night: dialectic argues the new notes"]
+  A["Capture: iPhone notes land in Thinking/Daily"] --> B["12:30 and 21:20: dialectic argues the new notes"]
   B --> C["21:00 closeout: one seed, one decision, one contradiction proposed"]
   C --> D["23:00 nightly: digest, archive, compile .wiki, lint"]
   D --> E["Every analysis filed into .wiki/digests/queries"]
   E --> A
-  C -.->|when a review date passes| F["Morning: calibrate nags you to grade the bet"]
+  C -.->|when a review date passes| F["Mon 06:30: resurface nags you to grade the bet"]
   F --> A
 ```
 
-The worker's timers, as installed by `.agents/systemd/install.sh`:
+The worker's timers, installed verbatim by `.agents/systemd/install.sh`:
 
-| When | Command | What it does |
+| When | Runs | What it does |
 |---|---|---|
-| 12:30 and 21:20 | `dialectic` | five personas argue the day's new notes, moderator writes the synthesis and the bet |
+| 12:30 and 21:20 | `tools/dialectic.py` | five personas argue the day's new notes, moderator posts to `#dialectic` and files the synthesis and the bet |
 | 21:00 | `closeout` | propose one seed idea, one decision worth writing down, one contradiction with your beliefs |
 | 23:00 | `nightly` | write the digest, archive the raw capture, compile `.wiki/`, lint |
 | Mon 05:00, Fri 21:00 | `dashboard` | rebuild the active-projects view from every `notes.md` |
@@ -293,55 +282,105 @@ The worker's timers, as installed by `.agents/systemd/install.sh`:
 | Sun 20:00 | `reconcile` | cross-check recent notes against your written beliefs |
 | Sun 22:00 | `lint` | fix links and frontmatter across `.wiki/` |
 
-On the laptop the same jobs run through launchd instead, installed by `--schedule`.
+### Real configuration
 
-### Configuration files
-
-Three things configure a deployment. None of them belong to the engine repo.
-
-**`_Agent-Context/PROFILE.md`** in the vault. Written by the installer, edited by hand.
-`owner_name` and `output_lang` shape every prompt; `private_segments` lists folders the
-compiler must never touch.
+**1. The vault profile, `_Agent-Context/PROFILE.md`.** Written by the installer, then
+edited. `owner_name` and `output_lang` shape every prompt; `worker_name` is the commit
+suffix the always-on machine signs with; `private_segments` names folders the compiler
+must never read.
 
 ```markdown
 ---
-owner_name: Alex
-output_lang: en
+owner_name: Tunca
+output_lang: tr
 company_area: Work
-worker_name: worker
-owner_full_name: Alex Rivera
-private_segments: Health, Family, Legal
+worker_name: omarchy
+owner_full_name: Tunca
+private_segments: Official Docs, Security Incidents
 ---
 ```
 
-**Environment**, in your shell profile or a systemd `EnvironmentFile` (see `.env.example`):
+**2. Backend and vault, in the shell profile (`.env.example` documents every variable).**
+Identical on both machines:
 
 ```bash
 export BRAINLESS_VAULT=~/projects/brainless
-export BRAINLESS_OWNER_NAME=Alex
-export BRAINLESS_OUTPUT_LANG=en
-export BRAINLESS_LLM_PROVIDER=claude-cli
-# or point at any OpenAI-compatible endpoint instead:
-# export BRAINLESS_LLM_PROVIDER=openai-compatible
-# export BRAINLESS_LLM_BASE_URL=http://localhost:11434/v1
-# export BRAINLESS_LLM_MODEL=llama3.1
+export BRAINLESS_OUTPUT_LANG=tr
+export BRAINLESS_LLM_PROVIDER=claude-cli   # signed-in claude CLI, no API key
 ```
 
-**Addon credentials**, only if you turn addons on, kept outside the vault in
-`~/.config/brainless/`:
+**3. The worker timer, one real unit pair.** Every scheduled job is a `oneshot` service
+wrapped in `flock` so it never races the git backup. The dialectic pair:
 
-```text
-~/.config/brainless/
-  telegram.env    # bot token and the one chat id allowed to write in
-  buzz.env        # relay URL and a token per persona
-  google.json     # OAuth client for Tasks and Calendar
-  imap.env        # mailbox that receives meeting-report e-mails
+```ini
+# ~/.config/systemd/user/brainless-dialectic.service
+[Service]
+Type=oneshot
+WorkingDirectory=%h/projects/brainless
+# flock serialises git against the 30 minute backup timer (pull, commit, push).
+ExecStart=/usr/bin/flock -w 300 %h/.brainless-git.lock \
+  /bin/bash %h/projects/brainless/.agents/scripts/worker_job.sh tools/dialectic.py
 ```
+
+```ini
+# ~/.config/systemd/user/brainless-dialectic.timer
+[Timer]
+OnCalendar=*-*-* 12:30:00
+OnCalendar=*-*-* 21:20:00
+Persistent=true
+RandomizedDelaySec=60
+```
+
+`worker_job.sh` is the pattern behind all of them: `git pull --rebase --autostash`, run the
+tool, then commit and push, so the Mac finds the result in the morning.
+
+**4. The Buzz personas, as sandboxed agents.** Each persona is a `buzz-acp` process paired
+with Claude Code, run from a systemd template unit and locked to read-only vault access.
+This is the part that lets an unattended agent speak in a channel without ever touching
+your notes:
+
+```ini
+# ~/.config/systemd/user/buzz-persona@.service  (start with: systemctl --user start buzz-persona@skeptic)
+[Service]
+Type=simple
+WorkingDirectory=%h/buzz-%i
+EnvironmentFile=%h/.config/brainless/buzz/%i.env
+ExecStart=%h/.cargo/bin/buzz-acp
+Restart=on-failure
+```
+
+```jsonc
+// .agents/buzz/personas/settings.json  (the whole security model in one file)
+"allow": [ "Read", "Glob", "Grep",
+           "Bash(python3 .../tools/wiki_search.py *)",
+           "Bash(.../buzz messages send *)" ],
+"deny":  [ "Write", "Edit", "WebFetch", "WebSearch",
+           "Bash(git push *)", "Bash(rm *)", "Bash(sudo *)", "Bash(ssh *)",
+           "Read(~/.config/**)", "Read(~/.ssh/**)", "Read(~/.claude/**)" ]
+```
+
+**5. Addon secrets, never in the repo.** Each persona reads one env file under
+`~/.config/brainless/`, filled from `.agents/buzz/personas/env.template`. Placeholders,
+exactly as shipped:
+
+```bash
+# ~/.config/brainless/buzz/skeptic.env  (filled by install_personas.sh, never committed)
+BUZZ_PRIVATE_KEY=__SECRET__
+BUZZ_RELAY_URL=__RELAY_URL__          # the Tailscale relay, not a public address
+BUZZ_ACP_AGENT_OWNER=__OWNER_PUBKEY__
+BUZZ_ACP_RESPOND_TO_ALLOWLIST=__MODERATOR_PUBKEY__
+BUZZ_ACP_CHANNELS=__CHANNEL_UUID__
+```
+
+**6. The Mac side, launchd.** `install.sh --schedule` writes three agents into
+`~/Library/LaunchAgents`: an hourly compile (`StartInterval 3600`), the nightly processor
+at 23:00, and the weekly lint on Sunday at 22:00. Same jobs as the worker's systemd timers,
+in Apple's format.
 
 ### A day, concretely
 
 ```bash
-# morning, over coffee: grade what has come due
+# morning on the Mac: grade what has come due
 $ brainless calibrate
 2 decisions past their review date. Write the outcome for each:
   - 2026-06-14  "Ship the pricing change without a beta"   predicted: +8% conversion
@@ -360,10 +399,14 @@ $ ls .wiki/digests/queries/ | tail -1
 2026-09-09-dialectic-four-day-week.md
 ```
 
-Overnight the worker runs the timers above, so by the time you open the laptop the
-digest is written, the projects view is current, and any decision due for grading is
-waiting at the top. You do not need any of this to start. One laptop is the baseline.
-The worker is where you go when the laptop being closed starts to cost you.
+At 12:30 and 21:20 the Omarchy worker runs the same dialectic unattended and posts it to
+the `#dialectic` channel, which I read on the phone. Overnight it writes the digest and
+rebuilds the projects view, so when I open the Mac in the morning the day is compiled and
+the decisions due for grading are waiting at the top.
+
+You do not need three devices to start. One laptop is the baseline. The iPhone is for
+capture without friction, and the Omarchy worker is where you go when the Mac being closed
+starts to cost you.
 
 ---
 

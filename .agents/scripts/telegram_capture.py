@@ -160,7 +160,7 @@ KURALLAR:
 - Sadece not içeriğini döndür, başka hiçbir şey yazma.
 {comment_line}
 
-# TUNCA'NIN GÜNCEL BAĞLAMI:
+# {OWNER} İÇİN GÜNCEL BAĞLAM:
 {context}
 
 # SAYFA ({url}):
@@ -226,7 +226,7 @@ KURALLAR:
 - Sadece not içeriğini döndür, başka hiçbir şey yazma.
 {caption_line}
 
-# TUNCA'NIN GÜNCEL BAĞLAMI (isim düzeltmeleri için):
+# {OWNER} İÇİN GÜNCEL BAĞLAM (isim düzeltmeleri için):
 {context}
 
 # GÖRSEL: {image_path} ({date_str})"""
@@ -248,7 +248,7 @@ KURALLAR:
 - Aksiyon varsa "- [ ]" görev satırı olarak yaz.
 - Sadece not içeriğini döndür, başka hiçbir şey yazma.
 
-# TUNCA'NIN GÜNCEL BAĞLAMI (isim düzeltmeleri için):
+# {OWNER} İÇİN GÜNCEL BAĞLAM (isim düzeltmeleri için):
 {context}
 
 # HAM METİN ({source}, {date_str}):

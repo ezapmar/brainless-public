@@ -302,7 +302,7 @@ KURALLAR:
 # HEDEF NOT ({target or 'yeni tohum'}):
 {note[:6000]}
 
-# TUNCA'NIN CEVABI:
+# {OWNER} CEVABI:
 {answer[:4000]}
 
 # BAĞLAM (isim düzeltmeleri ve bağlantılar için):

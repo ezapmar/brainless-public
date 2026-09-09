@@ -136,12 +136,36 @@ LEAK_PATTERNS = [
     ("private key block", re.compile(r"BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY")),
     ("hex secret (64 hex)", re.compile(r"(?<![0-9a-f])[0-9a-f]{64}(?![0-9a-f])")),
     ("bot token", re.compile(r"\d{8,10}:[A-Za-z0-9_-]{35}")),
+    ("github token", re.compile(r"gh[pousr]_[A-Za-z0-9]{36}|github_pat_[A-Za-z0-9_]{40,}")),
+    ("google api key", re.compile(r"AIza[0-9A-Za-z_-]{35}")),
+    ("openai key", re.compile(r"(?<![A-Za-z])sk-(?:proj-)?[A-Za-z0-9]{32,}")),
+    ("slack token", re.compile(r"xox[baprs]-[A-Za-z0-9-]{10,}")),
+    ("aws access key", re.compile(r"(?<![A-Z0-9])AKIA[0-9A-Z]{16}(?![0-9A-Z])")),
+    ("jwt", re.compile(r"eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{6,}")),
+    ("iban (TR)", re.compile(r"TR\d{24}")),
+    ("tailscale ip", re.compile(r"100\.(?:6[4-9]|[7-9]\d|1[01]\d|12[0-7])\.\d{1,3}\.\d{1,3}")),
+    ("private ipv4", re.compile(r"(?:192\.168|10\.\d{1,3}|172\.(?:1[6-9]|2\d|3[01]))\.\d{1,3}\.\d{1,3}")),
+    ("tailscale host", re.compile(r"[A-Za-z0-9-]+\.ts\.net")),
+    ("phone (+90)", re.compile(r"\+90\d{10}")),
     ("e-mail address", re.compile(r"[\w.+-]+@(?!example\.|github\.com|report\.spiky\.ai)[\w-]+\.[\w.]+")),
 ]
 OWNER_WORDS = ("Tunca", "Üçer", "tuncaucer", "kolayik", "Kolay İK", "Kolay IK", "omarchy", "ucer.us")
 # Files where the owner may legitimately appear (docs about this deployment).
 # README.md is authored in the owner's voice and reviewed by hand; the rest is code.
-OWNER_ALLOW = ("README.md", "LICENSE", "_Agent-Context/TRUNK-BASED-DEVELOPMENT.md", "tools/export_public.py")
+# The .agents/buzz deployment config carries the worker's real home path as a functional
+# value (systemd units, permission globs, the buzz-acp command); genericising it would
+# break the running deployment, so those files are allow-listed here instead. LEAK_PATTERNS
+# still scans them for real secrets; only the owner-word check is waived.
+OWNER_ALLOW = (
+    "README.md",
+    "LICENSE",
+    "_Agent-Context/TRUNK-BASED-DEVELOPMENT.md",
+    "tools/export_public.py",
+    ".agents/buzz/personas/settings.json",
+    ".agents/buzz/personas/env.template",
+    ".agents/systemd/buzz-persona@.service",
+    ".agents/buzz/team_instructions.md",
+)
 
 
 def rel(path):
@@ -205,8 +229,9 @@ def leak_scan(out):
                 for m in rx.finditer(text):
                     findings.append((r, label, m.group(0)[:40]))
             if not r.startswith(OWNER_ALLOW):
+                low = text.lower()
                 for w in OWNER_WORDS:
-                    if w in text:
+                    if w.lower() in low:  # case-insensitive: catches Omarchy, TUNCA, etc.
                         findings.append((r, "owner reference", w))
     return findings
 

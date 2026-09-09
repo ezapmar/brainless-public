@@ -32,7 +32,12 @@ from collections import Counter
 from datetime import datetime
 from pathlib import Path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from owner_profile import LANG  # noqa: E402
+from owner_profile import LANG, COMPANY_AREA  # noqa: E402
+
+# Company name as it appears in wikilinks/paths, derived from the profile so the linter
+# stays deployment-neutral (e.g. company_area "Work/Acme Co" -> tokens acme co, acme-co, acme).
+_C = COMPANY_AREA.strip("/").split("/")[-1].lower()
+_COMPANY_TOKENS = tuple({_C, _C.replace(" ", "-"), _C.split()[0]}) if _C else ()
 
 VAULT = Path(os.environ.get("BRAINLESS_VAULT") or os.path.expanduser("~/projects/brainless"))
 WIKI = VAULT / ".wiki"
@@ -85,9 +90,9 @@ def is_external_reference(target: str) -> bool:
     """Targets that intentionally point outside the generated wiki (the human homes: Work, Personal, etc.)."""
     t = target.strip().lower()
     if t.startswith(("work/", "personal/", "library/", "thinking/", "inbox/",
-                     "archive/", "kolay", "_agent-context/", "tools/")):
+                     "archive/", "_agent-context/", "tools/")) or (_COMPANY_TOKENS and t.startswith(_COMPANY_TOKENS)):
         return True
-    if any(x in t for x in ["kolay ik", "kolay-ik", "belief", "decision"]):
+    if any(x in t for x in (*_COMPANY_TOKENS, "belief", "decision")):
         return True
     # Also resolve against actual human-owned belief/decision/area files by stem
     return False
