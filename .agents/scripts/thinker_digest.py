@@ -182,7 +182,7 @@ KURALLAR:
 - Em dash ve en dash KULLANMA.
 - Sadece markdown gövde döndür (frontmatter YAZMA).
 
-# TUNCA'NIN BAĞLAMI:
+# {OWNER} İÇİN BAĞLAM:
 {context}
 
 # BU HAFTA YAYIMLANANLAR (başlıklar):
@@ -191,7 +191,7 @@ KURALLAR:
 # SEÇİLMİŞ TAM METİNLER:
 {chr(10).join(bodies)[:30000]}
 
-# TUNCA'NIN BOTA ATTIĞI LİNKLER (manuel kol, X dahil):
+# BOTA ATILAN LİNKLER (manuel kol, X dahil):
 {manual[:12000]}
 """
     out = run_prompt(prompt, timeout=300)

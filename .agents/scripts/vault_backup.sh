@@ -32,7 +32,7 @@ if [ -d .git/rebase-merge ] || [ -d .git/rebase-apply ]; then
 fi
 
 if wait_for_github; then
-  # Omarchy worker'in push'ladigi capture'lari al (2026-08-26'dan beri
+  # Worker'in push'ladigi capture'lari al (2026-08-26'dan beri
   # Telegram dinleyicisi ofisteki Linux makinede calisiyor).
   git pull --rebase --autostash --quiet origin master || true
   if [ -d .git/rebase-merge ] || [ -d .git/rebase-apply ]; then

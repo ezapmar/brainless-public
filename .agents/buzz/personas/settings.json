@@ -13,7 +13,10 @@
       "Write", "Edit", "MultiEdit", "NotebookEdit", "WebFetch", "WebSearch",
       "Bash(git push *)", "Bash(git commit *)", "Bash(rm *)", "Bash(mv *)", "Bash(cp *)",
       "Bash(sudo *)", "Bash(ssh *)", "Bash(curl *)", "Bash(wget *)",
-      "Read(/home/tunca/.config/**)", "Read(/home/tunca/.ssh/**)", "Read(/home/tunca/.claude/**)"
+      "Read(/home/tunca/.config/**)", "Read(/home/tunca/.ssh/**)", "Read(/home/tunca/.claude/**)",
+      "Read(/home/tunca/.aws/**)", "Read(/home/tunca/.gnupg/**)", "Read(/home/tunca/.netrc)",
+      "Read(/home/tunca/.git-credentials)", "Read(/home/tunca/.npmrc)", "Read(/home/tunca/.docker/**)",
+      "Read(/home/tunca/.kube/**)", "Read(/home/tunca/.cargo/credentials)", "Read(/home/tunca/.cargo/credentials.toml)"
     ]
   }
 }

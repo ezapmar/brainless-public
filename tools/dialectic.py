@@ -539,7 +539,7 @@ def buzz_post_sh(identity, channel, text):
 
 
 def write_status(date_str, mode, result, detail):
-    """Omarchy-owned status file read by health_check (Mac), watchdog and the briefing."""
+    """Worker-owned status file read by health_check (Mac), watchdog and the briefing."""
     line = f"- {date_str} {mode}: {result}, {detail}"
     old = [l for l in read_file(STATUS_MD).splitlines() if l.startswith("- ")]
     old = [l for l in old if not l.startswith(f"- {date_str} {mode}:")]

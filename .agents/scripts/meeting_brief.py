@@ -31,7 +31,7 @@ TASKS_FILE = os.path.join(VAULT, "_Agent-Context", "TASKS.md")
 CONTEXT_FILE = os.path.join(VAULT, "_Agent-Context", "CONTEXT.md")
 STATE_FILE = os.path.join(VAULT, ".agents", "state", "brief_done")
 WINDOW_MIN = 45
-SELF = "tunca"
+SELF = OWNER.split()[0].lower() if OWNER else "me"  # owner's first name, to drop self from attendees
 
 
 def log(msg):

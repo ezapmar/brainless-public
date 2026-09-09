@@ -82,7 +82,7 @@ KURALLAR:
 # MEVCUT DEFTER (tekrar etme):
 {existing_block}
 
-# TUNCA'NIN BAĞLAMI (isim düzeltmeleri için):
+# {OWNER} İÇİN BAĞLAM (isim düzeltmeleri için):
 {context}
 
 # RAPOR ({note_name}):
