@@ -21,7 +21,8 @@ Optional focus area (freeform string). If omitted, draw from the whole vault.
 3. Phrase each idea as a **question**, not a statement. Atomic ideas in the owner's vault are provocations, not conclusions.
 4. For each idea, cite the 2+ source notes it draws from using full `[[Wikilinks]]`.
 5. Format each idea as a **paste-ready stub** using the structure of `_Templates/Idea.md` (read that template first to match field names exactly).
-6. End with a one-liner on which of the 3 ideas feels most pursuing, with reasoning — but do not pick for the owner.
+6. Assign each stub a stable `zk:` slip-id = the current timestamp formatted `YYYYMMDDHHmm` (Zettelkasten permanent address). Give consecutive stubs consecutive minutes so no two collide. Once written the id never changes, even if the title or filename does.
+7. End with a one-liner on which of the 3 ideas feels most pursuing, with reasoning — but do not pick for the owner.
 
 ## Output format
 
@@ -35,6 +36,7 @@ Optional focus area (freeform string). If omitted, draw from the whole vault.
 ```markdown
 ---
 date: <today YYYY-MM-DD>
+zk: <YYYYMMDDHHmm — stable slip-id, never changes>
 type: idea
 tags: [idea, status/seed]
 ---

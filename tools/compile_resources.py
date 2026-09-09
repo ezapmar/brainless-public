@@ -27,7 +27,7 @@ import re
 import subprocess
 import sys
 import unicodedata
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 
 VAULT = Path(os.environ.get("BRAINLESS_VAULT") or os.path.expanduser("~/projects/brainless"))
@@ -195,6 +195,25 @@ def stored_digest(dst: Path) -> str | None:
     except OSError:
         return None
     m = _DIGEST_RE.search(head)
+    return m.group(1) if m else None
+
+
+_ZK_RE = re.compile(r"^zk:\s*(\d{8,14})\s*$", re.M)
+
+
+def stored_zk(dst: Path) -> str | None:
+    """Return the note's existing zk slip-id (Zettelkasten permanent address), or None.
+
+    The zk id is stable: once assigned it must survive every recompile, even though
+    the rest of the file is regenerated. Callers reuse this so the address never churns.
+    """
+    if not dst.exists():
+        return None
+    try:
+        head = dst.read_text(errors="replace")[:2000]
+    except OSError:
+        return None
+    m = _ZK_RE.search(head)
     return m.group(1) if m else None
 
 
@@ -494,12 +513,18 @@ Output ONLY valid JSON.
     except Exception as e:
         print(f"[ideas] parse fail: {e}")
         return
-    for idea in data.get("ideas", []):
+    now = datetime.now()
+    for i, idea in enumerate(data.get("ideas", [])):
         slug = idea["slug"]
         dst = WIKI / "ideas" / f"{slug}.md"
+        # zk is the note's permanent slip-id: reuse the existing one so it never
+        # churns on recompile; only mint a fresh one for a genuinely new idea.
+        # Consecutive new ideas get consecutive minutes so ids in one run never collide.
+        zk = stored_zk(dst) or (now + timedelta(minutes=i)).strftime("%Y%m%d%H%M")
         body = f"""---
 lang: tr
 summary_en: {idea.get('en','')}
+zk: {zk}
 compiled_at: {datetime.now().isoformat(timespec='seconds')}
 status: seed
 ---
