@@ -208,17 +208,162 @@ Each needs its own credentials in `~/.config/brainless/`.
 
 ---
 
-## Our setup, for reference
+## Usage example: a full local setup
 
-One MacBook as the author. One small Linux box in the office, always on, behind
-Tailscale, running the timers, the Telegram capture and the Buzz relay. Claude Code on
-both, signed in with a subscription, no API key. Two writers on one git repo with a
-strict rule: one owner per file, append-only for anything both machines touch. The rule
-exists because on 4 September both machines created the same briefing file and every
-push failed for 51 hours.
+This is how the whole thing fits together on real machines. Two shapes are shown: the
+one-laptop baseline that everyone starts on, and the two-machine setup we actually run.
+Names and values below are placeholders. Nothing here needs a secret checked into the
+repo; credentials live outside the vault.
 
-You do not need any of this to start. One laptop is the baseline. The worker is where
-you go when the laptop being closed starts to cost you.
+### Shape 1: one laptop (the baseline)
+
+Everything runs on a single machine. The laptop is the author and the scheduler.
+
+```bash
+# install the engine and answer two questions (name, language)
+curl -fsSL https://raw.githubusercontent.com/ezapmar/brainless-public/main/install.sh | bash
+
+# turn on the hourly compile, the nightly digest and the weekly lint (launchd on macOS)
+bash ~/brainless/install.sh --vault ~/brainless --schedule
+
+# from then on, you mostly do this
+brainless dialectic "We should hire two seniors before the round closes"
+brainless calibrate          # decisions whose review date has passed
+```
+
+When the laptop is asleep, nothing runs. That is the only real limit of this shape, and
+it is fine for months.
+
+### Shape 2: two machines (author plus always-on worker)
+
+One laptop writes. One small Linux box stays on and does the unattended work: the timers,
+the Telegram capture and the Buzz relay. They share a single git repo (the vault).
+
+```mermaid
+flowchart LR
+  phone["Phone (Telegram)"]
+  you["Laptop: write notes, run slash commands"]
+  vault[("Git repo: the vault")]
+  channel["Buzz channel on your phone"]
+
+  subgraph worker["Worker: always on, behind Tailscale"]
+    capture["Telegram capture (whisper.cpp)"]
+    timers["systemd timers"]
+    relay["Buzz relay: 5 personas"]
+  end
+
+  phone -->|voice, photo, link| capture
+  you <-->|pull / push| vault
+  worker <-->|pull / commit / push| vault
+  timers -->|dialectic 12:30 and 21:20| relay
+  relay -->|synthesis and bet| channel
+```
+
+Both machines run the same LLM backend (a signed-in `claude` CLI, no API key). The one
+rule that keeps two writers from fighting: one owner per file, append-only for anything
+both machines touch. We learned that the hard way. On 4 September both machines wrote the
+same briefing file and every push failed for 51 hours. `_Agent-Context/TRUNK-BASED-DEVELOPMENT.md`
+has the full convention.
+
+### The daily loop
+
+Capture goes in, arguments come out, and yesterday's answers feed today's questions.
+
+```mermaid
+flowchart TD
+  A["Capture: notes, voice, photos land in Thinking/Daily"] --> B["Midday and night: dialectic argues the new notes"]
+  B --> C["21:00 closeout: one seed, one decision, one contradiction proposed"]
+  C --> D["23:00 nightly: digest, archive, compile .wiki, lint"]
+  D --> E["Every analysis filed into .wiki/digests/queries"]
+  E --> A
+  C -.->|when a review date passes| F["Morning: calibrate nags you to grade the bet"]
+  F --> A
+```
+
+The worker's timers, as installed by `.agents/systemd/install.sh`:
+
+| When | Command | What it does |
+|---|---|---|
+| 12:30 and 21:20 | `dialectic` | five personas argue the day's new notes, moderator writes the synthesis and the bet |
+| 21:00 | `closeout` | propose one seed idea, one decision worth writing down, one contradiction with your beliefs |
+| 23:00 | `nightly` | write the digest, archive the raw capture, compile `.wiki/`, lint |
+| Mon 05:00, Fri 21:00 | `dashboard` | rebuild the active-projects view from every `notes.md` |
+| Mon 06:30 | `resurface` | bring decisions due for grading back to the top |
+| Sun 19:00 | `thinking` | weekly themes, blind spots, promotion candidates |
+| Sun 20:00 | `reconcile` | cross-check recent notes against your written beliefs |
+| Sun 22:00 | `lint` | fix links and frontmatter across `.wiki/` |
+
+On the laptop the same jobs run through launchd instead, installed by `--schedule`.
+
+### Configuration files
+
+Three things configure a deployment. None of them belong to the engine repo.
+
+**`_Agent-Context/PROFILE.md`** in the vault. Written by the installer, edited by hand.
+`owner_name` and `output_lang` shape every prompt; `private_segments` lists folders the
+compiler must never touch.
+
+```markdown
+---
+owner_name: Alex
+output_lang: en
+company_area: Work
+worker_name: worker
+owner_full_name: Alex Rivera
+private_segments: Health, Family, Legal
+---
+```
+
+**Environment**, in your shell profile or a systemd `EnvironmentFile` (see `.env.example`):
+
+```bash
+export BRAINLESS_VAULT=~/projects/brainless
+export BRAINLESS_OWNER_NAME=Alex
+export BRAINLESS_OUTPUT_LANG=en
+export BRAINLESS_LLM_PROVIDER=claude-cli
+# or point at any OpenAI-compatible endpoint instead:
+# export BRAINLESS_LLM_PROVIDER=openai-compatible
+# export BRAINLESS_LLM_BASE_URL=http://localhost:11434/v1
+# export BRAINLESS_LLM_MODEL=llama3.1
+```
+
+**Addon credentials**, only if you turn addons on, kept outside the vault in
+`~/.config/brainless/`:
+
+```text
+~/.config/brainless/
+  telegram.env    # bot token and the one chat id allowed to write in
+  buzz.env        # relay URL and a token per persona
+  google.json     # OAuth client for Tasks and Calendar
+  imap.env        # mailbox that receives meeting-report e-mails
+```
+
+### A day, concretely
+
+```bash
+# morning, over coffee: grade what has come due
+$ brainless calibrate
+2 decisions past their review date. Write the outcome for each:
+  - 2026-06-14  "Ship the pricing change without a beta"   predicted: +8% conversion
+
+# a thesis you want tested before a meeting
+$ brainless dialectic "Move the team to a four-day week for one quarter"
+Skeptic     : the conclusion hides two claims, output and morale, measured differently
+Scientist   : cheapest test is one team for six weeks, terminate if throughput falls >10%
+Gambler     : write it as a bet. 60% it holds. In twelve months it failed because ...
+Moderator   : strongest objection is measurement. What must be true: a throughput metric
+              you trust weekly. Cheap dated test: one team, six weeks, review 2026-11-01.
+              Clashes with belief "async beats synchronous for deep work".
+
+# it is filed for you; tomorrow's question can build on it
+$ ls .wiki/digests/queries/ | tail -1
+2026-09-09-dialectic-four-day-week.md
+```
+
+Overnight the worker runs the timers above, so by the time you open the laptop the
+digest is written, the projects view is current, and any decision due for grading is
+waiting at the top. You do not need any of this to start. One laptop is the baseline.
+The worker is where you go when the laptop being closed starts to cost you.
 
 ---
 

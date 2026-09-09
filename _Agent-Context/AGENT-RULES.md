@@ -77,8 +77,9 @@ Agents should implement these commands when invoked:
 | `/context` | Load CONTEXT.md + last 7 daily notes → present current state |
 | `/trace <topic>` | Find all notes mentioning topic, sort by date, show evolution |
 | `/connect <A> <B>` | Find link paths between two notes/concepts, suggest new connections |
-| `/ideas` | Analyze recent notes + beliefs → generate ideas at intersections |
-| `/graduate` | Find `#status/seed` notes older than 2 weeks → suggest promotions |
+| `/ideas` | Analyze recent notes + beliefs → generate atomic ideas at intersections, each with a stable `zk:` slip-id |
+| `/graduate` | Find `#status/seed` notes older than 2 weeks → suggest promotions; fission new evergreens into atomic idea stubs |
+| `/backlog` | Rank the wiki's unresolved-link demand into a "notes to write" queue (the archive asking for its next note) |
 | `/decide <question>` | Load relevant beliefs + past decisions → run decision framework |
 | `/weekly` | Summarize last 7 daily notes, surface themes, suggest focus areas |
 | `/contradict` | Find conflicting beliefs or decisions that don't align with beliefs |
