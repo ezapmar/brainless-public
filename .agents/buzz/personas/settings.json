@@ -1,0 +1,19 @@
+{
+  "permissions": {
+    "allow": [
+      "Read",
+      "Glob",
+      "Grep",
+      "Bash(python3 /home/tunca/projects/brainless/tools/wiki_search.py *)",
+      "Bash(/home/tunca/.cargo/bin/buzz messages send *)",
+      "Bash(/home/tunca/.cargo/bin/buzz messages get *)",
+      "Bash(/home/tunca/.cargo/bin/buzz messages thread *)"
+    ],
+    "deny": [
+      "Write", "Edit", "MultiEdit", "NotebookEdit", "WebFetch", "WebSearch",
+      "Bash(git push *)", "Bash(git commit *)", "Bash(rm *)", "Bash(mv *)", "Bash(cp *)",
+      "Bash(sudo *)", "Bash(ssh *)", "Bash(curl *)", "Bash(wget *)",
+      "Read(/home/tunca/.config/**)", "Read(/home/tunca/.ssh/**)", "Read(/home/tunca/.claude/**)"
+    ]
+  }
+}

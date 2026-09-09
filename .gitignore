@@ -1,0 +1,51 @@
+# brainless public engine repo
+
+# Secrets and credentials
+*.key
+*.pem
+*.p12
+*service_account*
+*_token.json
+*.credentials.json
+.env
+
+# Privacy: personal identity, health and official documents anywhere in the tree
+**/Official Docs/
+**/* - Health/
+**/*Passport*
+**/*Pasaport*
+**/Security Incidents/
+
+# Machine noise
+.DS_Store
+venv/
+**/.venv/
+__pycache__/
+*.pyc
+.obsidian/workspace*.json
+
+# --- never absorb vault content ---
+Work/*
+Personal/*
+Library/*
+Inbox/*
+raw/*
+Archive/*
+Daily Briefings/*
+Thinking/**/*.md
+.wiki/summaries/*
+.wiki/articles/*
+.wiki/ideas/*
+.wiki/digests/*
+.wiki/projects/*
+.wiki/moc/*
+.wiki/entities/*
+.wiki/relationships/*
+.wiki/INDEX.md
+_Agent-Context/*.md
+!_Agent-Context/AGENT-RULES.md
+!_Agent-Context/TRUNK-BASED-DEVELOPMENT.md
+!_Agent-Context/PROFILE.md
+!**/.gitkeep
+logs/*
+.agents/state/*

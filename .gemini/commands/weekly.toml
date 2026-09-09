@@ -1,0 +1,11 @@
+description = "Themes, blind spots, and promotion candidates from recent dailies"
+
+prompt = """
+Follow the guardrails in this file first:
+@{.wiki/_commands/_shared-rules.md}
+
+Then execute this command definition exactly:
+@{.wiki/_commands/weekly.md}
+
+Lookback window in days (optional, default 7): {{args}}
+"""

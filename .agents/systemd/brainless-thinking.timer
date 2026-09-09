@@ -1,0 +1,10 @@
+[Unit]
+Description=brainless: Pazar 19:00 dusunme sorusu
+
+[Timer]
+OnCalendar=Sun 19:00
+Persistent=true
+RandomizedDelaySec=120
+
+[Install]
+WantedBy=timers.target

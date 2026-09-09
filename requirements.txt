@@ -1,0 +1,15 @@
+# Core document conversion for the hourly pipeline (smart_processor.py).
+# IMPORTANT: pinned to 0.1.7 with explicit format extras. Do NOT use
+# markitdown[all] on Python 3.14 — its youtube-transcript-api pin is
+# unsatisfiable there and pip silently downgrades markitdown to 0.0.2.
+markitdown[pdf,docx,xlsx,pptx]==0.1.7
+
+# Google Tasks / Calendar clients (.agents/scripts/gtasks_sync.py, meeting_brief.py; worker addon)
+google-api-python-client
+google-auth-httplib2
+google-auth-oauthlib
+
+# NOTE: the LLM backend is not a pip package. Default is the claude CLI (Node tool,
+# subscription sign-in): npm install -g @anthropic-ai/claude-code
+# Alternative: any OpenAI-compatible endpoint via BRAINLESS_LLM_PROVIDER=openai-compatible,
+# BRAINLESS_LLM_BASE_URL and BRAINLESS_LLM_MODEL (see tools/llm.py).

@@ -1,0 +1,11 @@
+description = "Generate atomic idea candidates from belief × project intersections"
+
+prompt = """
+Follow the guardrails in this file first:
+@{.wiki/_commands/_shared-rules.md}
+
+Then execute this command definition exactly:
+@{.wiki/_commands/ideas.md}
+
+Focus area (optional): {{args}}
+"""

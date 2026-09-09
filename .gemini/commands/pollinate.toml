@@ -1,0 +1,7 @@
+description = "Cross-reference a new note with your existing Beliefs and Ideas"
+
+prompt = """
+@{.wiki/_commands/pollinate.md}
+
+TARGET NOTE: {{args}}
+"""

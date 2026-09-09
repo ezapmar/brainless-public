@@ -1,0 +1,11 @@
+description = "Structured decision framework using your beliefs and past decisions"
+
+prompt = """
+Follow the guardrails in this file first:
+@{.wiki/_commands/_shared-rules.md}
+
+Then execute this command definition exactly:
+@{.wiki/_commands/decide.md}
+
+Decision question: {{args}}
+"""
