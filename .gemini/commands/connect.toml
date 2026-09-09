@@ -1,0 +1,11 @@
+description = "Find the link-path between two notes and propose missing edges"
+
+prompt = """
+Follow the guardrails in this file first:
+@{.wiki/_commands/_shared-rules.md}
+
+Then execute this command definition exactly:
+@{.wiki/_commands/connect.md}
+
+Notes to connect: {{args}}
+"""

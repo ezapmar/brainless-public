@@ -1,0 +1,10 @@
+[Unit]
+Description=brainless: rebuild the personal dashboard timer
+
+[Timer]
+OnCalendar=Mon *-*-* 05:00:00
+OnCalendar=Fri *-*-* 21:00:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,11 @@
+[Unit]
+Description=brainless: critical dialectic round timer
+
+[Timer]
+OnCalendar=*-*-* 12:30:00
+OnCalendar=*-*-* 21:20:00
+Persistent=true
+RandomizedDelaySec=60
+
+[Install]
+WantedBy=timers.target

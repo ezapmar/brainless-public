@@ -1,0 +1,9 @@
+description = "Snapshot of current state; flag drift between CONTEXT.md and reality"
+
+prompt = """
+Follow the guardrails in this file first:
+@{.wiki/_commands/_shared-rules.md}
+
+Then execute this command definition exactly:
+@{.wiki/_commands/context.md}
+"""

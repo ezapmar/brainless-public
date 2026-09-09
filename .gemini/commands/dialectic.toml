@@ -1,0 +1,11 @@
+description = "Argue a topic with the five critical-thinking personas, then synthesize"
+
+prompt = """
+Follow the guardrails in this file first:
+@{.wiki/_commands/_shared-rules.md}
+
+Then execute this command definition exactly:
+@{.wiki/_commands/dialectic.md}
+
+Topic (optional; free text or note name, empty = today's captures): {{args}}
+"""

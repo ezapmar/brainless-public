@@ -1,0 +1,15 @@
+[Unit]
+Description=Buzz dialectic persona %i (buzz-acp + Claude Code, read-only vault access)
+After=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/tunca/buzz-%i
+EnvironmentFile=/home/tunca/.config/brainless/buzz/%i.env
+Environment=PATH=/home/tunca/.cargo/bin:/home/tunca/.local/share/mise/shims:/home/tunca/.local/bin:/usr/local/bin:/usr/bin:/bin
+ExecStart=/home/tunca/.cargo/bin/buzz-acp
+Restart=on-failure
+RestartSec=15
+
+[Install]
+WantedBy=default.target

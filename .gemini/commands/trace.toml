@@ -1,0 +1,11 @@
+description = "Chronological evolution of thinking on a topic"
+
+prompt = """
+Follow the guardrails in this file first:
+@{.wiki/_commands/_shared-rules.md}
+
+Then execute this command definition exactly:
+@{.wiki/_commands/trace.md}
+
+Topic to trace: {{args}}
+"""

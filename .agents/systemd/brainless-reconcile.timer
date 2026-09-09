@@ -1,0 +1,9 @@
+[Unit]
+Description=brainless: weekly CONTEXT.md drift report timer
+
+[Timer]
+OnCalendar=Sun *-*-* 20:00:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target

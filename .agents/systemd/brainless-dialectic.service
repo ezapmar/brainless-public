@@ -1,0 +1,9 @@
+[Unit]
+Description=brainless: critical dialectic round (moderator posts topics to Buzz #dialectic, files synthesis)
+After=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=%h/projects/brainless
+# flock serialises git against the 30 minute backup timer (pull, commit, push).
+ExecStart=/usr/bin/flock -w 300 %h/.brainless-git.lock /bin/bash %h/projects/brainless/.agents/scripts/worker_job.sh tools/dialectic.py

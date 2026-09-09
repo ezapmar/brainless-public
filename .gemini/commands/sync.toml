@@ -1,0 +1,7 @@
+description = "Propagate updates from recent Daily Notes to Project Notes"
+
+prompt = """
+@{.wiki/_commands/sync.md}
+
+Current date: 2026-04-25
+"""

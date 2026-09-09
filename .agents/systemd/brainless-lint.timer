@@ -1,0 +1,9 @@
+[Unit]
+Description=brainless: weekly wiki lint with fixes timer
+
+[Timer]
+OnCalendar=Sun *-*-* 22:00:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target

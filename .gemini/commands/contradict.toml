@@ -1,0 +1,11 @@
+description = "Find tensions between beliefs, decisions, and recent actions"
+
+prompt = """
+Follow the guardrails in this file first:
+@{.wiki/_commands/_shared-rules.md}
+
+Then execute this command definition exactly:
+@{.wiki/_commands/contradict.md}
+
+Scope (optional — beliefs | decisions | all, default all): {{args}}
+"""
