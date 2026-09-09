@@ -48,28 +48,35 @@ A project folder is any folder under `Work/` or `Personal/` with a `notes.md`.
 
 ## Quick start
 
-Requirements: Python 3.11+, git, and one LLM backend. The default backend is the
+Requirements: git, Python 3.10+, and one LLM backend. The default backend is the
 `claude` CLI signed in with a subscription. Any OpenAI-compatible endpoint works
 instead (OpenAI, Together, Grok, Ollama, LM Studio).
 
-```bash
-git clone <this repo> ~/projects/brainless
-cd ~/projects/brainless
-bash setup.sh                      # checks python, markitdown, the LLM backend
-cp .env.example ~/.config/brainless.env   # optional; edit what you need
-```
-
-Then edit `_Agent-Context/PROFILE.md`: your name, output language (`en` or `tr`),
-the folder under `Work/` that is your company, and any extra private folder names.
-
-Try it:
+One line:
 
 ```bash
-python3 tools/compile_resources.py --dry-run     # what would be compiled
-python3 tools/compile_resources.py               # build .wiki/
-python3 tools/wiki_search.py "some topic" --k 5
-python3 tools/dialectic.py --local --topic "We should ship the feature this quarter"
+curl -fsSL https://raw.githubusercontent.com/ezapmar/brainless-public/main/install.sh | bash
 ```
+
+It clones the engine into `~/brainless` (pass `--vault <dir>` to change), creates a
+virtualenv with the document converter, checks the LLM backend, asks your name and
+output language for `_Agent-Context/PROFILE.md`, and installs the `brainless` command
+into `~/.local/bin`. Add `--schedule` to install the hourly conversion, nightly digest
+and weekly lint (launchd on macOS, systemd user timers on Linux). Safe to re-run.
+
+Then:
+
+```bash
+brainless compile --dry-run                      # what would be compiled
+brainless compile                                # build .wiki/
+brainless search "some topic"
+brainless dialectic "We should ship the feature this quarter"
+brainless calibrate
+brainless help
+```
+
+Edit `_Agent-Context/PROFILE.md` any time: name, output language (`en` or `tr`), the
+folder under `Work/` that is your company, extra private folder names.
 
 Inside Claude Code (or Gemini CLI) from the vault root, the slash commands in
 `.claude/commands/` are available. Their canonical definitions live in
@@ -115,7 +122,7 @@ needed for the core loop.
 - LLM calls never get file or shell tools. Context is embedded in the prompt.
 - `tools/export_public.py` is how this repo is produced from a private vault: a
   whitelist copy plus a leak scan that refuses to pass on identity numbers, keys,
-  tokens or the owner's name.
+  tokens or the owner's name. `--update` refreshes an existing checkout in place.
 
 ## Design notes
 

@@ -1,0 +1,8 @@
+# Core dependency for the document conversion step (smart_processor.py, batch_markitdown.py).
+# Pinned with explicit format extras. Do NOT use markitdown[all] on Python 3.14: its
+# youtube-transcript-api pin is unsatisfiable there and pip silently downgrades markitdown.
+markitdown[pdf,docx,xlsx,pptx]==0.1.7
+
+# Everything else in the core is standard library. Addons (Google Tasks, Calendar) are
+# in requirements.txt. The LLM backend is the claude CLI (Node) or any OpenAI-compatible
+# endpoint; see .env.example.

@@ -1,0 +1,52 @@
+#!/usr/bin/env bash
+# brainless command line. Thin dispatcher over the tools in the vault.
+#   brainless <command> [args]      (brainless help for the list)
+# Vault resolution: $BRAINLESS_VAULT, else ~/.config/brainless/vault, else ~/brainless.
+set -euo pipefail
+VAULT="${BRAINLESS_VAULT:-}"
+if [ -z "$VAULT" ] && [ -s "$HOME/.config/brainless/vault" ]; then VAULT="$(head -1 "$HOME/.config/brainless/vault")"; fi
+VAULT="${VAULT:-$HOME/brainless}"
+[ -d "$VAULT/tools" ] || { echo "brainless: no vault at $VAULT (set BRAINLESS_VAULT or run install.sh)" >&2; exit 1; }
+export BRAINLESS_VAULT="$VAULT"
+PY="$VAULT/.venv/bin/python"; [ -x "$PY" ] || PY="python3"
+cd "$VAULT"
+
+cmd="${1:-help}"; shift || true
+case "$cmd" in
+  compile)    exec "$PY" tools/compile_resources.py "$@" ;;
+  search)     exec "$PY" tools/wiki_search.py "$@" ;;
+  dialectic)  # brainless dialectic "<thesis>" [--local is implied unless --buzz]
+              if [ $# -gt 0 ] && [ "${1#-}" = "$1" ]; then topic="$1"; shift; set -- --topic "$topic" "$@"; fi
+              case " $* " in *" --buzz "*) set -- "${@/--buzz/}" ;; *) set -- --local "$@" ;; esac
+              exec "$PY" tools/dialectic.py "$@" ;;
+  lint)       exec "$PY" tools/lint_wiki.py "$@" ;;
+  calibrate)  exec "$PY" tools/calibrate.py "$@" ;;
+  health)     "$PY" tools/health_check.py "$@" && cat _Agent-Context/HEALTH.md ;;
+  digest)     exec "$PY" tools/nightly_processor.py "$@" ;;
+  closeout)   exec "$PY" tools/evening_closeout.py "$@" ;;
+  dashboard)  exec "$PY" tools/build_dashboard.py "$@" ;;
+  file)       exec "$PY" tools/file_query.py "$@" ;;
+  export)     exec "$PY" tools/export_public.py "$@" ;;
+  update)     git pull --rebase --autostash && "$PY" -m pip install --quiet -r requirements-core.txt && echo "updated" ;;
+  vault)      echo "$VAULT" ;;
+  help|-h|--help)
+    cat <<'EOF'
+brainless <command> [args]
+
+  compile [--dry-run|--full-rebuild|--only <phase>]   build .wiki/ from your notes
+  search "<query>" [--k N] [--json]                    search the compiled wiki
+  dialectic "<thesis>" [--run noon|evening] [--buzz]   five personas argue it (local by default)
+  lint [--fix] [--fix-links] [--dry-run]               wiki integrity checks and repairs
+  calibrate                                            decisions due for grading, missing predictions
+  health                                               refresh and print _Agent-Context/HEALTH.md
+  digest                                               nightly digest of Thinking/Daily (archives captures)
+  closeout [--dry-run]                                 evening close-out appended to today's briefing
+  dashboard                                            rebuild the projects dashboard
+  file <command> "<title>" < note.md                   file a result into .wiki/digests/queries/
+  export --out <dir> [--update]                        produce the public engine tree from this vault
+  update                                               git pull and refresh dependencies
+  vault                                                print the vault path
+EOF
+    ;;
+  *) echo "brainless: unknown command '$cmd' (try: brainless help)" >&2; exit 2 ;;
+esac

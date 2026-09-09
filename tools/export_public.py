@@ -37,8 +37,11 @@ SHIP_DIRS = [
 RENAMES = {"README.public.md": "README.md"}
 SHIP_FILES = [
     "README.public.md",
+    "install.sh",
+    "bin/brainless",
     "setup.sh",
     "requirements.txt",
+    "requirements-core.txt",
     ".env.example",
     "LICENSE",
     "_Agent-Context/AGENT-RULES.md",
@@ -187,7 +190,8 @@ def write_tree(out):
 
 def leak_scan(out):
     findings = []
-    for dirpath, _, filenames in os.walk(out):
+    for dirpath, dirnames, filenames in os.walk(out):
+        dirnames[:] = [d for d in dirnames if d != ".git"]  # git's own metadata is not content
         for fn in filenames:
             p = os.path.join(dirpath, fn)
             r = os.path.relpath(p, out)
@@ -210,6 +214,8 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", help="destination directory (omit for a dry run)")
     ap.add_argument("--scan-only", action="store_true", help="only scan an existing --out tree")
+    ap.add_argument("--update", action="store_true",
+                    help="refresh an existing checkout in place: replace everything except .git, keep history")
     args = ap.parse_args()
     if not args.out:
         files = sorted(set(iter_ship()))
@@ -218,8 +224,15 @@ def main():
         return
     if not args.scan_only:
         if os.path.exists(args.out) and os.listdir(args.out):
-            print(f"refusing to write into a non-empty directory: {args.out}", file=sys.stderr)
-            sys.exit(2)
+            if not args.update:
+                print(f"refusing to write into a non-empty directory: {args.out} (use --update to refresh a checkout)",
+                      file=sys.stderr)
+                sys.exit(2)
+            for name in os.listdir(args.out):
+                if name == ".git":
+                    continue
+                p = os.path.join(args.out, name)
+                shutil.rmtree(p) if os.path.isdir(p) and not os.path.islink(p) else os.remove(p)
         n = write_tree(args.out)
         print(f"wrote {n} files to {args.out}")
     findings = leak_scan(args.out)
