@@ -10,6 +10,9 @@ PY_BINS=$(ls -d "$HOME"/Library/Python/*/bin 2>/dev/null | sort -Vr | tr '\n' ':
 NODE_BIN=$(ls -d "$HOME"/.nvm/versions/node/*/bin 2>/dev/null | sort -V | tail -1)
 export PATH="${PY_BINS}$HOME/.local/bin:${NODE_BIN:+$NODE_BIN:}/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin"
 cd "${BRAINLESS_VAULT:-$HOME/projects/brainless}" || exit 1
+# Prefer the vault's own virtualenv when the installer created one.
+if [ -x .venv/bin/python3 ]; then export PATH="$PWD/.venv/bin:$PATH"; fi
+mkdir -p logs
 
 LOG="logs/smart_processor.log"
 MAX_BYTES=$((5 * 1024 * 1024))   # rotate at 5 MB, keep one previous generation
