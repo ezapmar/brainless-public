@@ -1,0 +1,12 @@
+name: leak-scan
+on: [push, pull_request]
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+      - name: Scan the tree for owner references and secrets
+        run: python3 tools/export_public.py --scan-only --out .
