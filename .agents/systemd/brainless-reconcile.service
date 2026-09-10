@@ -1,6 +1,7 @@
 [Unit]
 Description=brainless: weekly CONTEXT.md drift report
 After=network-online.target
+OnFailure=brainless-notify-failure@%n.service
 
 [Service]
 Type=oneshot

@@ -1,6 +1,7 @@
 [Unit]
 Description=brainless: think surface (regenerate THINKING.md, post to Buzz #thinking)
 After=network-online.target
+OnFailure=brainless-notify-failure@%n.service
 
 [Service]
 Type=oneshot

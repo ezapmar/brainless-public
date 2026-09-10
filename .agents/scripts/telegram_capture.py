@@ -35,6 +35,7 @@ VAULT = os.environ.get("BRAINLESS_VAULT") or os.path.expanduser("~/projects/brai
 sys.path.insert(0, os.path.join(VAULT, "tools"))
 from llm import run_prompt
 from owner_profile import OWNER, OWNER_FULL, WORKER  # noqa: E402
+from transcript_filter import is_empty_transcript  # noqa: E402
 
 CONF_DIR = os.path.expanduser("~/.config/brainless")
 TOKEN_FILE = os.path.join(CONF_DIR, "telegram_token")
@@ -311,6 +312,11 @@ def handle_message(token, msg, chat_id=None):
             log("Transkript bos dondu (20 MB siniri ya da whisper hatasi)")
             notify("Ses alındı ama transkript edilemedi. Muhtemel sebep: 20 MB "
                    "indirme sınırı ya da whisper hatası. Kayıt vault'a düşmedi.")
+            return None
+        if is_empty_transcript(text):
+            log("Anlamsiz transkript (sessizlik/whisper artefakti), atlandi")
+            notify("Ses alındı ama konuşma algılanmadı (sessizlik ya da whisper "
+                   "artefaktı). Kayıt vault'a düşmedi.")
             return None
     elif "photo" in msg:
         log("Görsel alındı, işleniyor...")
