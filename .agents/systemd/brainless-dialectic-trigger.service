@@ -1,0 +1,11 @@
+[Unit]
+Description=brainless: dialectic Buzz trigger (watch #dialectic for !dialectic <thesis>)
+After=network-online.target
+OnFailure=brainless-notify-failure@%n.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=%h/projects/brainless
+# No flock here: the watcher only reads/posts on Buzz and launches worker_job.sh,
+# which scopes the git lock itself. A round's own overlap guard is ~/.dialectic-round.lock.
+ExecStart=/usr/bin/python3 %h/projects/brainless/tools/dialectic_trigger.py

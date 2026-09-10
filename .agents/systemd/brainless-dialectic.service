@@ -1,6 +1,7 @@
 [Unit]
 Description=brainless: critical dialectic round (moderator posts topics to Buzz #dialectic, files synthesis)
 After=network-online.target
+OnFailure=brainless-notify-failure@%n.service
 
 [Service]
 Type=oneshot

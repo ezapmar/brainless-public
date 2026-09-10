@@ -1,6 +1,7 @@
 [Unit]
 Description=brainless: haftalik dusunme sorusu (Telegram)
 After=network-online.target
+OnFailure=brainless-notify-failure@%n.service
 
 [Service]
 Type=oneshot

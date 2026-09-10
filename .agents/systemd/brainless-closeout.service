@@ -1,6 +1,7 @@
 [Unit]
 Description=brainless: evening closeout appended to the daily briefing
 After=network-online.target
+OnFailure=brainless-notify-failure@%n.service
 
 [Service]
 Type=oneshot

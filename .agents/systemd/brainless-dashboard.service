@@ -1,6 +1,7 @@
 [Unit]
 Description=brainless: rebuild the personal dashboard
 After=network-online.target
+OnFailure=brainless-notify-failure@%n.service
 
 [Service]
 Type=oneshot

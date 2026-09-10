@@ -19,12 +19,16 @@ import imaplib
 import os
 import re
 import ssl
+import sys
 from datetime import datetime, timedelta
 from email.header import decode_header, make_header
 from email.utils import parseaddr, parsedate_to_datetime
 from html.parser import HTMLParser
 
 VAULT = os.environ.get("BRAINLESS_VAULT") or os.path.expanduser("~/projects/brainless")
+sys.path.insert(0, os.path.join(VAULT, "tools"))
+from transcript_filter import is_empty_transcript  # noqa: E402
+
 CONF_DIR = os.path.expanduser("~/.config/brainless")
 STATE_FILE = os.path.join(VAULT, ".agents", "state", "spiky_uid")
 OUT_DIR = os.path.join(VAULT, "Inbox", "Spiky")
@@ -131,8 +135,8 @@ def process(uid, raw):
     except Exception:
         when = datetime.now().astimezone()
     body = clean_body(plain_body(msg))
-    if not body:
-        log(f"uid {uid}: bos govde, atlandi")
+    if is_empty_transcript(body):
+        log(f"uid {uid}: bos/anlamsiz govde, atlandi")
         return
     body = body[:200_000]  # kotu niyetli/bozuk mail vault'u sisirmesin
     os.makedirs(OUT_DIR, exist_ok=True)

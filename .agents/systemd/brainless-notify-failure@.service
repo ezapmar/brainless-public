@@ -1,0 +1,7 @@
+[Unit]
+Description=brainless: Telegram alert for failed unit %i
+
+[Service]
+Type=oneshot
+WorkingDirectory=%h/projects/brainless
+ExecStart=/usr/bin/python3 %h/projects/brainless/.agents/scripts/notify_failure.py %i

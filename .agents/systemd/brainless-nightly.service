@@ -1,6 +1,7 @@
 [Unit]
 Description=brainless: nightly digest, archive captures, compile and lint
 After=network-online.target
+OnFailure=brainless-notify-failure@%n.service
 
 [Service]
 Type=oneshot
