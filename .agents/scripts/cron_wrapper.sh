@@ -35,6 +35,15 @@ if [ "$status" -ne 0 ]; then
   osascript -e 'display notification "smart_processor exited with errors — check logs/smart_processor.log" with title "brainless"' 2>/dev/null
 fi
 
+# Hourly CRM snapshot (read-only, no LLM). Silent no-op without a token in
+# ~/.config/brainless/. Runs before health_check so HEALTH.md sees fresh status.
+CRM_LOG="logs/crm_capture.log"
+if [ -f "$CRM_LOG" ] && [ "$(stat -f%z "$CRM_LOG" 2>/dev/null || echo 0)" -gt "$MAX_BYTES" ]; then
+  mv -f "$CRM_LOG" "$CRM_LOG.1"
+fi
+python3 .agents/scripts/crm_capture.py >> "$CRM_LOG" 2>&1
+bash .agents/scripts/buzz_crm_sync.sh >> "$CRM_LOG" 2>&1
+
 # Hourly heartbeat: refresh _Agent-Context/HEALTH.md (cheap, no LLM calls).
 python3 tools/health_check.py >> logs/health_check.log 2>&1
 

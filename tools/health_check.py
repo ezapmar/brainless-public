@@ -116,6 +116,45 @@ def check_llm_auth():
         add("LLM erişimi", "WARN", f"son çağrı hatası ({age} önce): {detail[:70]}")
 
 
+def check_crm():
+    """CRM snapshot canary (.agents/scripts/crm_capture.py).
+
+    Silent when no CRM token is configured, so a clean install never shows red.
+    Reads the breadcrumb the script drops on every run; log mtime alone would
+    stay green while the API rejects the token every hour.
+    """
+    conf = os.path.expanduser("~/.config/brainless")
+    try:
+        with open(os.path.join(conf, "crm_provider")) as fh:
+            provider = fh.read().strip().lower() or "pipedrive"
+    except OSError:
+        provider = "pipedrive"
+    if not os.path.exists(os.path.join(conf, f"{provider}_api_token")):
+        return
+    label = "CRM anlık görüntü"
+    path = os.path.join(VAULT, ".agents", "state", "crm_status")
+    if not os.path.exists(path):
+        add(label, "WARN", "henüz çalışmadı (crm_capture.py, saatlik cron)")
+        return
+    try:
+        with open(path, errors="replace") as fh:
+            parts = fh.read().strip().split("\t")
+        outcome = parts[1] if len(parts) > 1 else "error"
+        detail = parts[2] if len(parts) > 2 else ""
+    except Exception:
+        add(label, "WARN", "durum dosyası okunamadı")
+        return
+    age_s = time.time() - os.path.getmtime(path)
+    age = age_str(age_s)
+    if outcome == "ok":
+        status = "RED" if age_s > 26 * 3600 else "OK"
+        add(label, status, f"{detail} ({age} önce)")
+    elif outcome == "auth":
+        add(label, "RED", f"API token reddedildi ({age} önce): {detail[:70]}. Token dosyasını yenile")
+    else:
+        add(label, "RED", f"son çalışma hatalı ({age} önce): {detail[:70]}")
+
+
 def check_log_errors():
     """Recent error lines in the processor logs."""
     # nightly log lives on the worker now; the stale Mac file must not WARN.
@@ -213,6 +252,7 @@ def main():
     check_worker()
     check_dialectic()
     check_llm_auth()
+    check_crm()
     check_log_errors()
 
     worst = "OK"

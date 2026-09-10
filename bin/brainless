@@ -29,6 +29,7 @@ case "$cmd" in
   export)     exec "$PY" tools/export_public.py "$@" ;;
   update)     git pull --rebase --autostash && "$PY" -m pip install --quiet -r requirements-core.txt && echo "updated" ;;
   vault)      echo "$VAULT" ;;
+  version|--version) cat "$VAULT/VERSION" 2>/dev/null || echo "unknown" ;;
   help|-h|--help)
     cat <<'EOF'
 brainless <command> [args]
@@ -46,6 +47,7 @@ brainless <command> [args]
   export --out <dir> [--update]                        produce the public engine tree from this vault
   update                                               git pull and refresh dependencies
   vault                                                print the vault path
+  version                                              print the engine version
 EOF
     ;;
   *) echo "brainless: unknown command '$cmd' (try: brainless help)" >&2; exit 2 ;;

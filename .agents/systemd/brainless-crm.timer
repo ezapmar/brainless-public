@@ -1,0 +1,9 @@
+[Unit]
+Description=brainless: daily CRM snapshot timer
+
+[Timer]
+OnCalendar=*-*-* 06:30:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target

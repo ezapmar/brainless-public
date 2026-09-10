@@ -52,7 +52,9 @@ if [ -z "$CID" ]; then log "channel '$CHANNEL' not found on relay"; exit 0; fi
 MAX=60000
 if [ "${#BODY}" -gt "$MAX" ]; then BODY="${BODY:0:$MAX}"$'\n\n'"[kesildi: mesaj $MAX karakteri asti]"; fi
 
-if printf '%s' "$BODY" | timeout 30 buzz messages send --channel "$CID" --content - >/dev/null 2>"$BUZZ_DIR/last_error.log"; then
+# macOS has no coreutils `timeout`; fall back to gtimeout or none.
+TMO=""; command -v timeout >/dev/null 2>&1 && TMO="timeout 30"; [ -z "$TMO" ] && command -v gtimeout >/dev/null 2>&1 && TMO="gtimeout 30"
+if printf '%s' "$BODY" | $TMO buzz messages send --channel "$CID" --content - >/dev/null 2>"$BUZZ_DIR/last_error.log"; then
   log "posted as $IDENTITY to #$CHANNEL"
 else
   log "send failed for #$CHANNEL: $(head -c 200 "$BUZZ_DIR/last_error.log")"

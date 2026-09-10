@@ -32,6 +32,7 @@ SHIP_DIRS = [
     ".gemini/commands",
     ".wiki/_commands",
     "_Templates",
+    "docs",
 ]
 # README.public.md ships as README.md (the private README describes one deployment).
 RENAMES = {"README.public.md": "README.md"}
@@ -44,6 +45,8 @@ SHIP_FILES = [
     "requirements-core.txt",
     ".env.example",
     "LICENSE",
+    "CHANGELOG.md",
+    "VERSION",
     "_Agent-Context/AGENT-RULES.md",
     "_Agent-Context/TRUNK-BASED-DEVELOPMENT.md",
 ]
