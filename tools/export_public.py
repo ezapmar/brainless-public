@@ -192,6 +192,26 @@ def iter_ship():
             yield f
 
 
+# CI gate written into the public checkout: GitHub Actions runs the same leak
+# scan on every push and pull request and fails if anything leaks, so the
+# guarantee is mechanical instead of a step someone must remember. It is
+# generated here on every export, so it self-heals and never lands in the
+# private source tree (where the scan would fail on legitimate owner content).
+LEAK_SCAN_WORKFLOW = """name: leak-scan
+on: [push, pull_request]
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+      - name: Scan the tree for owner references and secrets
+        run: python3 tools/export_public.py --scan-only --out .
+"""
+
+
 def write_tree(out):
     os.makedirs(out, exist_ok=True)
     n = 0
@@ -210,6 +230,10 @@ def write_tree(out):
             fh.write(text)
     with open(os.path.join(out, ".gitignore"), "w") as fh:
         fh.write(CONTENT_HOMES_IGNORE)
+    wf = os.path.join(out, ".github", "workflows", "leak-scan.yml")
+    os.makedirs(os.path.dirname(wf), exist_ok=True)
+    with open(wf, "w") as fh:
+        fh.write(LEAK_SCAN_WORKFLOW)
     return n
 
 
