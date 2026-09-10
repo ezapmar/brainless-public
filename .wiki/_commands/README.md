@@ -54,6 +54,7 @@ Each command reads specific parts of the vault, reasons over them, and prints a 
 | `/ideas [area]` | Generate atomic idea candidates from belief × project intersections | `Thinking/Beliefs/`, `.wiki/ideas/`, recent dailies |
 | `/graduate [days]` | Seeds ready for promotion to `#status/growing` or `#status/evergreen` | notes tagged `#status/seed` |
 | `/decide <question>` | Fills in a decision framework using your beliefs + past decisions | `Thinking/Beliefs/`, `Thinking/Decisions/` |
+| `/calibrate` | Grades matured decisions in one line (agent drafts outcome, you confirm) | `Thinking/Decisions/`, `Thinking/Calibration.md`, `tools/calibrate.py` |
 | `/weekly [days]` | Themes, blind spots, promotion candidates from recent dailies | `.wiki/digests/`, git log |
 | `/contradict` | Pairs of beliefs/decisions that conflict; stale unused beliefs | `Thinking/Beliefs/`, `Thinking/Decisions/` |
 

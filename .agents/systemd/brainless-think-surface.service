@@ -1,0 +1,11 @@
+[Unit]
+Description=brainless: think surface (regenerate THINKING.md, post to Buzz #thinking)
+After=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=%h/projects/brainless
+# git lock lives in worker_job.sh, wrapping only pull+backup (not the tool run).
+ExecStart=/bin/bash %h/projects/brainless/.agents/scripts/worker_job.sh tools/think_surface.py
+# Post the freshly written surface to Buzz #thinking (never fails the unit).
+ExecStartPost=/bin/bash %h/projects/brainless/.agents/scripts/buzz_think_sync.sh

@@ -81,6 +81,7 @@ Agents should implement these commands when invoked:
 | `/graduate` | Find `#status/seed` notes older than 2 weeks → suggest promotions; fission new evergreens into atomic idea stubs |
 | `/backlog` | Rank the wiki's unresolved-link demand into a "notes to write" queue (the archive asking for its next note) |
 | `/decide <question>` | Load relevant beliefs + past decisions → run decision framework |
+| `/calibrate` | Grade matured decisions in one line (agent drafts the outcome, you confirm) so judgment compounds |
 | `/weekly` | Summarize last 7 daily notes, surface themes, suggest focus areas |
 | `/contradict` | Find conflicting beliefs or decisions that don't align with beliefs |
 | `/dialectic [topic]` | Argue a topic (or today's captures) with the five critical-thinking personas, two rounds, then synthesize |

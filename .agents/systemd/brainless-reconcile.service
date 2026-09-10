@@ -5,5 +5,5 @@ After=network-online.target
 [Service]
 Type=oneshot
 WorkingDirectory=%h/projects/brainless
-# flock serialises git against the 30 minute backup timer (pull, commit, push).
-ExecStart=/usr/bin/flock -w 300 %h/.brainless-git.lock /bin/bash %h/projects/brainless/.agents/scripts/worker_job.sh tools/weekly_reconcile.py
+# git lock lives in worker_job.sh, wrapping only pull+backup (not the tool run).
+ExecStart=/bin/bash %h/projects/brainless/.agents/scripts/worker_job.sh tools/weekly_reconcile.py
