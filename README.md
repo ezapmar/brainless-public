@@ -188,6 +188,13 @@ None of these are needed for the loop above.
   the installer.
 - **Google Tasks and Calendar.** Two-way task sync and a brief before each meeting.
 - **Meeting transcripts.** An IMAP ingest for meeting report e-mails.
+- **CRM snapshot.** A read-only pull from your CRM (Pipedrive first; the provider
+  seam in `.agents/scripts/crm_capture.py` takes others) into a status block the
+  briefing copies and an event log per company under `Inbox/CRM/`. Organisation
+  and deal level only, no people, no LLM. Drop your token in
+  `~/.config/brainless/pipedrive_api_token`; without it the script is a no-op.
+  Setup, flags, example output and the provider seam:
+  [docs/addons/crm-pipedrive.md](docs/addons/crm-pipedrive.md).
 - **An always-on worker.** A second machine that runs the timers, pulls, commits and
   pushes, so your laptop can sleep. The units in `.agents/systemd/` are built for it.
 
