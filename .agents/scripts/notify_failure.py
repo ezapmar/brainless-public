@@ -19,6 +19,10 @@ import sys
 import urllib.parse
 import urllib.request
 
+VAULT = os.environ.get("BRAINLESS_VAULT") or os.path.expanduser("~/projects/brainless")
+sys.path.insert(0, os.path.join(VAULT, "tools"))
+from i18n import t  # noqa: E402
+
 CONF_DIR = os.path.expanduser("~/.config/brainless")
 MAX_LOG = 1200  # keep the message well under Telegram's 4096 char limit
 
@@ -79,7 +83,7 @@ def main():
     if status:
         msg += f"{status}\n"
     if log:
-        msg += f"\nSon kayıt:\n{log}"
+        msg += f"\n{t('notify_failure.log_label')}\n{log}"
     ok = send_telegram(msg)
     return 0 if ok else 1
 

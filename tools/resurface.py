@@ -18,7 +18,8 @@ from datetime import datetime
 VAULT = os.environ.get("BRAINLESS_VAULT") or os.path.expanduser("~/projects/brainless")
 sys.path.insert(0, os.path.join(VAULT, "tools"))
 from llm import run_prompt
-from owner_profile import OWNER, lang_name  # noqa: E402
+from owner_profile import OWNER, output_lang_directive  # noqa: E402
+from i18n import t  # noqa: E402
 
 CONTEXT_FILE = os.path.join(VAULT, "_Agent-Context", "CONTEXT.md")
 OUT_FILE = os.path.join(VAULT, "_Agent-Context", "RESURFACE.md")
@@ -74,50 +75,50 @@ def main():
         with open(CONTEXT_FILE, errors="replace") as fh:
             context_md = fh.read()[:6000]
     except OSError as e:
-        log(f"CONTEXT.md okunamadı: {e}")
+        log(f"CONTEXT.md unreadable: {e}")
         return
 
     candidates = collect_candidates()
     if len(candidates) < 5:
-        log(f"Sadece {len(candidates)} aday var, resurface atlandı.")
+        log(f"Only {len(candidates)} candidates, resurface skipped.")
         return
 
     lines = []
     for mtime, rel, title, body in candidates:
         age_days = int((time.time() - mtime) / 86400)
-        lines.append(f"- {rel} | {title} | {age_days} gündür dokunulmamış | {body}")
+        lines.append(f"- {rel} | {title} | untouched for {age_days} days | {body}")
     catalog = "\n".join(lines)
 
     date_str = datetime.now().strftime("%Y-%m-%d")
-    prompt = f"""Sen {OWNER} için 'brainless' sistemindeki not hatırlatma asistanısın. Çıktı dili: {lang_name(native=True)}.
-Aşağıda 30+ gündür dokunulmamış notların listesi ve {OWNER} adlı sahibin güncel bağlamı var.
-Bu hafta yeniden okunmaya EN ÇOK değer 5 notu seç.
+    prompt = f"""You are the note resurfacing assistant of the 'brainless' system for {OWNER}. {output_lang_directive()}
+Below is a list of notes untouched for 30+ days and the current context of the owner, {OWNER}.
+Pick the 5 notes MOST worth re-reading this week.
 
-SEÇİM KRİTERİ: Aktif projelere ve önceliklere bugün katkısı olabilecek notlar.
-Nostalji değil, kullanım değeri. Listede olmayan bir notu asla uydurma.
+SELECTION CRITERION: notes that can contribute to the active projects and priorities today.
+Usefulness, not nostalgia. Never invent a note that is not in the list.
 
-ÇIKTI FORMATI (sadece bunu yaz):
-- [[<dosya yolu, .md uzantısız>]]: <tek cümle, neden bu hafta okunmalı>
-(tam 5 madde)
+OUTPUT FORMAT (write only this):
+- [[<file path, without the .md extension>]]: <one sentence, why it should be read this week>
+(exactly 5 items)
 
-# GÜNCEL BAĞLAM (CONTEXT.md):
+# CURRENT CONTEXT (CONTEXT.md):
 {context_md}
 
-# ADAY NOTLAR:
+# CANDIDATE NOTES:
 {catalog}"""
 
     result = run_prompt(prompt, timeout=300)
     if not result:
-        log("Claude çağrısı başarısız; RESURFACE.md yazılmadı.")
+        log("LLM call failed; RESURFACE.md not written.")
         return
 
     header = (
-        f"# Haftanın Yeniden Yüzeye Çıkan Notları\n\n"
-        f"> Oluşturulma: {date_str}. Brifingler bu listeyi dosya 7 günden tazeyken dahil eder.\n\n"
+        t("resurface.title") + "\n\n"
+        + t("resurface.intro", date=date_str) + "\n\n"
     )
     with open(OUT_FILE, "w") as fh:
         fh.write(header + result + "\n")
-    log(f"Yazıldı: {OUT_FILE} ({len(candidates)} aday içinden)")
+    log(f"Written: {OUT_FILE} (out of {len(candidates)} candidates)")
 
 
 if __name__ == "__main__":

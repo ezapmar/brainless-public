@@ -1,0 +1,10 @@
+{
+  "header": "🐶 brainless watchdog:\n\n",
+  "mac_silent": "Mac'in GitHub'a ulastirdigi son commit {hours} saat once (esik {threshold} saat). Bu 'commit atilmadi' demek degil. Sirayla bak: 1) push dusuyor mu (Mac'te logs/vault_backup.log), 2) backup job'i calisiyor mu, 3) makine kapali mi.",
+  "mac_no_commit": "Son 100 commit'te Mac imzali commit yok.",
+  "health_red": "HEALTH.md kirmizi: {line}",
+  "units_failed": "Linux'ta hata veren job'lar: {units}",
+  "dialectic_missing": "Dialectic round did not run: {missing}; journalctl --user -u brainless-dialectic",
+  "dialectic_error": "Dialectic round failed: {error}",
+  "llm_auth": "Linux'ta LLM auth hatasi (son cagri {stamp}); llm_status'a bak"
+}

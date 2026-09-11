@@ -1,15 +1,15 @@
 """Minimal, provider-pluggable LLM helper for vault automation scripts.
 
 One entry point: run_prompt(prompt) -> str | None. Context must be embedded
-in the prompt. Untrusted content (Telegram mesajlari, transkriptler, cekilen
-web sayfalari, e-posta govdesi, takvim davetleri) bu prompt'lara akiyor; bu
-yuzden claude-cli cagrilarinda tehlikeli araclar (Bash, Write, Edit, WebFetch
-vb.) HER ZAMAN --disallowedTools ile reddedilir (deny, allow'a ustun gelir),
-boylece prompt-injection bir not zehirlemeyi kod calistirmaya/veri sizdirmaya
-ceviremez. Varsayilan: hicbir arac yok; yalniz cagiran acikca allowed_tools
-verirse (or. foto OCR icin Read) ve o araç deny listesinde degilse acilir.
-Not: .claude/settings.local.json artik takipsiz; otomasyon interaktif izin
-listesini miras almaz.
+in the prompt. Untrusted content (Telegram messages, transcripts, fetched web
+pages, e-mail bodies, calendar invites) flows into these prompts; that is why
+claude-cli calls ALWAYS deny the dangerous tools (Bash, Write, Edit, WebFetch
+and so on) with --disallowedTools (deny beats allow), so a prompt injection
+cannot turn a poisoned note into code execution or data exfiltration. Default:
+no tools at all; a tool opens only when the caller passes it explicitly in
+allowed_tools (e.g. Read for photo OCR) and it is not on the deny list.
+Note: .claude/settings.local.json is no longer tracked; automation does not
+inherit the interactive permission list.
 
 The provider is chosen by BRAINLESS_LLM_PROVIDER (default "claude-cli"), so
 the whole batch brain can move off Claude by setting a few env vars. Every
@@ -38,8 +38,8 @@ from resolve_bin import resolve_claude
 VAULT = os.environ.get("BRAINLESS_VAULT") or os.path.expanduser("~/projects/brainless")
 STATUS_FILE = os.path.join(VAULT, ".agents", "state", "llm_status")
 
-# Otomasyon prompt'larina guvenilmeyen icerik giriyor; bu araclar her cagride
-# reddedilir (kod calistirma, dosya yazma, ag erisimi, alt-ajan).
+# Untrusted content enters the automation prompts; these tools are denied on
+# every call (code execution, file writes, network access, sub-agents).
 _DANGEROUS_TOOLS = [
     "Bash", "Write", "Edit", "MultiEdit", "NotebookEdit",
     "WebFetch", "WebSearch", "Task",
@@ -52,7 +52,7 @@ _AUTH_HINTS = ("401", "403", "unauthorized", "authenticate",
 
 def _clean(text: str) -> str:
     # House style: em/en dashes are banned in all vault output.
-    return text.replace("—", "-").replace("–", "-")
+    return text.replace("\u2014", "-").replace("\u2013", "-")
 
 
 def _record(outcome: str, detail: str = "") -> None:
@@ -75,8 +75,8 @@ def _run_claude_cli(prompt: str, timeout: int, allowed_tools=None) -> str | None
     claude = resolve_claude()
     env = os.environ.copy()
     env["PATH"] = os.path.dirname(claude) + os.pathsep + env.get("PATH", "")
-    cmd = [claude, "-p", prompt.replace("\x00", "")]  # argv null byte kabul etmez
-    # Deny listesi allow'a ustun gelir; settings ne derse desin bu araclar kapali.
+    cmd = [claude, "-p", prompt.replace("\x00", "")]  # argv does not accept null bytes
+    # The deny list beats allow; whatever settings say, these tools stay closed.
     cmd += ["--disallowedTools", *_DANGEROUS_TOOLS]
     if allowed_tools:
         safe = [t for t in allowed_tools if t not in _DANGEROUS_TOOLS]

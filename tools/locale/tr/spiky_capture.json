@@ -1,0 +1,5 @@
+{
+  "default_title": "Spiky Raporu",
+  "default_name": "Rapor",
+  "note_header": "# {title}\n\nTarih: {when}\nKaynak: Spiky raporu (email ingest, worker)\n\n---\n\n"
+}

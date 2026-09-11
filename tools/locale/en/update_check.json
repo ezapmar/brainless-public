@@ -1,0 +1,5 @@
+{
+  "msg_header": "📦 {worker}: {count} packages can be updated.",
+  "msg_security": "Security related: {pkgs}",
+  "msg_hint": "When ready: sudo pacman -Syu"
+}

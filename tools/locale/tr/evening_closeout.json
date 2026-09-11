@@ -1,0 +1,17 @@
+{
+  "section_marker": "## Akşam Kapanışı",
+  "calendar_heading": "### 📊 Karar takvimi",
+  "due_heading": "**Notlanmayı bekliyor (review tarihi geçti, sonuç yazılmadı):**",
+  "needs_pred_heading": "**Tahmin eksik (decided ama forecast yok):**",
+  "no_review_heading": "**Review tarihi yok (pending/deferred):**",
+  "heading_what_happened": "## Bugün Ne Oldu",
+  "heading_carry_over": "## Yarına Devreden",
+  "heading_open_loops": "## Açık Döngüler",
+  "heading_thinking_loop": "## Düşünce Döngüsü",
+  "none_word": "Yok",
+  "seed_label": "🌱 Aday tohum",
+  "decision_label": "⚖️ Kristalize edilecek karar",
+  "contradiction_label": "🔀 Çelişki",
+  "missing_briefing_title": "# {date} Günlük Not",
+  "missing_briefing_note": "(Sabah brifingi bugün üretilmedi; bu dosya akşam kapanışıyla açıldı.)"
+}

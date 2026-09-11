@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-wiki_search.py — small CLI search over wiki/.
+wiki_search.py: small CLI search over wiki/.
 
 Uses ripgrep + a naive BM25 reranker on top.
 Designed to be called by slash commands and by Claude Code as a tool.

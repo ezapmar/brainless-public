@@ -17,17 +17,17 @@ Optional focus area (freeform string). If omitted, draw from the whole vault.
 
 ## Behavior
 1. Build a mental list of: (a) beliefs currently held, (b) active projects, (c) themes mentioned in recent dailies.
-2. Produce **3 candidate atomic ideas** where each idea is the **intersection of at least two distinct categories** — e.g. a belief × a project, a resource × an area. Pure single-category ideas are not allowed.
+2. Produce **3 candidate atomic ideas** where each idea is the **intersection of at least two distinct categories**, e.g. a belief × a project, a resource × an area. Pure single-category ideas are not allowed.
 3. Phrase each idea as a **question**, not a statement. Atomic ideas in the owner's vault are provocations, not conclusions.
 4. For each idea, cite the 2+ source notes it draws from using full `[[Wikilinks]]`.
 5. Format each idea as a **paste-ready stub** using the structure of `_Templates/Idea.md` (read that template first to match field names exactly).
 6. Assign each stub a stable `zk:` slip-id = the current timestamp formatted `YYYYMMDDHHmm` (Zettelkasten permanent address). Give consecutive stubs consecutive minutes so no two collide. Once written the id never changes, even if the title or filename does.
-7. End with a one-liner on which of the 3 ideas feels most pursuing, with reasoning — but do not pick for the owner.
+7. End with a one-liner on which of the 3 ideas feels most pursuing, with reasoning, but do not pick for the owner.
 
 ## Output format
 
 ```
-# Idea candidates <optional: — focus: <area>>
+# Idea candidates <optional:: focus: <area>>
 
 ## 1. <Short idea title>
 **Question:** <the provocation>
@@ -36,7 +36,7 @@ Optional focus area (freeform string). If omitted, draw from the whole vault.
 ```markdown
 ---
 date: <today YYYY-MM-DD>
-zk: <YYYYMMDDHHmm — stable slip-id, never changes>
+zk: <YYYYMMDDHHmm, stable slip-id, never changes>
 type: idea
 tags: [idea, status/seed]
 ---
@@ -59,7 +59,7 @@ tags: [idea, status/seed]
 ## 3. …
 
 ## Which one pulls hardest?
-<1-2 sentences — observational, not prescriptive>
+<1-2 sentences, observational, not prescriptive>
 ```
 
 ## Guardrails

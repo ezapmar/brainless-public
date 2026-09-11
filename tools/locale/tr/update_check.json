@@ -1,0 +1,5 @@
+{
+  "msg_header": "📦 {worker}: {count} paket guncellenebilir.",
+  "msg_security": "Guvenlik-ilgili: {pkgs}",
+  "msg_hint": "Hazir oldugunda: sudo pacman -Syu"
+}

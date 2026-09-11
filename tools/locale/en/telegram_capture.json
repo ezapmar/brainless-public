@@ -1,0 +1,17 @@
+{
+  "source_label": "Source",
+  "source_voice": "voice note",
+  "source_text": "text note",
+  "source_telegram_link": "Telegram link",
+  "source_telegram_image": "Telegram image",
+  "quick_note_title": "Quick Note",
+  "image_note_title": "Image Note",
+  "note_title_fallback": "Note",
+  "empty_kinds": "empty",
+  "unreadable_marker": "[unreadable]",
+  "reply_connected": "Connected. Send a voice or text note and I will file it in the vault. 🧠",
+  "reply_saved": "Saved to vault: {title}",
+  "reply_transcribe_failed": "Audio received but it could not be transcribed. Likely cause: the 20 MB download limit or a whisper error. The recording did not reach the vault.",
+  "reply_no_speech": "Audio received but no speech was detected (silence or a whisper artefact). The recording did not reach the vault.",
+  "reply_unsupported": "This message type cannot be processed ({kinds}), it did not reach the vault. You can send a voice note, an audio file, a photo or text."
+}

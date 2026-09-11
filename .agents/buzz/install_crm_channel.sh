@@ -14,7 +14,7 @@ KEYS="$BUZZ_DIR/keys"
 RELAY_CONTAINER="${BUZZ_RELAY_CONTAINER:-buzz-prod-relay-1}"
 CHANNEL_NAME="${CRM_CHANNEL:-crm}"
 IDENTITY="crm"
-OWNER="$(grep -h '^BUZZ_ACP_AGENT_OWNER=' "$BUZZ_DIR/asistan.env" | cut -d= -f2)"
+OWNER="$(grep -h '^BUZZ_ACP_AGENT_OWNER=' "$BUZZ_DIR/assistant.env" | cut -d= -f2)"
 export PATH="$HOME/.cargo/bin:$PATH"
 if [ -s "$BUZZ_DIR/relay_url" ]; then export BUZZ_RELAY_URL="$(head -1 "$BUZZ_DIR/relay_url")"; fi
 export BUZZ_RELAY_URL="${BUZZ_RELAY_URL:-http://localhost:3000}"

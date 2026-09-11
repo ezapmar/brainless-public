@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # Create the Buzz identity + channel for the daily thinking surface.
 #   bash .agents/buzz/install_think_channel.sh
-# Generates the "dusunce" key (once), registers it as a relay member, creates
+# Generates the "thinking" key (once), registers it as a relay member, creates
 # the #thinking channel with the moderator identity if missing, caches its uuid
-# in channels.json, and adds the owner + dusunce as members. Idempotent: an
+# in channels.json, and adds the owner + thinking as members. Idempotent: an
 # existing key or channel is kept. Mirrors install_personas.sh.
 set -eu
 VAULT="${BRAINLESS_VAULT:-$HOME/projects/brainless}"
@@ -11,8 +11,8 @@ BUZZ_DIR="$HOME/.config/brainless/buzz"
 KEYS="$BUZZ_DIR/keys"
 RELAY_CONTAINER="${BUZZ_RELAY_CONTAINER:-buzz-prod-relay-1}"
 CHANNEL_NAME="${THINKING_CHANNEL:-thinking}"
-IDENTITY="dusunce"
-OWNER="$(grep -h '^BUZZ_ACP_AGENT_OWNER=' "$BUZZ_DIR/asistan.env" | cut -d= -f2)"
+IDENTITY="thinking"
+OWNER="$(grep -h '^BUZZ_ACP_AGENT_OWNER=' "$BUZZ_DIR/assistant.env" | cut -d= -f2)"
 export PATH="$HOME/.cargo/bin:$PATH"
 if [ -s "$BUZZ_DIR/relay_url" ]; then export BUZZ_RELAY_URL="$(head -1 "$BUZZ_DIR/relay_url")"; fi
 export BUZZ_RELAY_URL="${BUZZ_RELAY_URL:-http://localhost:3000}"
@@ -37,8 +37,8 @@ ensure_key() {  # $1 = identity
 ensure_key "$IDENTITY"
 DUS_PUB="$(pubkey_of "$IDENTITY")"
 docker exec "$RELAY_CONTAINER" buzz-admin add-member --pubkey "$DUS_PUB" >/dev/null 2>&1 || true
-BUZZ_PRIVATE_KEY="$(secret_of "$IDENTITY")" buzz users set-profile --name "Dusunce" >/dev/null 2>&1 \
-  || log "dusunce profile name not set (check: buzz users set-profile --help)"
+BUZZ_PRIVATE_KEY="$(secret_of "$IDENTITY")" buzz users set-profile --name "Thinking" >/dev/null 2>&1 \
+  || log "thinking profile name not set (check: buzz users set-profile --help)"
 
 channel_id() {
   BUZZ_PRIVATE_KEY="$(secret_of moderator)" buzz channels list 2>/dev/null \
@@ -58,4 +58,4 @@ TMP="$(mktemp)"; { [ -s "$BUZZ_DIR/channels.json" ] && cat "$BUZZ_DIR/channels.j
 
 BUZZ_PRIVATE_KEY="$(secret_of moderator)" buzz channels add-member --channel "$CID" --pubkey "$OWNER" --role owner >/dev/null 2>&1 || true
 BUZZ_PRIVATE_KEY="$(secret_of moderator)" buzz channels add-member --channel "$CID" --pubkey "$DUS_PUB" --role bot >/dev/null 2>&1 || true
-log "done: #$CHANNEL_NAME ready, dusunce is a member"
+log "done: #$CHANNEL_NAME ready, thinking is a member"

@@ -15,7 +15,7 @@ BUZZ_DIR="$HOME/.config/brainless/buzz"
 KEYS="$BUZZ_DIR/keys"
 RELAY_CONTAINER="${BUZZ_RELAY_CONTAINER:-buzz-prod-relay-1}"
 CHANNEL_NAME="${DIALECTIC_CHANNEL:-dialectic}"
-OWNER="$(grep -h '^BUZZ_ACP_AGENT_OWNER=' "$BUZZ_DIR/asistan.env" | cut -d= -f2)"
+OWNER="$(grep -h '^BUZZ_ACP_AGENT_OWNER=' "$BUZZ_DIR/assistant.env" | cut -d= -f2)"
 # Owner display name for the persona prompts ({{OWNER}} placeholder), from PROFILE.md.
 OWNER_NAME="$(grep -m1 '^owner_name:' "$VAULT/_Agent-Context/PROFILE.md" 2>/dev/null | cut -d: -f2- | xargs)"; OWNER_NAME="${OWNER_NAME:-the owner}"
 export PATH="$HOME/.cargo/bin:$PATH"

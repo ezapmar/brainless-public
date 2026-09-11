@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Evening close-out for the brainless vault.
 
-Appends an "Akşam Kapanışı" section to today's briefing file. Two jobs:
+Appends an evening close-out section (locale key evening_closeout.section_marker)
+to today's briefing file. Two jobs:
   1. Reflect: what happened today, what carries over, open loops.
   2. Compound (forcing function): turn today's raw material into durable
      thinking by PROPOSING one candidate seed, one decision worth
@@ -35,15 +36,18 @@ VAULT = os.environ.get("BRAINLESS_VAULT") or os.path.expanduser("~/projects/brai
 sys.path.insert(0, os.path.join(VAULT, "tools"))
 from llm import run_prompt
 from calibrate import scan as calibration_scan
-from owner_profile import OWNER, lang_name  # noqa: E402
+from owner_profile import OWNER, output_lang_directive  # noqa: E402
+from i18n import t, t_list  # noqa: E402
 
 CAPTURE_DIR = os.path.join(VAULT, "Thinking", "Daily")
-TASKS_FILE = os.path.join(VAULT, "_Agent-Context", "TASKS.md")  # tek görev defteri
+TASKS_FILE = os.path.join(VAULT, "_Agent-Context", "TASKS.md")  # the single task ledger
 BELIEFS_FILE = os.path.join(VAULT, "_Agent-Context", "BELIEFS-SUMMARY.md")
 BRIEFING_DIR = os.path.join(VAULT, "Daily Briefings")
 STATUS_FILE = os.path.join(VAULT, ".agents", "state", "llm_status")
 MAX_CONTEXT = 15000  # chars of embedded context; keeps the call cheap
-MARKER = "## Akşam Kapanışı"
+MARKER = t("evening_closeout.section_marker")
+# Older briefings may carry the marker in another language; detect all of them.
+MARKERS = t_list("evening_closeout.section_marker")
 
 
 def log(msg):
@@ -67,8 +71,8 @@ def todays_captures():
     if os.path.isdir(CAPTURE_DIR):
         for name in sorted(os.listdir(CAPTURE_DIR)):
             path = os.path.join(CAPTURE_DIR, name)
-            # Sadece .md: foto capture'lari Thinking/Daily'ye .jpg birakiyor;
-            # binary icerik prompt'a girerse subprocess null byte'ta patliyor.
+            # Only .md: photo captures leave .jpg files in Thinking/Daily;
+            # binary content in the prompt makes subprocess choke on a null byte.
             if os.path.isfile(path) and not name.startswith(".") and name.endswith(".md"):
                 try:
                     with open(path, errors="replace") as fh:
@@ -133,17 +137,17 @@ def calibration_block():
     due, needs_pred, no_review = calibration_scan()
     if not (due or needs_pred or no_review):
         return ""
-    lines = ["### 📊 Karar takvimi"]
+    lines = [t("evening_closeout.calendar_heading")]
     if due:
-        lines.append("**Notlanmayı bekliyor (review tarihi geçti, sonuç yazılmadı):**")
+        lines.append(t("evening_closeout.due_heading"))
         for name, rev in due:
             lines.append(f"- [[{name}]] (review {rev})")
     if needs_pred:
-        lines.append("**Tahmin eksik (decided ama forecast yok):**")
+        lines.append(t("evening_closeout.needs_pred_heading"))
         for name in needs_pred:
             lines.append(f"- [[{name}]]")
     if no_review:
-        lines.append("**Review tarihi yok (pending/deferred):**")
+        lines.append(t("evening_closeout.no_review_heading"))
         for name in no_review:
             lines.append(f"- [[{name}]]")
     return "\n".join(lines)
@@ -154,36 +158,37 @@ def build_section(date_str, captures, changes):
     None return here means the LLM call itself failed (see latest_llm_status)."""
     context = ""
     if captures:
-        context += f"\n# BUGÜNÜN HAM NOTLARI (Thinking/Daily):\n{captures}"
+        context += f"\n# TODAY'S RAW NOTES (Thinking/Daily):\n{captures}"
     if changes:
-        context += f"\n# BUGÜN DOKUNULAN DOSYALAR:\n{changes}"
+        context += f"\n# FILES TOUCHED TODAY:\n{changes}"
     tasks = open_tasks()
     if tasks:
-        context += f"\n# AÇIK GÖREVLER (_Agent-Context/TASKS.md):\n{tasks}"
+        context += f"\n# OPEN TASKS (_Agent-Context/TASKS.md):\n{tasks}"
     context = context[:MAX_CONTEXT]
 
     beliefs = beliefs_summary()
+    none = t("evening_closeout.none_word")
 
-    prompt = f"""Sen {OWNER} için 'brainless' sistemindeki akşam kapanışı asistanısın.
-Tarih: {date_str}. Aşağıdaki bağlama dayanarak KISA bir günlük kapanış yaz ({lang_name(native=True)}):
+    prompt = f"""You are the evening close-out assistant of the 'brainless' system for {OWNER}.
+Date: {date_str}. Based on the context below, write a SHORT daily close-out. {output_lang_directive()} Use exactly these headings:
 
-## Bugün Ne Oldu
-(en fazla 3 madde, dosya listesini tekrarlama, anlam çıkar)
-## Yarına Devreden
-(somut, en fazla 3 madde; yoksa "Yok" yaz)
-## Açık Döngüler
-(cevap bekleyen veya unutulma riski olan şeyler; yoksa bölümü atla)
+{t("evening_closeout.heading_what_happened")}
+(at most 3 bullets; do not repeat the file list, extract the meaning)
+{t("evening_closeout.heading_carry_over")}
+(concrete, at most 3 bullets; if there is nothing, write "{none}")
+{t("evening_closeout.heading_open_loops")}
+(things waiting for an answer or at risk of being forgotten; skip the section if there are none)
 
-## Düşünce Döngüsü
-Amaç: günün ham malzemesini kalıcı düşünceye çevirmek. SADECE bağlamda gerçekten varsa öner; zorlama, uydurma. Yoksa ilgili maddeye "Yok" yaz. Bunlar birer ÖNERİ; {OWNER} kendi eliyle işleyecek.
-- 🌱 Aday tohum: Bugünün notlarından/işinden çıkan 1 açık soru. Format: **Soru?** + neden önemli (1 cümle) + hangi mevcut nota bağlanır ([[Not adı]]). Thinking/Ideas/ altına yapıştırılabilir olsun.
-- ⚖️ Kristalize edilecek karar: Bugün Work/ altında bir karar olgunlaşıyorsa, Thinking/Decisions/ altına taşımayı öner ve yanlışlanabilir bir tahmin cümlesi ekle. Yoksa "Yok".
-- 🔀 Çelişki: Aşağıdaki inançlarından biriyle bugünkü bir eylem/karar çelişiyorsa tek cümlede göster. Yoksa bu maddeyi atla.
+{t("evening_closeout.heading_thinking_loop")}
+Purpose: turn the day's raw material into durable thinking. Propose ONLY what is genuinely in the context; do not force it, do not invent. If there is nothing, write "{none}" for that item. These are PROPOSALS; {OWNER} will process them by hand.
+- {t("evening_closeout.seed_label")}: 1 open question arising from today's notes/work. Format: **Question?** + why it matters (1 sentence) + which existing note it connects to ([[Note name]]). Make it paste-ready for Thinking/Ideas/.
+- {t("evening_closeout.decision_label")}: if a decision under Work/ is maturing today, propose moving it to Thinking/Decisions/ and add a falsifiable prediction sentence. Otherwise "{none}".
+- {t("evening_closeout.contradiction_label")}: if one of the beliefs below clashes with an action/decision of today, show it in one sentence. Otherwise skip this item.
 
-İNANÇLARIM (tohum ve çelişki için referans):
-{beliefs or "(özet bulunamadı)"}
+BELIEFS OF {OWNER} (reference for the seed and the contradiction):
+{beliefs or "(no summary found)"}
 
-Sadece markdown içeriğini yaz, başka hiçbir şey yazma. Uydurma: bağlamda olmayanı yazma. Karar review tarihlerinden BAHSETME (o listeyi sistem ekliyor).
+Write only the markdown content, nothing else. Do not invent: write nothing that is not in the context. Do NOT mention decision review dates (the system appends that list).
 {context}"""
 
     result = run_prompt(prompt, timeout=300)
@@ -204,12 +209,13 @@ def main():
     captures = todays_captures()
     changes = todays_changes()
     if not captures and not changes:
-        log("Kapatılacak bir şey yok: bugün capture da dosya değişikliği de yok.")
+        log("Nothing to close: no captures and no file changes today.")
         return
 
     if os.path.exists(briefing_path) and not dry_run:
         with open(briefing_path, errors="replace") as fh:
-            if MARKER in fh.read():
+            text = fh.read()
+        if any(m in text for m in MARKERS):
                 log("Close-out already present for today. Skipping.")
                 return
 
@@ -217,12 +223,12 @@ def main():
     if section is None:
         outcome, detail = latest_llm_status()
         if outcome == "auth":
-            log(f"LLM kimlik doğrulama süresi dolmuş ({detail[:80]}). "
-                f"Terminalde `claude` ile yeniden giriş yap; capture/değişiklik hazır.")
+            log(f"LLM authentication expired ({detail[:80]}). "
+                f"Log in again with `claude` in a terminal; captures/changes are ready.")
         elif outcome == "timeout":
-            log("LLM çağrısı zaman aşımına uğradı; kapanış yazılmadı.")
+            log("LLM call timed out; close-out not written.")
         else:
-            log(f"LLM çağrısı başarısız ({outcome or 'bilinmiyor'}): {detail[:80]}")
+            log(f"LLM call failed ({outcome or 'unknown'}): {detail[:80]}")
         return
 
     if dry_run:
@@ -231,7 +237,8 @@ def main():
 
     os.makedirs(BRIEFING_DIR, exist_ok=True)
     if not os.path.exists(briefing_path):
-        header = f"# {date_str} Günlük Not\n\n(Sabah brifingi bugün üretilmedi; bu dosya akşam kapanışıyla açıldı.)\n"
+        header = (t("evening_closeout.missing_briefing_title", date=date_str) + "\n\n"
+                  + t("evening_closeout.missing_briefing_note") + "\n")
         section = header + section
     with open(briefing_path, "a") as fh:
         fh.write(section)
@@ -240,12 +247,12 @@ def main():
 
 
 def post_to_buzz(text):
-    """Best effort (Buzz Katman 1): akşam kapanışını #gunluk kanalına Brifing kimliğiyle bas."""
+    """Best effort (Buzz layer 1): post the close-out to the daily channel with the briefing identity."""
     script = os.path.join(VAULT, ".agents", "scripts", "buzz_post.sh")
     if not os.access(script, os.X_OK):
         return
     try:
-        subprocess.run([script, "brifing", "daily"], input=text, text=True,
+        subprocess.run([script, "briefing", "daily"], input=text, text=True,
                        capture_output=True, timeout=45, cwd=VAULT)
     except Exception as exc:
         log(f"buzz post skipped: {exc}")

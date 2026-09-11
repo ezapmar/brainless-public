@@ -10,7 +10,7 @@ WORKER="$(grep -m1 '^worker_name:' _Agent-Context/PROFILE.md 2>/dev/null | cut -
 
 git pull --rebase --autostash --quiet || true
 
-# Buzz Katman 1: post the morning briefing to #gunluk once per day (best effort).
+# Buzz Layer 1: post the morning briefing to #daily once per day (best effort).
 [ -x .agents/scripts/buzz_briefing_sync.sh ] && bash .agents/scripts/buzz_briefing_sync.sh || true
 
 if [ -n "$(git status --porcelain)" ]; then

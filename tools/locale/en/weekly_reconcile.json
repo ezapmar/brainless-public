@@ -1,0 +1,10 @@
+{
+  "heading_stale": "## Stale or Looks Wrong",
+  "heading_missing": "## Missing New Developments",
+  "heading_proposed": "## Proposed Updates",
+  "no_drift": "No drift, CONTEXT is current.",
+  "no_drift_marker": "No drift",
+  "report_title": "# CONTEXT Drift Report",
+  "report_intro": "> Generated: {date}. This report is a proposal only; update CONTEXT.md with {owner}'s approval.",
+  "notify_text": "Weekly CONTEXT reconciliation ready: drift found"
+}

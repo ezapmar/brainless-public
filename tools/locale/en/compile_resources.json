@@ -1,0 +1,17 @@
+{
+  "summary_heading": "## Summary",
+  "status_heading": "## Status",
+  "links_heading": "## Links",
+  "open_threads_heading": "## Open Threads",
+  "decisions_heading": "## Decisions",
+  "cross_effects_heading": "## Cross-effects (if any)",
+  "entity_summary_heading": "## Summary",
+  "entity_timeline_heading": "## Timeline",
+  "entity_open_items_heading": "## Open Items",
+  "entity_relations_heading": "## Relationships",
+  "entity_sources_heading": "## Sources",
+  "private_name_parts": [
+    "passport",
+    "schengen"
+  ]
+}

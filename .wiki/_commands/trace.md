@@ -18,7 +18,7 @@ If no argument is provided, ask: "Which topic should I trace?"
 1. Find every note whose **content or title** mentions the topic (case-insensitive, handle obvious variants, e.g. "ticket" also matches "ticket-system", "Kolay Ticket").
 2. For each match, read its `date` frontmatter. If no frontmatter date, fall back to the filename date (for dailies) or file mtime.
 3. Sort chronologically, oldest first.
-4. For each entry, extract the 1-2 sentences where the topic appears — quote exactly.
+4. For each entry, extract the 1-2 sentences where the topic appears, quote exactly.
 5. Identify inflection points: dates where the framing of the topic visibly shifted. Call these out in a final summary.
 6. Also include note maturity (`#status/seed|growing|evergreen`) so user can weight early vs. refined thinking.
 
@@ -36,14 +36,14 @@ If no argument is provided, ask: "Which topic should I trace?"
 | … | … | … | … |
 
 ## Inflection points
-- **2026-01-14** — shift from X to Y framing. Triggered by [[Note]].
-- **2026-03-22** — decision made, see [[Decision Note]].
+- **2026-01-14**, shift from X to Y framing. Triggered by [[Note]].
+- **2026-03-22**, decision made, see [[Decision Note]].
 
 ## Current position
 <1-2 sentence summary of where the thinking stands today, citing the most recent evergreen or growing note on the topic>
 
 ## Gaps
-<notes that should probably exist but don't — e.g. "no Decision note exists despite the thinking being clearly settled">
+<notes that should probably exist but don't, e.g. "no Decision note exists despite the thinking being clearly settled">
 ```
 
 ## Guardrails

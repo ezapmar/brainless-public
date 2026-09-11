@@ -1,0 +1,48 @@
+{
+  "apply_words": [
+    "apply",
+    "yes apply"
+  ],
+  "cancel_words": [
+    "cancel"
+  ],
+  "skip_words": [
+    "skip"
+  ],
+  "answer_prefix": [
+    "answer"
+  ],
+  "q_grade": "📊 Decision grading: [[{name}]] (review {review}) is still ungraded.\nWhat was the prediction, what actually happened, what does that teach you about your judgment? Answer by voice or text.",
+  "q_predict": "🔮 Prediction: [[{name}]] was decided but has no measurable prediction.\nWhat do you expect to happen, with what percent confidence, and when should we check?",
+  "q_cadence": "🎯 Cadence step: {step}\nDid you do it this week? If yes, what came out of it; if not, what got in the way?",
+  "q_belief": "🧭 Belief challenge: [[{name}]] was last challenged on {date}.\nIn recent weeks, was there a concrete event that confirmed or refuted this belief? Tell one example; did your confidence change?",
+  "q_seed": "🌱 Seed: no new question has landed in Thinking/Ideas for two weeks.\nWhat question has your mind kept circling this week? One sentence is enough, I will expand the rest.",
+  "pending_open": "⏳ Last week's question is still open. Reply to that message to answer it, or write 'skip' to skip it.\n\n{question}",
+  "ask_message": "🧠 Weekly thinking question\n\n{question}\n\nReply to this message (swipe) by voice or text. Write 'skip' to skip.",
+  "preview_grade": "📊 Outcome draft for [[{target}]]\n\nOutcome ({score}): {outcome}\nLesson: {lesson}\n\nThe Calibration.md row will be filled too.",
+  "preview_predict": "🔮 Prediction draft for [[{target}]]\n\nPrediction: {prediction}\nConfidence: {confidence}%\nReview: {review}",
+  "preview_belief": "🧭 Challenge record for [[{target}]]\n\nEvent: {instance}\nVerdict: {verdict}\nConfidence: {confidence}\nlast_challenged will be set to today.",
+  "preview_cadence": "🎯 Cadence step {done}\n\nNote: {note}\n(Lands in Thinking/Daily as a capture.)",
+  "cadence_will_mark": "will be checked off ✅",
+  "cadence_stays_open": "stays open",
+  "preview_seed": "🌱 New seed: {title}\n\n{idea}\n\nWhy: {why}\nConnects: {connects}",
+  "note_grade_block": "- **Outcome ({today}, {score}):** {outcome}\n- **Lesson:** {lesson}\n",
+  "verdict_supports": "supported",
+  "verdict_challenges": "refuted",
+  "verdict_neutral": "neutral",
+  "note_belief_entry": "### {today}\n- Event: {instance}\n- Verdict: {verdict}\n",
+  "note_cadence_capture": "# Cadence step: {target}\n\n- Status: {status}\n- Note: {note}\n\n#thinking #cadence\n\n---\nSource: Telegram thinking loop, {stamp}\n",
+  "cadence_done": "done",
+  "cadence_not_done": "not done",
+  "seed_default_name": "Seed {today}",
+  "seed_source": "Telegram thinking loop",
+  "query_body": "# Thinking loop: {kind}\n\n## Answer (raw)\n{answer}\n\n## Applied\n```json\n{payload}\n```\n\nTouched: {touched}\n",
+  "applied": "✅ Applied: {files}",
+  "cancelled": "OK, draft discarded. The question stays open; answer again if you like, or 'skip'.",
+  "skipped": "Skipped. A different question comes next week.",
+  "transcribe_failed": "Could not transcribe the audio; can you try again?",
+  "unsupported_message": "I cannot process this message type as an answer; send voice or text.",
+  "drafting": "Got it, preparing the draft...",
+  "draft_failed": "Could not produce a draft (LLM returned nothing). Your answer is not lost; try again or 'skip'.",
+  "draft_footer": "\n\nWrite 'apply' and I will write it into the note; 'cancel' discards it."
+}

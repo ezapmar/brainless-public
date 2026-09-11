@@ -5,11 +5,11 @@ argument-hint: [min-age-days, default 14]
 ---
 
 ## Inputs
-Optional integer — minimum age in days for a seed to be considered. Default: 14.
+Optional integer, minimum age in days for a seed to be considered. Default: 14.
 
 ## Reads
 - Every markdown file tagged `#status/seed` (search frontmatter `tags` and inline tags). Treat a `status: seed` frontmatter scalar the same as the tag.
-- For each candidate, count **inbound wikilinks** — how many other notes contain `[[this note]]`.
+- For each candidate, count **inbound wikilinks**, how many other notes contain `[[this note]]`.
 - Read each candidate's frontmatter `date` and body length (word count).
 - For any note you propose promoting to **evergreen**, also read its body (Key Points / sections) so you can judge whether it holds more than one idea.
 
@@ -39,7 +39,7 @@ Optional integer — minimum age in days for a seed to be considered. Default: 1
 ## Output format
 
 ```
-# Graduate review — cutoff <N> days
+# Graduate review: cutoff <N> days
 
 ## Propose → #status/growing (<count>)
 
@@ -58,7 +58,7 @@ Optional integer — minimum age in days for a seed to be considered. Default: 1
 
 ## Fission → atomic ideas (from new evergreens) (<count>)
 
-### From [[Parent Note]] (`path/to/parent.md`) — <N> ideas
+### From [[Parent Note]] (`path/to/parent.md`): <N> ideas
 ```markdown
 ---
 date: <today YYYY-MM-DD>
@@ -78,8 +78,8 @@ tags: [idea, status/seed]
 ```
 <one stub per distinct Key Point; consecutive zk minutes>
 
-## Lonely seeds — archive or kill (<count>)
-- [[Note]] — 0 inbound, <N> days old. Consider moving to `Archive/` or deleting.
+## Lonely seeds: archive or kill (<count>)
+- [[Note]], 0 inbound, <N> days old. Consider moving to `Archive/` or deleting.
 
 ## Leave alone (<count>)
 <just a count, not a list>
@@ -91,4 +91,4 @@ Reply `apply 1,3,5` to apply specific diffs, `apply all promotions`, or `skip` t
 ## Guardrails
 Follow `.wiki/_commands/_shared-rules.md`.
 If the owner replies with an `apply` instruction, only then modify the tag frontmatter. Touch no other fields. One commit per apply batch.
-Fission stubs are paste-ready proposals only — never write idea files automatically. `Thinking/Ideas/` is human-owned (paste there yourself); only write to `.wiki/ideas/` on an explicit `apply ideas`.
+Fission stubs are paste-ready proposals only, never write idea files automatically. `Thinking/Ideas/` is human-owned (paste there yourself); only write to `.wiki/ideas/` on an explicit `apply ideas`.

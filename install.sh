@@ -96,9 +96,9 @@ if grep -q '^owner_name: the owner' "$PROFILE" 2>/dev/null; then
   NAME="the owner"; LANG_CODE="en"
   if [ "$NONINTERACTIVE" -eq 0 ] && [ -t 0 ]; then
     read -r -p "    Your first name (used in prompts): " NAME_IN; NAME="${NAME_IN:-$NAME}"
-    read -r -p "    Output language, en or tr [en]: " LANG_IN; LANG_CODE="${LANG_IN:-en}"
+    read -r -p "    Output language code, e.g. en, tr, de [en]: " LANG_IN; LANG_CODE="${LANG_IN:-en}"
   fi
-  case "$LANG_CODE" in tr|en) ;; *) LANG_CODE="en" ;; esac
+  case "$LANG_CODE" in [a-z][a-z]|[a-z][a-z][a-z]) ;; *) LANG_CODE="en" ;; esac
   # Escape for sed replacement.
   NAME_ESC="$(printf '%s' "$NAME" | sed 's/[&/\]/\\&/g')"
   sed -i.bak -e "s/^owner_name: .*/owner_name: $NAME_ESC/" -e "s/^owner_full_name: .*/owner_full_name: $NAME_ESC/" \

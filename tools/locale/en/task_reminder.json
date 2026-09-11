@@ -1,0 +1,7 @@
+{
+  "label_promises": "Your promises",
+  "label_waiting": "Waiting on others",
+  "item_age": "{title} ({age} days)",
+  "header": "📋 Task reminder (open for {days}+ days):",
+  "more_items": "- ... +{n} more items (TASKS.md / Google Tasks)"
+}

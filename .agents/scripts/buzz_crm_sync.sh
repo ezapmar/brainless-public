@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Buzz Katman 1: post the CRM snapshot (_Agent-Context/CRM.md) to #crm as the
+# Buzz Layer 1: post the CRM snapshot (_Agent-Context/CRM.md) to #crm as the
 # "crm" identity whenever its body changed since the last post. Timestamps are
 # ignored in the comparison, so a quiet hour posts nothing. Runs right after
 # crm_capture.py (cron_wrapper.sh on the laptop, ExecStartPost on the worker).

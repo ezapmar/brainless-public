@@ -7,5 +7,5 @@ Follow the guardrails in this file first:
 Then execute this command definition exactly:
 @{.wiki/_commands/contradict.md}
 
-Scope (optional — beliefs | decisions | all, default all): {{args}}
+Scope (optional, beliefs | decisions | all, default all): {{args}}
 """

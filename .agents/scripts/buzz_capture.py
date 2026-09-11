@@ -26,7 +26,8 @@ from datetime import datetime
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 import telegram_capture as tc  # noqa: E402  (reuses whisper, prompts, paths)
-from owner_profile import OWNER, OWNER_FULL, WORKER  # noqa: E402
+from owner_profile import OWNER, OWNER_FULL, WORKER, LANG  # noqa: E402
+from i18n import t  # noqa: E402
 
 VAULT = tc.VAULT
 BUZZ_DIR = os.path.expanduser("~/.config/brainless/buzz")
@@ -166,10 +167,10 @@ def transcribe_file(path):
         wav = os.path.join(tmp, "voice.wav")
         subprocess.run(["ffmpeg", "-y", "-i", path, "-ar", "16000", "-ac", "1", wav],
                        check=True, capture_output=True, timeout=120)
-        r = subprocess.run([tc.WHISPER, "-m", tc.MODEL, "-l", "tr", "-f", wav, "--no-timestamps"],
+        r = subprocess.run([tc.WHISPER, "-m", tc.MODEL, "-l", LANG, "-f", wav, "--no-timestamps"],
                            capture_output=True, text=True, timeout=600)
         if r.returncode != 0:
-            log(f"whisper hata: {r.stderr[:200]}")
+            log(f"whisper error: {r.stderr[:200]}")
             return None
         return r.stdout.strip()
 
@@ -178,8 +179,8 @@ def write_note(note, stamp, source):
     os.makedirs(tc.CAPTURE_DIR, exist_ok=True)
     path = os.path.join(tc.CAPTURE_DIR, f"{stamp}-buzz.md")
     with open(path, "w") as fh:
-        fh.write(note + f"\n\n---\nKaynak: Buzz #{CHANNEL_NAME} {source}, {stamp}\n")
-    log(f"Not yazıldı: {path}")
+        fh.write(note + f"\n\n---\n{t('buzz_capture.source_label')}: Buzz #{CHANNEL_NAME} {source}, {stamp}\n")
+    log(f"Note written: {path}")
     return path
 
 
@@ -199,15 +200,15 @@ def handle(msg):
         with tempfile.TemporaryDirectory() as tmp:
             raw = os.path.join(tmp, f"voice{ext}")
             if not download(url, raw):
-                raise RuntimeError("ses dosyası indirilemedi")
-            log("Ses alındı, transkript ediliyor...")
+                raise RuntimeError(t("buzz_capture.err_audio_download"))
+            log("Audio received, transcribing...")
             text = transcribe_file(raw)
         if not text:
-            raise RuntimeError("transkript boş döndü")
+            raise RuntimeError(t("buzz_capture.err_transcript_empty"))
         if caption:
-            text = f"{text}\n\n({OWNER} notu: {caption})"
-        note = tc.make_note(text, "Buzz sesli not") or f"# Hızlı Not\n\n{text}"
-        path = write_note(note, stamp, "sesli not")
+            text = f"{text}\n\n" + t("buzz_capture.caption_note", owner=OWNER, caption=caption)
+        note = tc.make_note(text, t("buzz_capture.source_voice_prompt")) or f"# {t('buzz_capture.quick_note_title')}\n\n{text}"
+        path = write_note(note, stamp, t("buzz_capture.source_voice"))
         return note.splitlines()[0].lstrip("# ").strip(), path
 
     if images:
@@ -216,23 +217,23 @@ def handle(msg):
         os.makedirs(tc.CAPTURE_DIR, exist_ok=True)
         dest = os.path.join(tc.CAPTURE_DIR, f"{stamp}-buzz{ext}")
         if not download(url, dest):
-            raise RuntimeError("görsel indirilemedi")
-        log("Görsel alındı, işleniyor...")
-        note = tc.make_photo_note(dest, caption) or f"# Görsel Not\n\n{caption}".rstrip()
+            raise RuntimeError(t("buzz_capture.err_image_download"))
+        log("Image received, processing...")
+        note = tc.make_photo_note(dest, caption) or f"# {t('buzz_capture.image_note_title')}\n\n{caption}".rstrip()
         note += f"\n\n![[{os.path.basename(dest)}]]"
-        path = write_note(note, stamp, "görsel")
+        path = write_note(note, stamp, t("buzz_capture.source_image"))
         return note.splitlines()[0].lstrip("# ").strip(), path
 
     if caption:
         m = tc.URL_RE.search(caption)
         if m and len(tc.URL_RE.sub("", caption).strip()) < 200 and "/media/" not in m.group(0):
             title = tc.handle_link(caption, m)
-            return (title or "Link notu"), os.path.join("Inbox", "Links")
-        note = tc.make_note(caption, "Buzz yazılı not") or f"# Hızlı Not\n\n{caption}"
-        path = write_note(note, stamp, "yazılı not")
+            return (title or t("buzz_capture.link_note_title")), os.path.join("Inbox", "Links")
+        note = tc.make_note(caption, t("buzz_capture.source_text_prompt")) or f"# {t('buzz_capture.quick_note_title')}\n\n{caption}"
+        path = write_note(note, stamp, t("buzz_capture.source_text"))
         return note.splitlines()[0].lstrip("# ").strip(), path
 
-    raise RuntimeError("işlenebilir içerik yok (metin, ses ya da görsel bekleniyor)")
+    raise RuntimeError(t("buzz_capture.err_no_content"))
 
 
 def reply(channel, event_id, text):
@@ -240,25 +241,25 @@ def reply(channel, event_id, text):
         buzz(["messages", "send", "--channel", channel, "--reply-to", event_id, "--content", "-"],
              stdin=text, timeout=45)
     except Exception as exc:
-        log(f"cevap gönderilemedi: {exc}")
+        log(f"reply could not be sent: {exc}")
 
 
 def main():
     channel = channel_id(CHANNEL_NAME)
     if not channel or not secret(IDENTITY):
-        log("buzz capture: kanal ya da kimlik yok, atlanıyor")
+        log("buzz capture: no channel or identity, skipping")
         return
     since = load_since()
     try:
         out = buzz(["messages", "get", "--channel", channel, "--limit", "50", "--since", str(since - 1)])
     except Exception as exc:
-        log(f"buzz messages get başarısız: {exc}")
+        log(f"buzz messages get failed: {exc}")
         return
     try:
         data = json.loads(out or "[]")
         msgs = data if isinstance(data, list) else data.get("messages", [])
     except ValueError:
-        log("buzz çıktısı JSON değil")
+        log("buzz output is not JSON")
         return
 
     seen = load_seen()
@@ -281,10 +282,10 @@ def main():
         try:
             title, path = handle(msg)
             rel = os.path.relpath(path, VAULT)
-            reply(channel, mid, f"Not düştü: {title}\n{rel}")
+            reply(channel, mid, t("buzz_capture.reply_saved", title=title, rel=rel))
         except Exception as exc:
-            log(f"capture hatası: {exc}")
-            reply(channel, mid, f"Bu mesaj işlenemedi: {exc}. Vault'a düşmedi.")
+            log(f"capture error: {exc}")
+            reply(channel, mid, t("buzz_capture.reply_failed", exc=exc))
     save_seen(seen)
     save_since(newest)
 

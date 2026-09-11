@@ -1,5 +1,5 @@
 #!/bin/bash
-# setup.sh — stand up the brainless automation on a fresh machine.
+# setup.sh: stand up the brainless automation on a fresh machine.
 # Idempotent: safe to re-run. Installs Python deps and checks external tools.
 PREFIX="${BRAINLESS_LABEL_PREFIX:-com.$USER}"
 set -euo pipefail
@@ -13,7 +13,7 @@ echo "==> Verifying markitdown has document support"
 if python3 -c "import pdfminer, openpyxl, pptx, mammoth" 2>/dev/null; then
   echo "    ok: pdf/xlsx/pptx/docx converters present"
 else
-  echo "    WARNING: markitdown extras missing — PDFs/DOCX/XLSX will fail to convert."
+  echo "    WARNING: markitdown extras missing, PDFs/DOCX/XLSX will fail to convert."
   echo "    Re-run: python3 -m pip install --break-system-packages --user 'markitdown[pdf,docx,xlsx,pptx]==0.1.7'"
 fi
 

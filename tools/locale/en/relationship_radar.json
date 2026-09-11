@@ -1,0 +1,17 @@
+{
+  "tasks_section_waiting": "Waiting",
+  "tasks_section_promises": "Promises",
+  "report_red": "🔴 Long silence ({weeks}+ weeks):",
+  "report_yellow": "\n🟡 Gone quiet ({weeks}+ weeks):",
+  "report_momentum": "\n📉 Momentum drop ({points}+ points):",
+  "report_waiting": "\n⏳ Waiting on them (open items):",
+  "row_contact": "{name} ({scope}), last contact {weeks} weeks ago",
+  "row_momentum": "{name}: last meeting score {score} ({drop} points lower)",
+  "row_waiting": "{name}: {n} items",
+  "snapshot_title": "# Relationship Radar",
+  "snapshot_intro": "Updated: {updated}. Thresholds: silence {yellow}w yellow / {red}w red, momentum {points}+ points.",
+  "snapshot_table_header": "| Person | Scope | Last contact | Cadence (days) | Last score | Momentum | Waiting on | You owe |",
+  "week_short": "w",
+  "telegram_title": "🤝 Relationship radar (weekly):",
+  "telegram_detail": "Details: .wiki/relationships/radar.md"
+}

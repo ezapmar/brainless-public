@@ -1,0 +1,19 @@
+{
+  "summary_heading": "## Özet (TR)",
+  "status_heading": "## Durum (TR)",
+  "links_heading": "## Bağlantılar",
+  "open_threads_heading": "## Açık İşler / Open Threads",
+  "decisions_heading": "## Kararlar / Decisions",
+  "cross_effects_heading": "## Cross-effects (varsa)",
+  "entity_summary_heading": "## Özet",
+  "entity_timeline_heading": "## Zaman Çizgisi",
+  "entity_open_items_heading": "## Açık Maddeler",
+  "entity_relations_heading": "## İlişkiler",
+  "entity_sources_heading": "## Kaynaklar",
+  "private_name_parts": [
+    "pasaport",
+    "kimlik",
+    "nüfus",
+    "nufus"
+  ]
+}
