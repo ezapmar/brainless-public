@@ -19,6 +19,10 @@ push. The private vault this is exported from has its own history.
   (key files under `~/.config/brainless/buzz/keys/`), and the owner env file is
   `assistant.env`. Existing relays rename the files once.
 - Installer accepts any two or three letter language code.
+- Document conversion calls markitdown as a Python library
+  (`tools/markitdown_native.py`), not the CLI: one reused converter instance, no
+  PATH discovery, no per file subprocess. `smart_processor.py` and
+  `batch_markitdown.py` share it.
 - No em or en dashes anywhere in the tree; the leak scan and CI stay as before.
 
 ## 0.1.2 (2026-09-11)
