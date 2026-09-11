@@ -1,0 +1,8 @@
+{
+  "digest_title": "# Haftalık Okuma Sentezi ({stamp})",
+  "digest_source_line": "Kaynak: thinker_digest.py ({worker}). {n_new} yeni yazi, {n_links} forward edilen link.",
+  "notify_ready": "📚 Haftalık okuma sentezi hazır ({n_new} yeni yazı{links_part})\n",
+  "notify_links_part": ", {n_links} senin linkin",
+  "notify_authors": "Yazanlar: {who}\n",
+  "notify_vault": "\nVault: {path}"
+}

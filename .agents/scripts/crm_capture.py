@@ -53,6 +53,7 @@ from datetime import date, datetime, timedelta
 VAULT = os.environ.get("BRAINLESS_VAULT") or os.path.expanduser("~/projects/brainless")
 sys.path.insert(0, os.path.join(VAULT, "tools"))
 from owner_profile import LANG, OWNER  # noqa: E402
+from i18n import languages, raw, t  # noqa: E402
 
 CONF_DIR = os.path.expanduser("~/.config/brainless")
 STATE_FILE = os.path.join(VAULT, ".agents", "state", "crm_snapshot.json")
@@ -66,94 +67,27 @@ DEFAULT_STAGE_DAYS = 30
 MAX_PAGES = 20
 PAGE_SIZE = 500
 
-LABELS = {
-    "tr": {
-        "title": "# CRM Durumu",
-        "status": "Durum",
-        "updated": "güncelleme",
-        "source": "kaynak",
-        "owner": "sahip",
-        "counts": "{orgs} şirket, {deals} açık anlaşma, {flags} bayrak, son 24 saatte {changes} değişiklik",
-        "flags": "## Bayraklar",
-        "changes": "## Değişenler (son 24 saat)",
-        "idle_orgs": "## Anlaşması olmayan şirketler",
-        "none": "- yok",
-        "baseline_note": "- ilk çalışma: temel çizgi alındı, delta bir sonraki çalışmadan itibaren",
-        "cols": ["Şirket", "Anlaşma", "Aşama", "Değer", "Son aktivite", "Sonraki adım", "Bayrak"],
-        "total": "Toplam",
-        "deal_word": "anlaşma",
-        "no_org": "(şirket yok)",
-        "day_short": "g",
-        "last_activity": "son aktivite",
-        "footer": ("> Kişi adı, e-posta ve telefon bilerek yok (şirket ve anlaşma seviyesi). "
-                   "LLM kullanılmaz. Üretici: .agents/scripts/crm_capture.py"),
-        "flag_no_activity": "{d} gündür aktivite yok",
-        "flag_next_overdue": "sonraki adım gecikmiş ({date})",
-        "flag_close_passed": "beklenen kapanış geçti ({date})",
-        "flag_stage_stale": "{d} gündür aynı aşamada",
-        "code_no_activity": "AKTIVITE>{n}g",
-        "code_next_overdue": "SONRAKI GECIKTI",
-        "code_close_passed": "KAPANIS GECTI",
-        "code_stage_stale": "ASAMA>{n}g",
-        "ev_baseline": "{org}: izlemeye alındı ({detail})",
-        "ev_deal_new": "{org}: \"{title}\" yeni anlaşma ({detail})",
-        "ev_stage": "{org}: \"{title}\" aşama {detail}",
-        "ev_value": "{org}: \"{title}\" değer {detail}",
-        "ev_won": "{org}: \"{title}\" kazanıldı",
-        "ev_lost": "{org}: \"{title}\" kaybedildi",
-        "ev_deleted": "{org}: \"{title}\" silindi",
-        "ev_reassigned": "{org}: \"{title}\" başkasına atandı",
-        "ev_gone": "{org}: \"{title}\" listeden çıktı",
-        "ev_org_new": "{org}: izlemeye alındı",
-        "ev_org_gone": "{org}: sahiplikten çıktı",
-        "ev_org_renamed": "{org}: yeniden adlandırıldı ({detail})",
-        "log_header": "# {org}\n\nKaynak: CRM ({provider}), otomatik olay günlüğü. Kişi verisi yok.\n\n---\n\n",
-        "open_deals": "{n} açık anlaşma",
-    },
-    "en": {
-        "title": "# CRM Status",
-        "status": "Status",
-        "updated": "updated",
-        "source": "source",
-        "owner": "owner",
-        "counts": "{orgs} organisations, {deals} open deals, {flags} flags, {changes} changes in the last 24h",
-        "flags": "## Flags",
-        "changes": "## Changes (last 24h)",
-        "idle_orgs": "## Organisations without open deals",
-        "none": "- none",
-        "baseline_note": "- first run: baseline taken, deltas start with the next run",
-        "cols": ["Organisation", "Deal", "Stage", "Value", "Last activity", "Next step", "Flags"],
-        "total": "Total",
-        "deal_word": "deals",
-        "no_org": "(no organisation)",
-        "day_short": "d",
-        "last_activity": "last activity",
-        "footer": ("> No person names, e-mails or phones by design (organisation and deal level). "
-                   "No LLM. Producer: .agents/scripts/crm_capture.py"),
-        "flag_no_activity": "no activity for {d} days",
-        "flag_next_overdue": "next step overdue ({date})",
-        "flag_close_passed": "expected close passed ({date})",
-        "flag_stage_stale": "same stage for {d} days",
-        "code_no_activity": "NO ACTIVITY>{n}d",
-        "code_next_overdue": "NEXT OVERDUE",
-        "code_close_passed": "CLOSE PASSED",
-        "code_stage_stale": "STAGE>{n}d",
-        "ev_baseline": "{org}: tracking started ({detail})",
-        "ev_deal_new": "{org}: \"{title}\" new deal ({detail})",
-        "ev_stage": "{org}: \"{title}\" stage {detail}",
-        "ev_value": "{org}: \"{title}\" value {detail}",
-        "ev_won": "{org}: \"{title}\" won",
-        "ev_lost": "{org}: \"{title}\" lost",
-        "ev_deleted": "{org}: \"{title}\" deleted",
-        "ev_reassigned": "{org}: \"{title}\" reassigned",
-        "ev_gone": "{org}: \"{title}\" left the list",
-        "ev_org_new": "{org}: tracking started",
-        "ev_org_gone": "{org}: no longer owned",
-        "ev_org_renamed": "{org}: renamed ({detail})",
-        "log_header": "# {org}\n\nSource: CRM ({provider}), automatic event log. No person data.\n\n---\n\n",
-        "open_deals": "{n} open deals",
-    },
-}
+
+class Labels:
+    """Per-language view of the crm_capture locale (tools/locale/<lang>/crm_capture.json).
+
+    L["key"] returns the raw string or list for that language (English fallback);
+    L.get("key") returns None for an unknown key. The language is explicit so the
+    --lang flag can differ from the profile default.
+    """
+
+    def __init__(self, lang):
+        self.lang = lang
+
+    def __getitem__(self, key):
+        val = raw(f"crm_capture.{key}", lang=self.lang)
+        if val is None:
+            raise KeyError(key)
+        return val
+
+    def get(self, key, default=None):
+        val = raw(f"crm_capture.{key}", lang=self.lang)
+        return default if val is None else val
 
 
 def log(msg):
@@ -169,7 +103,7 @@ def read_file(path):
 
 
 def _plain(text):
-    """Saglayici metnini ev stiline indir: tire yasagi, tablo ve wikilink kacisi."""
+    """Reduce provider text to house style: dash ban, table and wikilink escaping."""
     text = str(text or "")
     text = text.replace("\u2014", "-").replace("\u2013", "-")
     text = text.replace("|", "/").replace("[[", "(").replace("]]", ")")
@@ -178,18 +112,18 @@ def _plain(text):
 
 def safe_name(title):
     title = title.replace("\u2014", "-").replace("\u2013", "-")
-    return re.sub(r"[^\w\sÇçĞğİıÖöŞşÜü&.-]", "", title).strip()[:80] or "Sirket"
+    return re.sub(r"[^\w\sÇçĞğİıÖöŞşÜü&.-]", "", title).strip()[:80] or t("crm_capture.default_org_name")
 
 
 def _id_of(value):
-    """Pipedrive v1 iliskili alanlari bazen {value, name} sozlugu olarak dondurur."""
+    """Pipedrive v1 sometimes returns related fields as a {value, name} dict."""
     if isinstance(value, dict):
         value = value.get("value") or value.get("id")
     return str(value) if value not in (None, "") else None
 
 
 def _d(value):
-    """'YYYY-MM-DD' veya 'YYYY-MM-DD HH:MM:SS' -> date; bos/bozuk -> None."""
+    """'YYYY-MM-DD' or 'YYYY-MM-DD HH:MM:SS' -> date; empty/broken -> None."""
     if not value:
         return None
     try:
@@ -198,14 +132,14 @@ def _d(value):
         return None
 
 
-# --------------------------------------------------------------------------- saglayici
+# --------------------------------------------------------------------------- provider
 
 class AuthError(Exception):
     pass
 
 
 class Provider:
-    """Normalize sozlukler dondurur; saglayici alanlari bu sinifin disina cikmaz.
+    """Returns normalised dicts; provider fields never leave this class.
 
     deal: id, title, org_id, org_name, pipeline_id, stage_id, value, currency,
           expected_close_date, last_activity_date, next_activity_date,
@@ -231,8 +165,8 @@ class Provider:
 
 
 class PipedriveProvider(Provider):
-    """Pipedrive REST v1 (x-api-token). v1 secildi: anlasma nesnesi last/next
-    activity ve stage_change_time tasiyor, v2 bunlari Activities API'sine tasidi."""
+    """Pipedrive REST v1 (x-api-token). v1 was chosen: the deal object carries last/next
+    activity and stage_change_time, v2 moved them to the Activities API."""
     name = "pipedrive"
 
     def __init__(self, token):
@@ -260,12 +194,12 @@ class PipedriveProvider(Provider):
                     wait = min(int(wait), 30)
                 except ValueError:
                     wait = 2
-                log(f"429, {wait}s bekleniyor: {path}")
+                log(f"429, waiting {wait}s: {path}")
                 time.sleep(wait)
                 return self._get(path, params, _retry=False)
             raise RuntimeError(f"HTTP {e.code} {path}")
         if payload.get("success") is False:
-            raise RuntimeError(f"API hata {path}: {str(payload.get('error'))[:80]}")
+            raise RuntimeError(f"API error {path}: {str(payload.get('error'))[:80]}")
         return payload
 
     def _paged(self, path, params=None):
@@ -313,7 +247,7 @@ class PipedriveProvider(Provider):
 
     @staticmethod
     def _norm_deal(raw):
-        # Kisi alanlari (person_id, person_name, cc_email, ...) bilerek eslenmez.
+        # Person fields (person_id, person_name, cc_email, ...) are deliberately not mapped.
         org = raw.get("org_id")
         org_name = raw.get("org_name") or (org.get("name") if isinstance(org, dict) else "") or ""
         return {
@@ -351,11 +285,11 @@ PROVIDERS = {"pipedrive": PipedriveProvider}
 
 
 def get_provider(conf_dir):
-    """Token yoksa None (sessiz cikis). Bilinmeyen saglayici adi -> exit 2."""
+    """None when there is no token (silent exit). Unknown provider name -> exit 2."""
     name = (read_file(os.path.join(conf_dir, "crm_provider")) or "pipedrive").lower()
     cls = PROVIDERS.get(name)
     if cls is None:
-        log(f"bilinmeyen crm_provider: {name} (desteklenen: {', '.join(PROVIDERS)})")
+        log(f"unknown crm_provider: {name} (supported: {', '.join(PROVIDERS)})")
         sys.exit(2)
     token = read_file(os.path.join(conf_dir, f"{name}_api_token"))
     if not token:
@@ -374,16 +308,16 @@ class Config:
         self.lang = args.lang
 
 
-# --------------------------------------------------------------------------- hesap
+# --------------------------------------------------------------------------- compute
 
 def compute_flags(item, today, cfg, is_deal=True):
-    """[(kod, deger, seviye)] ; seviye WARN|RED."""
+    """[(code, value, severity)] ; severity WARN|RED."""
     flags = []
     last = _d(item.get("last_activity_date")) or _d(item.get("add_time"))
     if last:
         days = (today - last).days
         if days > cfg.no_activity_days:
-            # Anlasmasi olmayan sirket en fazla sari: kirmizi anlasmalara ayrilir.
+            # An organisation without deals is at most yellow: red is reserved for deals.
             sev = "RED" if is_deal and days > 2 * cfg.no_activity_days else "WARN"
             flags.append(("no_activity", days, sev))
     if not is_deal:
@@ -413,7 +347,7 @@ def _ev(now_iso, typ, org_id, org_name, title="", detail="", deal_id=None):
 
 
 def diff(prev, deals, orgs, pipes, provider, owner_id, now_iso, L):
-    """Onceki durumla karsilastir; olay listesi dondur. Ilk kosu = temel cizgi."""
+    """Compare with the previous state; return the event list. First run = baseline."""
     events = []
     prev_deals = prev.get("deals") or {}
     prev_orgs = prev.get("orgs") or {}
@@ -475,7 +409,7 @@ def diff(prev, deals, orgs, pipes, provider, owner_id, now_iso, L):
 
 
 def assign_files(prev_files, events):
-    """Sirket id -> Inbox/CRM dosya adi. Ad cakismasinda id soneki."""
+    """Organisation id -> Inbox/CRM file name. Id suffix on a name clash."""
     files = dict(prev_files or {})
     for ev in events:
         oid = ev.get("org_id")
@@ -502,8 +436,7 @@ def fmt_money(value, currency, L):
     except (TypeError, ValueError):
         num = 0.0
     text = f"{num:,.0f}"
-    if L is LABELS["tr"]:
-        text = text.replace(",", ".")
+    text = text.replace(",", L["thousands_sep"])
     return f"{text} {currency}".strip()
 
 
@@ -614,8 +547,8 @@ def render(state, deals, orgs, deal_flags, org_flags, events, pipes, cfg, now, L
 
 
 def analyse(provider, prev, cfg, now):
-    """Saf hesap: ag disinda yan etkisi yok; main() ve self_test() bunu cagirir."""
-    L = LABELS[cfg.lang]
+    """Pure computation: no side effects beyond the network; main() and self_test() call it."""
+    L = Labels(cfg.lang)
     today = now.date()
     now_iso = now.isoformat(timespec="minutes")
     me = provider.me()
@@ -628,7 +561,7 @@ def analyse(provider, prev, cfg, now):
         if wanted:
             deals = [d for d in deals if d["pipeline_id"] in wanted]
         else:
-            log(f"crm_pipelines hicbir boru hattiyla eslesmedi ({', '.join(sorted(cfg.pipelines))}); hepsi alindi")
+            log(f"crm_pipelines matched no pipeline ({', '.join(sorted(cfg.pipelines))}); took all")
     deal_flags = {d["id"]: compute_flags(d, today, cfg) for d in deals}
     with_deals = {d["org_id"] for d in deals if d["org_id"]}
     org_flags = {o["id"]: compute_flags(o, today, cfg, is_deal=False) for o in orgs if o["id"] not in with_deals}
@@ -649,7 +582,7 @@ def analyse(provider, prev, cfg, now):
             "counts": (len(orgs), len(deals), sum(len(v) for v in deal_flags.values()) + sum(len(v) for v in org_flags.values()))}
 
 
-# --------------------------------------------------------------------------- yazma
+# --------------------------------------------------------------------------- write
 
 def load_state():
     try:
@@ -675,7 +608,7 @@ def write_status(outcome, detail=""):
 
 
 def append_org_logs(events, files, provider_name, L):
-    """Sadece olayi olan sirketlerin dosyasina dokunur."""
+    """Touches only the files of organisations that have an event."""
     grouped = {}
     for ev in events:
         if ev.get("org_id") and ev["org_id"] in files:
@@ -698,7 +631,7 @@ _TS_RE = re.compile(r"\d{4}-\d{2}-\d{2} \d{2}:\d{2}")
 
 
 def write_snapshot(text):
-    """Govde (zaman damgasi haric) degismediyse dosyaya dokunma: saatlik commit gurultusu olmasin."""
+    """Leave the file alone when the body (timestamp aside) is unchanged: no hourly commit noise."""
     old = read_file(SNAPSHOT_FILE) or ""
     if _TS_RE.sub("", old).strip() == _TS_RE.sub("", text).strip():
         return False
@@ -719,19 +652,19 @@ def _fixture():
         },
         "orgs": [
             {"id": "100", "name": "Acme Holding", "open_deals_count": 1, "last_activity_date": "2026-08-15", "next_activity_date": None},
-            {"id": "101", "name": "Beta Lojistik", "open_deals_count": 1, "last_activity_date": "2026-09-08", "next_activity_date": "2026-09-15"},
-            {"id": "102", "name": "Gamma Enerji", "open_deals_count": 0, "last_activity_date": "2026-07-01", "next_activity_date": None},
+            {"id": "101", "name": "Beta Logistics", "open_deals_count": 1, "last_activity_date": "2026-09-08", "next_activity_date": "2026-09-15"},
+            {"id": "102", "name": "Gamma Energy", "open_deals_count": 0, "last_activity_date": "2026-07-01", "next_activity_date": None},
         ],
         "deals": [
             {"id": "500", "title": "Acme HRIS", "org_id": "100", "org_name": "Acme Holding", "pipeline_id": "1", "stage_id": "11",
              "value": 12000, "currency": "EUR", "expected_close_date": "2026-09-01", "last_activity_date": "2026-08-15",
              "next_activity_date": "2026-09-05", "stage_change_time": "2026-07-20 09:00:00", "add_time": "2026-06-01 09:00:00",
              "update_time": "2026-08-15 09:00:00", "label": None, "status": "open", "owner_id": "7"},
-            {"id": "501", "title": "Beta bordro", "org_id": "101", "org_name": "Beta Lojistik", "pipeline_id": "1", "stage_id": "10",
+            {"id": "501", "title": "Beta payroll", "org_id": "101", "org_name": "Beta Logistics", "pipeline_id": "1", "stage_id": "10",
              "value": 300000, "currency": "TRY", "expected_close_date": "2026-12-01", "last_activity_date": "2026-09-08",
              "next_activity_date": "2026-09-15", "stage_change_time": "2026-09-01 09:00:00", "add_time": "2026-09-01 09:00:00",
              "update_time": "2026-09-08 09:00:00", "label": None, "status": "open", "owner_id": "7"},
-            {"id": "502", "title": "Kanal ortakligi", "org_id": None, "org_name": "", "pipeline_id": "2", "stage_id": "20",
+            {"id": "502", "title": "Channel partnership", "org_id": None, "org_name": "", "pipeline_id": "2", "stage_id": "20",
              "value": 0, "currency": "", "expected_close_date": None, "last_activity_date": "2026-09-09",
              "next_activity_date": None, "stage_change_time": "2026-09-09 09:00:00", "add_time": "2026-09-09 09:00:00",
              "update_time": "2026-09-09 09:00:00", "label": None, "status": "open", "owner_id": "7"},
@@ -764,52 +697,58 @@ class _FakeProvider(Provider):
 
 def self_test():
     class Args:
-        no_activity_days, stage_days, lang = DEFAULT_NO_ACTIVITY_DAYS, DEFAULT_STAGE_DAYS, "tr"
+        no_activity_days, stage_days, lang = DEFAULT_NO_ACTIVITY_DAYS, DEFAULT_STAGE_DAYS, "en"
     cfg = Config("/nonexistent", Args)
     now = datetime(2026, 9, 10, 10, 0)
     fx = _fixture()
     prov = _FakeProvider(fx)
 
-    # 1) bayraklar
+    # 1) flags
     f500 = {c for c, _, _ in compute_flags(fx["deals"][0], now.date(), cfg)}
     assert f500 == {"no_activity", "next_overdue", "close_passed", "stage_stale"}, f500
     assert compute_flags(fx["deals"][1], now.date(), cfg) == []
     f102 = compute_flags(fx["orgs"][2], now.date(), cfg, is_deal=False)
     assert f102 and f102[0][2] == "WARN", f102
 
-    # 2) ilk kosu = temel cizgi
+    # 2) first run = baseline
     r1 = analyse(prov, {}, cfg, now)
     assert {e["type"] for e in r1["events"]} == {"baseline"}, r1["events"]
     assert set(r1["files"]) == {"100", "101", "102"}, r1["files"]
     assert len(r1["state"]["deals"]) == 3 and r1["worst"] == "RED"
     assert "## Enterprise" in r1["text"] and "## Business Development" in r1["text"]
-    assert "(şirket yok)" in r1["text"] and "Gamma Enerji" in r1["text"]
+    assert "(no organisation)" in r1["text"] and "Gamma Energy" in r1["text"]
     assert "\u2014" not in r1["text"] and "\u2013" not in r1["text"]
 
-    # 3) ikinci kosu: asama degisti, bir anlasma kazanildi, yeni anlasma, sirket gitti
+    # 3) second run: stage changed, one deal won, new deal, organisation gone
     fx["deals"][0]["stage_id"] = "12"
     won = dict(fx["deals"][1], status="won")
     prov.closed["501"] = won
-    fx["deals"][1] = {**fx["deals"][2], "id": "503", "title": "Beta ek modul", "org_id": "101",
-                      "org_name": "Beta Lojistik", "pipeline_id": "1", "stage_id": "10"}
+    fx["deals"][1] = {**fx["deals"][2], "id": "503", "title": "Beta add-on module", "org_id": "101",
+                      "org_name": "Beta Logistics", "pipeline_id": "1", "stage_id": "10"}
     fx["orgs"].pop()
     r2 = analyse(prov, r1["state"], cfg, now + timedelta(hours=1))
     types = sorted(e["type"] for e in r2["events"])
     assert types == ["deal_new", "org_gone", "stage", "won"], types
     stage_ev = next(e for e in r2["events"] if e["type"] == "stage")
     assert stage_ev["detail"] == "Proposal -> Negotiation", stage_ev
-    assert "## Değişenler (son 24 saat)\n- 2026-09-10 11:00" in r2["text"]
+    assert "## Changes (last 24h)\n- 2026-09-10 11:00" in r2["text"]
     assert len(r2["state"]["events"]) == len(r1["events"]) + len(r2["events"])
 
-    # 4) sessiz kosu: olay yok
+    # 4) quiet run: no events
     r3 = analyse(prov, r2["state"], cfg, now + timedelta(hours=2))
     assert r3["events"] == [], r3["events"]
 
-    # 5) ad cakismasi ve metin temizligi
+    # 5) name clash and text cleanup
     files = assign_files({"1": "Acme.md"}, [_ev("t", "org_new", "2", "Acme")])
     assert files["2"] == "Acme (crm 2).md", files
     assert _plain("A \u2014 B | [[C]]") == "A - B / (C)"
-    assert LABELS["tr"] is LABELS["tr"] and fmt_money(12000, "EUR", LABELS["tr"]) == "12.000 EUR"
+    assert fmt_money(12000, "EUR", Labels("tr")) == "12.000 EUR" and fmt_money(12000, "EUR", Labels("en")) == "12,000 EUR"
+
+    # 6) the other locale renders too (labels come from tools/locale/<lang>/crm_capture.json)
+    class ArgsTr(Args):
+        lang = "tr"
+    r_tr = analyse(_FakeProvider(_fixture()), {}, Config("/nonexistent", ArgsTr), now)
+    assert t("crm_capture.title", lang="tr") in r_tr["text"] and "12.000 EUR" in r_tr["text"], r_tr["text"][:200]
     print("OK")
 
 
@@ -821,7 +760,7 @@ def main():
     ap.add_argument("--self-test", action="store_true", help="unit test with a fixture (no network)")
     ap.add_argument("--no-activity-days", type=int, default=DEFAULT_NO_ACTIVITY_DAYS, metavar="N")
     ap.add_argument("--stage-days", type=int, default=DEFAULT_STAGE_DAYS, metavar="M")
-    ap.add_argument("--lang", choices=sorted(LABELS), default=LANG if LANG in LABELS else "en")
+    ap.add_argument("--lang", choices=languages(), default=LANG if LANG in languages() else "en")
     args = ap.parse_args()
     if args.self_test:
         self_test()
@@ -829,19 +768,19 @@ def main():
 
     provider = get_provider(CONF_DIR)
     if provider is None:
-        return  # kimlik yoksa sessizce cik
+        return  # no credentials: exit silently
     cfg = Config(CONF_DIR, args)
-    L = LABELS[cfg.lang]
+    L = Labels(cfg.lang)
     prev = load_state()
     try:
         result = analyse(provider, prev, cfg, datetime.now())
     except AuthError as e:
-        log(f"kimlik reddedildi: {e}")
+        log(f"credentials rejected: {e}")
         if not args.dry_run:
             write_status("auth", str(e))
         sys.exit(1)
     except Exception as e:  # noqa: BLE001
-        log(f"hata: {type(e).__name__}: {e}")
+        log(f"error: {type(e).__name__}: {e}")
         if not args.dry_run:
             write_status("error", f"{type(e).__name__}: {e}")
         sys.exit(1)
@@ -851,15 +790,15 @@ def main():
         print(result["text"])
         for ev in result["events"]:
             print(f"EVENT {ev['ts']} {event_text(ev, L)}")
-        log(f"dry-run: {n_orgs} org, {n_deals} deal, {n_flags} bayrak, {len(result['events'])} olay (yazilmadi)")
+        log(f"dry-run: {n_orgs} org, {n_deals} deal, {n_flags} flags, {len(result['events'])} events (nothing written)")
         return
 
     save_state(result["state"])
     logged = append_org_logs(result["events"], result["files"], provider.name, L)
     changed = write_snapshot(result["text"])
-    write_status("ok", f"{n_orgs} org, {n_deals} deal, {n_flags} bayrak")
-    log(f"{n_orgs} org, {n_deals} deal, {n_flags} bayrak, {len(result['events'])} olay, "
-        f"{logged} sirket gunlugu, CRM.md {'yazildi' if changed else 'degismedi'}")
+    write_status("ok", f"{n_orgs} org, {n_deals} deal, {n_flags} flags")
+    log(f"{n_orgs} org, {n_deals} deal, {n_flags} flags, {len(result['events'])} events, "
+        f"{logged} organisation log(s), CRM.md {'written' if changed else 'unchanged'}")
 
 
 if __name__ == "__main__":

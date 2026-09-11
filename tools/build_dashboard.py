@@ -29,6 +29,7 @@ DEADLINE_HORIZON_DAYS = 400
 import sys as _sys
 _sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from owner_profile import COMPANY_AREA, GENERIC_PRIVATE_SEGMENTS, PRIVATE_SEGMENTS as PROFILE_PRIVATE_SEGMENTS  # noqa: E402
+from i18n import t  # noqa: E402
 
 FM_RE = re.compile(r"^---\n(.*?)\n---\n", re.S)
 PRIVATE = ("- Health", *GENERIC_PRIVATE_SEGMENTS, *PROFILE_PRIVATE_SEGMENTS)
@@ -115,9 +116,9 @@ def section(text, title):
 
 def clean(t):
     """House style: no em/en dashes; drop stray bold markers around a line."""
-    t = t.replace(" — ", ", ").replace("—", ", ").replace(" – ", ", ").replace("–", "-")
-    t = re.sub(r"\s*,\s*,", ",", t)
-    return t.strip().strip("*").strip()
+    s = t.replace(" \u2014 ", ", ").replace("\u2014", ", ").replace(" \u2013 ", ", ").replace("\u2013", "-")
+    s = re.sub(r"\s*,\s*,", ",", s)
+    return s.strip().strip("*").strip()
 
 
 def first_line(body):
@@ -200,43 +201,46 @@ def build_projects_active(now):
     L = []
     L.append("# Active Projects Summary")
     L.append("")
-    L.append("> Otomatik üretilir: `tools/build_dashboard.py` (Pzt 05:00 / Cum 21:00), kaynak `Work/*/notes.md` ve `Personal/*/notes.md`.")
-    L.append("> Elle düzenleme bir sonraki çalıştırmada silinir; projeyi değiştirmek için kendi `notes.md` dosyasını güncelle.")
-    L.append(f"> {STALE_DAYS} günden eski son log = ⚠️ bayat. Güncelleme: {now.strftime('%Y-%m-%d %H:%M')}")
+    L.append(t("build_dashboard.pa_auto_line"))
+    L.append(t("build_dashboard.pa_hand_edit_line"))
+    L.append(t("build_dashboard.pa_stale_line", days=STALE_DAYS, time=now.strftime('%Y-%m-%d %H:%M')))
     L.append("")
-    L.append(f"## Aktif ({len(rows)})")
+    L.append(t("build_dashboard.pa_active_heading", n=len(rows)))
     L.append("")
     for i, r in enumerate(rows, 1):
-        flag = " ⚠️ bayat" if (r["age"] is None or r["age"] > STALE_DAYS) else ""
+        flag = t("build_dashboard.pa_stale_flag") if (r["age"] is None or r["age"] > STALE_DAYS) else ""
         L.append(f"### {i}. {r['name']} [{r['cat']}]")
-        L.append(f"- **Status**: {r['status']}. Son log: {r['last'] or 'yok'}{flag}")
+        L.append(t("build_dashboard.pa_status_row", status=r['status'],
+                   last=r['last'] or t("build_dashboard.none"), flag=flag))
         if r["outcome"]:
             L.append(f"- **Outcome**: {r['outcome']}")
         if r["current"]:
             L.append(f"- **Current**: {r['current']}")
-        L.append(f"- **Next action**: {r['next'] or 'açık madde yok'}")
+        L.append(f"- **Next action**: {r['next'] or t('build_dashboard.pa_no_open_item')}")
         L.append(f"- **Link**: [[{r['name']}]] (`{r['cat']}/{r['name']}/notes.md`)")
         L.append("")
 
     if homeless:
-        L.append(f"## Ev bekleyen projeler ({len(homeless)})")
+        L.append(t("build_dashboard.pa_homeless_heading", n=len(homeless)))
         L.append("")
-        L.append("CONTEXT.md aktif diyor ama `notes.md` yok; dashboard ve derleyici bunları görmüyor. Şablon: `_Templates/Project.md`.")
+        L.append(t("build_dashboard.pa_homeless_note"))
         L.append("")
         for name, folder in homeless:
-            where = f"klasör var: `{folder.relative_to(VAULT)}/`" if folder else "klasör de yok"
+            where = (t("build_dashboard.pa_folder_exists", path=folder.relative_to(VAULT)) if folder
+                     else t("build_dashboard.pa_no_folder"))
             L.append(f"- [[{name}]]: {where}")
         L.append("")
 
     if parked:
-        L.append(f"## Beklemede / kapanıyor ({len(parked)})")
+        L.append(t("build_dashboard.pa_parked_heading", n=len(parked)))
         L.append("")
         for r in parked:
-            L.append(f"- [{r['cat']}] {r['name']} ({r['status']}, son log {r['last'] or 'yok'})")
+            L.append(t("build_dashboard.pa_parked_row", cat=r['cat'], name=r['name'], status=r['status'],
+                       last=r['last'] or t("build_dashboard.none")))
         L.append("")
 
     if archived:
-        L.append(f"## Arşiv ({len(archived)})")
+        L.append(t("build_dashboard.pa_archive_heading", n=len(archived)))
         L.append("")
         L.append(", ".join(f"[{c}] {n}" for c, n in archived))
         L.append("")
@@ -318,10 +322,10 @@ def main():
 
     L.append("## ⏰ Time-sensitive")
     for dl, delta, name, note in deadlines:
-        when = f"{delta} gün kaldı" if delta >= 0 else f"{-delta} gün GEÇTİ"
+        when = t("build_dashboard.days_left", n=delta) if delta >= 0 else t("build_dashboard.days_overdue", n=-delta)
         L.append(f"- **{name}:** {when} ({dl.strftime('%d.%m.%Y')})" + (f": {note}" if note else ""))
     if not deadlines:
-        L.append("- (notes.md frontmatter'ında `deadline:` olan aktif proje yok)")
+        L.append(t("build_dashboard.no_deadlines"))
     for name, st, tgt in decisions:
         L.append(f"- **Decision [{st}]:** {name}" + (f" → {tgt}" if tgt else ""))
     L.append("")

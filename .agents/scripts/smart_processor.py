@@ -11,7 +11,9 @@ BRAINLESS_ROOT = os.environ.get("BRAINLESS_VAULT") or os.path.expanduser("~/proj
 
 sys.path.insert(0, os.path.join(BRAINLESS_ROOT, "tools"))
 from resolve_bin import resolve_claude
-from owner_profile import COMPANY_AREA  # noqa: E402
+from owner_profile import COMPANY_AREA, LANG, lang_name, output_lang_directive  # noqa: E402
+from i18n import t  # noqa: E402
+from markitdown_native import convert_to_file  # noqa: E402
 
 CLAUDE_PATH = resolve_claude()
 
@@ -71,26 +73,6 @@ def is_backed_off(filepath, quarantine, now):
     elapsed = now - rec.get("last_attempt", 0)
     return elapsed < backoff_for(rec.get("attempts", 0))
 
-def get_markitdown_command():
-    """Return argv list for the current markitdown (updated library)."""
-    if cmd := shutil.which("markitdown"):
-        return [cmd]
-    try:
-        import markitdown  # noqa: F401
-        return [sys.executable, "-m", "markitdown"]
-    except ImportError:
-        pass
-    for ver in ("3.14", "3.11", "3.12", "3.13"):
-        candidate = os.path.expanduser(f"~/Library/Python/{ver}/bin/markitdown")
-        if os.path.isfile(candidate) and os.access(candidate, os.X_OK):
-            return [candidate]
-    legacy = os.path.expanduser("~/Projects/markitdown/.venv/bin/markitdown")
-    if os.path.isfile(legacy):
-        return [legacy]
-    raise RuntimeError(
-        "markitdown not found. Install with: python3 -m pip install --break-system-packages --user markitdown"
-    )
-
 # High-value knowledge resources get full AI treatment (Summary + Fiche + original cleanup).
 # General documents anywhere in the human homes will at least get converted to .md automatically.
 HIGH_VALUE_DIRS = [
@@ -116,9 +98,9 @@ CAPTURE_DIR = os.path.join(BRAINLESS_ROOT, "Thinking", "Daily")
 IMAGE_ATTACH_DIR = os.path.join(BRAINLESS_ROOT, "_attachments", "handwritten")
 
 OCR_PROMPT = """First read '_Agent-Context/CONTEXT.md' to learn the correct spellings of the owner's projects and people.
-Then read the image at '{image}'. It is a photo of a handwritten or printed note (Turkish and/or English).
+Then read the image at '{image}'. It is a photo of a handwritten or printed note ({langs}).
 
-Transcribe every legible word faithfully - do NOT invent, translate, or summarize. For a word you cannot read, write your best guess followed by (?), or [okunmuyor] if it is truly illegible.
+Transcribe every legible word faithfully - do NOT invent, translate, or summarize. For a word you cannot read, write your best guess followed by (?), or {illegible} if it is truly illegible.
 
 Then turn the transcription into a clean vault note:
 - First line: a short title starting with '# '.
@@ -127,6 +109,7 @@ Then turn the transcription into a clean vault note:
 - Write any action item as a '- [ ]' task line.
 - Last line: 1-3 relevant tags (e.g. #work #personal) if appropriate.
 - Never use em dashes or en dashes anywhere; use a plain hyphen.
+- For the title, tags and anything you add yourself: {lang_directive}
 
 Save ONLY the note markdown to '{out_path}' and write nothing else.
 """
@@ -134,6 +117,7 @@ Save ONLY the note markdown to '{out_path}' and write nothing else.
 SUMMARY_PROMPT = """Read the markdown file at '{filepath}'.
 Provide a concise but technical summary of the key findings, data points, and actionable insights.
 Focus on facts and figures.
+{lang_directive}
 Save the result to '{out_path}'.
 """
 
@@ -150,6 +134,7 @@ Format:
 ## 3. Résumé des idées principales (Key Ideas)
 ## 4. Analyse Critique & Connexions (Use [[links]] to related vault notes)
 
+{lang_directive}
 Save the result to '{out_path}'.
 """
 
@@ -199,7 +184,7 @@ def process_file(filepath):
             pass
 
     # 1. Markitdown (updated library). Only (re)convert if the raw md is missing
-    # or stale — and create the work_dir only once we are about to write output,
+    # or stale, and create the work_dir only once we are about to write output,
     # so failed conversions don't litter the vault with empty folders.
     need_convert = (not os.path.exists(raw_md)) or (
         os.path.exists(filepath)
@@ -208,9 +193,8 @@ def process_file(filepath):
     if need_convert:
         print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] Converting {filename}...")
         try:
-            markit_cmd = get_markitdown_command()
             os.makedirs(work_dir, exist_ok=True)
-            subprocess.run(markit_cmd + [filepath, "-o", raw_md], check=True)
+            convert_to_file(filepath, raw_md)
         except Exception as e:
             print(f"Failed to convert {filename}: {e}")
             # Remove an empty work_dir we may have just created.
@@ -224,12 +208,14 @@ def process_file(filepath):
         # 2. Summary (only for high-value knowledge resources)
         if not os.path.exists(summary_md):
             print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] Generating Summary for {filename}...")
-            run_claude(SUMMARY_PROMPT.format(filepath=raw_md, out_path=summary_md))
+            run_claude(SUMMARY_PROMPT.format(filepath=raw_md, out_path=summary_md,
+                                             lang_directive=output_lang_directive()))
 
         # 3. Fiche de Lecture
         if not os.path.exists(fiche_md):
             print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] Generating Fiche de Lecture for {filename}...")
-            run_claude(FICHE_PROMPT.format(filepath=raw_md, out_path=fiche_md))
+            run_claude(FICHE_PROMPT.format(filepath=raw_md, out_path=fiche_md,
+                                           lang_directive=output_lang_directive()))
 
         # 4. Cleanup originals (only for high-value to keep the vault lean)
         print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] Cleaning up originals for {filename}...")
@@ -250,7 +236,7 @@ def process_file(filepath):
 
 def _slugify(text):
     slug = re.sub(r"[^a-z0-9]+", "-", text.lower()).strip("-")
-    return slug[:40] or "not"
+    return slug[:40] or t("smart_processor.slug_fallback")
 
 
 def _to_ocr_image(filepath):
@@ -289,7 +275,10 @@ def process_image(filepath):
         return "failed"
 
     print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] OCR {os.path.basename(filepath)}...")
-    ok = run_claude(OCR_PROMPT.format(image=ocr_path, out_path=note_path))
+    langs = lang_name() if LANG == "en" else f"{lang_name()} and/or English"
+    ok = run_claude(OCR_PROMPT.format(image=ocr_path, out_path=note_path, langs=langs,
+                                      illegible=t("smart_processor.illegible_marker"),
+                                      lang_directive=output_lang_directive()))
     if not ok or not os.path.exists(note_path):
         if made_jpeg and os.path.exists(ocr_path):
             os.remove(ocr_path)          # clean the transcode on failure
@@ -301,7 +290,7 @@ def process_image(filepath):
             body = fh.read()
     except OSError:
         return "failed"
-    body = body.replace("—", "-").replace("–", "-").strip()
+    body = body.replace("\u2014", "-").replace("\u2013", "-").strip()
 
     # Archive the source image next to the vault's other attachments and link it.
     os.makedirs(IMAGE_ATTACH_DIR, exist_ok=True)
@@ -315,7 +304,7 @@ def process_image(filepath):
     if made_jpeg and os.path.exists(filepath):
         os.remove(filepath)              # drop the original HEIC; JPEG is archived
 
-    footer = (f"\n\n---\nKaynak: El yazısı notu (Inbox), {stamp}\n"
+    footer = ("\n\n---\n" + t("smart_processor.handwritten_footer", stamp=stamp) + "\n"
               f"![[{os.path.basename(archived)}]]\n")
     with open(note_path, "w") as fh:
         fh.write(body + footer)
@@ -458,21 +447,21 @@ def git_sync():
     stamp = time.strftime('%Y-%m-%d %H:%M:%S')
     if _rebase_in_progress():
         subprocess.run(["git", "rebase", "--abort"], cwd=BRAINLESS_ROOT)
-        print(f"[{stamp}] yarim kalan rebase abort edildi")
-        notify("Yarim kalan rebase temizlendi, elle senkron gerekiyor")
+        print(f"[{stamp}] half-finished rebase aborted")
+        notify(t("smart_processor.notify_rebase_cleaned"))
     if not _github_reachable():
-        print(f"[{stamp}] github erisilemiyor, pull atlandi")
+        print(f"[{stamp}] github unreachable, pull skipped")
         return False
     print(f"[{stamp}] Fetching updates (rebase + autostash)...")
     r = subprocess.run(["git", "pull", "--rebase", "--autostash", "--quiet", "origin", "master"],
                        cwd=BRAINLESS_ROOT)
     if _rebase_in_progress():
         subprocess.run(["git", "rebase", "--abort"], cwd=BRAINLESS_ROOT)
-        print(f"[{stamp}] pull cakismasi, rebase abort edildi")
-        notify("Pull cakismasi: elle senkron gerekiyor")
+        print(f"[{stamp}] pull conflict, rebase aborted")
+        notify(t("smart_processor.notify_pull_conflict"))
         return False
     if r.returncode != 0:
-        print(f"[{stamp}] pull basarisiz (exit {r.returncode}), devam ediliyor")
+        print(f"[{stamp}] pull failed (exit {r.returncode}), continuing")
         return False
     return True
 
@@ -510,7 +499,7 @@ def main():
 
                         if status == "converted":
                             converted += 1
-                            quarantine.pop(filepath, None)   # recovered — clear it
+                            quarantine.pop(filepath, None)   # recovered, clear it
                         elif status == "failed":
                             rec = quarantine.get(filepath, {"attempts": 0})
                             rec["attempts"] = rec.get("attempts", 0) + 1
@@ -529,7 +518,7 @@ def main():
     save_quarantine(quarantine)
 
     if converted:
-        # Git Commit — only when real work happened.
+        # Git Commit, only when real work happened.
         subprocess.run(["git", "add", "."], cwd=BRAINLESS_ROOT)
         subprocess.run(["git", "commit", "-m", "Auto-process: Summaries and Fiches generated, originals removed"], cwd=BRAINLESS_ROOT)
         print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] Batch complete: {converted} converted, "

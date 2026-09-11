@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""file_query.py — file a thinking-command's output into the wiki loopback.
+"""file_query.py: file a thinking-command's output into the wiki loopback.
 
 This is the loopback that makes the wiki compound (see .wiki/_commands/_shared-rules.md):
 command outputs are persisted under .wiki/digests/queries/ so future queries
@@ -19,6 +19,9 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from owner_profile import LANG  # noqa: E402
+
 # Portable: env override, else the repo that contains this script.
 VAULT = Path(os.environ.get("BRAINLESS_VAULT") or Path(__file__).resolve().parents[1])
 QDIR = VAULT / ".wiki" / "digests" / "queries"
@@ -35,7 +38,8 @@ def main():
     ap.add_argument("title", help="short title for this run")
     ap.add_argument("--date", help="YYYY-MM-DD (default: today)")
     ap.add_argument("--summary", default="", help="one-line English summary")
-    ap.add_argument("--lang", default="tr", choices=["tr", "en"], help="body language (default tr)")
+    ap.add_argument("--lang", default=LANG, choices=["tr", "en"],
+                    help="body language (default: the owner's output language)")
     args = ap.parse_args()
 
     content = sys.stdin.read().strip()

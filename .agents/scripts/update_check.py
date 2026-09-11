@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""Arch guncelleme bildirimi (worker, haftalik).
+"""Arch update notification (worker, weekly).
 
-`checkupdates` (pacman-contrib, root gerektirmez) ile bekleyen paketleri
-sayar; guvenlik-kritik olanlar varsa Telegram'dan haber verir. Otomatik
-UPGRADE YAPMAZ: Arch'ta kismi/otomatik upgrade kirilma riskidir; karar ve
-`pacman -Syu` insanda kalir. Amac: sessizce eskimeyi engellemek.
+Counts pending packages with `checkupdates` (pacman-contrib, no root needed);
+if security-critical ones are among them it reports via Telegram. It does NOT
+upgrade automatically: on Arch a partial/automatic upgrade is a breakage risk;
+the decision and `pacman -Syu` stay with a human. Goal: prevent silent aging.
 """
 import os
 import subprocess
@@ -14,9 +14,10 @@ VAULT = os.environ.get("BRAINLESS_VAULT") or os.path.expanduser("~/projects/brai
 sys.path.insert(0, os.path.join(VAULT, ".agents", "scripts"))
 sys.path.insert(0, os.path.join(VAULT, "tools"))
 from owner_profile import WORKER  # noqa: E402
+from i18n import t  # noqa: E402
 from watchdog import send_telegram
 
-# Guncellemesi geldiginde bilhassa dikkat edilecek paketler (ic string eslesme).
+# Packages that deserve special attention when an update arrives (substring match).
 SECURITY_PKGS = (
     "openssl", "openssh", "curl", "wget", "git", "linux", "linux-firmware",
     "ca-certificates", "tailscale", "sudo", "glibc", "systemd", "polkit",
@@ -28,20 +29,20 @@ def main():
     try:
         r = subprocess.run(["checkupdates"], capture_output=True, text=True, timeout=180)
     except (FileNotFoundError, subprocess.TimeoutExpired):
-        return  # checkupdates yok/takildi: sessiz cik
-    # checkupdates: guncelleme varsa 0, yoksa 2 doner; stdout satirlari "pkg a -> b"
+        return  # checkupdates missing/hung: exit silently
+    # checkupdates: returns 0 when updates exist, 2 when none; stdout lines are "pkg a -> b"
     lines = [l for l in r.stdout.splitlines() if l.strip()]
     if not lines:
-        print("guncelleme yok")
+        print("no updates")
         return
     names = [l.split()[0] for l in lines]
     security = sorted({n for n in names if any(s in n for s in SECURITY_PKGS)})
-    msg = [f"📦 {WORKER}: {len(lines)} paket guncellenebilir."]
+    msg = [t("update_check.msg_header", worker=WORKER, count=len(lines))]
     if security:
-        msg.append("Guvenlik-ilgili: " + ", ".join(security[:15]))
-    msg.append("Hazir oldugunda: sudo pacman -Syu")
+        msg.append(t("update_check.msg_security", pkgs=", ".join(security[:15])))
+    msg.append(t("update_check.msg_hint"))
     send_telegram("\n".join(msg))
-    print(f"bildirim gonderildi ({len(lines)} paket, {len(security)} guvenlik)")
+    print(f"notification sent ({len(lines)} packages, {len(security)} security)")
 
 
 if __name__ == "__main__":

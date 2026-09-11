@@ -50,7 +50,7 @@ if [ -z "$CID" ]; then log "channel '$CHANNEL' not found on relay"; exit 0; fi
 
 # Relay limit is 512 KB per message; keep well under it.
 MAX=60000
-if [ "${#BODY}" -gt "$MAX" ]; then BODY="${BODY:0:$MAX}"$'\n\n'"[kesildi: mesaj $MAX karakteri asti]"; fi
+if [ "${#BODY}" -gt "$MAX" ]; then BODY="${BODY:0:$MAX}"$'\n\n'"[truncated: message exceeded $MAX characters]"; fi
 
 # macOS has no coreutils `timeout`; fall back to gtimeout or none.
 TMO=""; command -v timeout >/dev/null 2>&1 && TMO="timeout 30"; [ -z "$TMO" ] && command -v gtimeout >/dev/null 2>&1 && TMO="gtimeout 30"

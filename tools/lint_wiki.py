@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-lint_wiki.py — integrity checks + auto-fix for the wiki layer.
+lint_wiki.py: integrity checks + auto-fix for the wiki layer.
 
 Reports written to wiki/_lint-report.md.
 
@@ -62,7 +62,7 @@ def parse_fm(text: str) -> dict:
 
 PLACEHOLDER_PATTERNS = [
     r"^Wikilink$", r"^Note Name$", r"^Note$", r"^Project( [A-Z])?$", r"^Belief( Note)?$",
-    r"^Decision( Note| — .+)?$", r"^[AB]$", r"^Target( Note)?$", r"^Candidate( Note)?$",
+    r"^Decision( Note| \u2014 .+)?$", r"^[AB]$", r"^Target( Note)?$", r"^Candidate( Note)?$",
     r"^Source( [AB])?$", r"^Intermediate( \d+)?$", r"^this note$", r"^New Idea Title$",
     r"^Belief Name$", r"^Daily \d{4}-\d{2}-\d{2}$",  # illustrative dates in command docs
     r"^Briefing \d{4}", r"^YYYY-MM-DD$",
@@ -187,10 +187,7 @@ def ensure_frontmatter(path: Path, dry_run: bool = False) -> list[str]:
             additions["lang"] = "en"
         elif "summaries/" in rel:
             # Summaries are written in the owner's output language (PROFILE.md).
-            if LANG == "tr":
-                additions["lang"] = "tr"
-            else:
-                additions["lang"] = "en"
+            additions["lang"] = LANG
         else:
             additions["lang"] = "en"
 
@@ -440,9 +437,9 @@ def main():
         f"_Generated {ts}_\n",
         "## Summary\n",
         f"- files scanned: {len(files)}",
-        f"- broken links (real): {len(real_broken)}   (wiki/_commands/ link scanning skipped — those files only contain prompt examples)",
+        f"- broken links (real): {len(real_broken)}   (wiki/_commands/ link scanning skipped, those files only contain prompt examples)",
         *([f"- broken links fixed: {links_remapped} remapped, {links_delinked} de-linked"
-           + (" (dry-run — no files written)" if args.dry_run else "")] if args.fix_links else []),
+           + (" (dry-run, no files written)" if args.dry_run else "")] if args.fix_links else []),
         f"- external / raw references (informational): {len(external_refs)}",
         f"- orphan files: {len(orphans)}",
         f"- stale summaries: {len(stale)}",
@@ -490,7 +487,7 @@ def main():
                 lambda x: f"- `{x[0].relative_to(VAULT)}` missing: {', '.join(x[1])}")
 
     if args.fix and fixed:
-        lines.append("## Frontmatter fixes " + ("(dry-run — no files written)" if args.dry_run else "(applied)") + f" ({len(fixed)})\n")
+        lines.append("## Frontmatter fixes " + ("(dry-run, no files written)" if args.dry_run else "(applied)") + f" ({len(fixed)})\n")
         for p, keys in fixed[:100]:
             lines.append(f"- `{p.relative_to(VAULT)}` ← added {', '.join(keys)}")
         if len(fixed) > 100:

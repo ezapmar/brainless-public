@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
-"""Iliski radari (worker, haftalik).
+"""Relationship radar (worker, weekly).
 
-Plan 3: kisi dossier'larinin (Plan 1) uzerine sinyal/uyari katmani. LLM'siz,
-deterministik: Spiky toplantilarindan son temas + kadans + skor momentumu,
-TASKS.md'den karsiliklilik (kime borclusun / kim sana borclu) hesaplar; sapma
-varsa Telegram'a haftalik radar dusurur ve .wiki/relationships/radar.md yazar.
+Plan 3: a signal/alert layer on top of the person dossiers (Plan 1). No LLM,
+deterministic: computes last contact + cadence + score momentum from Spiky
+meetings and reciprocity (whom you owe / who owes you) from TASKS.md; on a
+deviation it drops a weekly radar to Telegram and writes .wiki/relationships/radar.md.
 
-Esikler (sahip, 2026-08-28): sessizlik 20 hafta = sari, 32 hafta = kirmizi;
-momentum 15+ puan dususu bayrak. Kapsam entities.md'deki person + kapsam etiketi.
+Thresholds (owner, 2026-08-28): silence 20 weeks = yellow, 32 weeks = red;
+a momentum drop of 15+ points is flagged. Scope: person rows in entities.md + scope label.
 """
 import os
 import re
@@ -17,7 +17,10 @@ from datetime import datetime
 
 VAULT = os.environ.get("BRAINLESS_VAULT") or os.path.expanduser("~/projects/brainless")
 sys.path.insert(0, os.path.join(VAULT, ".agents", "scripts"))
+sys.path.insert(0, os.path.join(VAULT, "tools"))
 from watchdog import send_telegram
+from owner_profile import LANG  # noqa: E402
+from i18n import t, t_list  # noqa: E402
 
 SPIKY_DIR = os.path.join(VAULT, "Inbox", "Spiky")
 TASKS_FILE = os.path.join(VAULT, "_Agent-Context", "TASKS.md")
@@ -40,7 +43,7 @@ def read(path):
 
 
 def load_people():
-    """entities.md -> person kayitlari: {name, terms, scope}."""
+    """entities.md -> person records: {name, terms, scope}."""
     people = []
     for line in read(REGISTRY).splitlines():
         s = line.strip()
@@ -57,7 +60,7 @@ def load_people():
 
 
 def parse_score(text):
-    """Not govdesindeki 'Spiky Score' bloğundan ilk sayiyi al -> int | None."""
+    """Take the first number from the 'Spiky Score' block in the note body -> int | None."""
     lines = text.splitlines()
     for i, l in enumerate(lines):
         if l.strip() == "Spiky Score":
@@ -78,7 +81,7 @@ def participants_line(text):
 
 
 def meetings_for(person):
-    """Kisinin katildigi Spiky toplantilari: [(date, score, fname)] kronolojik."""
+    """Spiky meetings the person attended: [(date, score, fname)] chronological."""
     out = []
     if not os.path.isdir(SPIKY_DIR):
         return out
@@ -103,10 +106,15 @@ def meetings_for(person):
 
 
 def tasks_for(person):
-    """(bekledigin, borclu_oldugun) TASKS.md satirlari + en eski gun sayisi."""
+    """(waiting_on, you_owe) TASKS.md rows.
+
+    Section headings are matched in the current language and in English
+    (ledgers written by either an existing or a fresh install)."""
     waiting, owe = [], []
     section = None
-    low_terms = [t.casefold() for t in person["terms"]]
+    low_terms = [x.casefold() for x in person["terms"]]
+    waiting_names = t_list("relationship_radar.tasks_section_waiting")
+    promise_names = t_list("relationship_radar.tasks_section_promises")
     for line in read(TASKS_FILE).splitlines():
         s = line.strip()
         if s.startswith("## "):
@@ -116,9 +124,9 @@ def tasks_for(person):
         if not m:
             continue
         row = m.group(1)
-        if section == "Bekliyorum" and any(row.casefold().startswith(t) for t in low_terms):
+        if section in waiting_names and any(row.casefold().startswith(x) for x in low_terms):
             waiting.append(row)
-        elif section == "Sözlerim" and any(t in row.casefold() for t in low_terms):
+        elif section in promise_names and any(x in row.casefold() for x in low_terms):
             owe.append(row)
     return waiting, owe
 
@@ -136,10 +144,10 @@ def analyze():
         dates = [d for d, _, _ in mtgs]
         last = dates[-1]
         stale_w = weeks_since(last)
-        # kadans: ardisik toplantilar arasi medyan gun
+        # cadence: median days between consecutive meetings
         gaps = [(dates[i] - dates[i - 1]).days for i in range(1, len(dates))]
         cadence_d = statistics.median(gaps) if gaps else None
-        # momentum: skorlu toplantilar; son skor vs oncekilerin ortalamasi
+        # momentum: scored meetings; last score vs the mean of the earlier ones
         scores = [s for _, s, _ in mtgs if s is not None]
         drop = None
         if len(scores) >= 2:
@@ -157,26 +165,27 @@ def analyze():
 
 
 def attendee_signals(attendee_strings):
-    """meeting_brief icin: katilimci adlarina eslesen kisilerin ilişki sinyali.
-    -> ['Ad: son temas Xh once, kadans ~Yg, son skor Z, ondan N madde bekliyorsun']"""
+    """For meeting_brief: relationship signals of the people matching the attendee names.
+    English prompt material, not user-facing text.
+    -> ['Name: last contact X weeks ago, cadence ~Y days, last score Z, you are waiting on N items from them']"""
     low = [a.casefold() for a in attendee_strings if a]
     if not low:
         return []
     out = []
     for r in analyze():
-        if not any(t.casefold() in a for a in low for t in r["terms"]):
+        if not any(x.casefold() in a for a in low for x in r["terms"]):
             continue
-        parts = [f"son temas {int(r['stale_w'])} hafta once"]
+        parts = [f"last contact {int(r['stale_w'])} weeks ago"]
         if r["cadence_d"]:
-            parts.append(f"normal kadans ~{int(r['cadence_d'])} gun")
+            parts.append(f"usual cadence ~{int(r['cadence_d'])} days")
         if r["last_score"] is not None:
-            parts.append(f"son toplanti skoru {r['last_score']}")
+            parts.append(f"last meeting score {r['last_score']}")
         if r["drop"]:
-            parts.append(f"MOMENTUM DUSUK ({r['drop']} puan)")
+            parts.append(f"MOMENTUM LOW ({r['drop']} points)")
         if r["waiting"]:
-            parts.append(f"ONDAN {len(r['waiting'])} acik madde bekliyorsun")
+            parts.append(f"you are WAITING ON {len(r['waiting'])} open item(s) FROM THEM")
         if r["owe"]:
-            parts.append(f"ONA {len(r['owe'])} madde borclusun")
+            parts.append(f"you OWE THEM {len(r['owe'])} item(s)")
         out.append(f"{r['name']} ({r['scope']}): " + ", ".join(parts))
     return out
 
@@ -188,43 +197,43 @@ def build_report(rows):
     waiting = [r for r in rows if r["waiting"]]
 
     def fmt(r):
-        return f"{r['name']} ({r['scope']}), son temas {int(r['stale_w'])} hafta once"
+        return t("relationship_radar.row_contact", name=r["name"], scope=r["scope"], weeks=int(r["stale_w"]))
 
     msg = []
     if red:
-        msg.append("🔴 Uzun sessizlik (32+ hafta):")
+        msg.append(t("relationship_radar.report_red", weeks=STALE_RED_WEEKS))
         msg += [f"- {fmt(r)}" for r in sorted(red, key=lambda r: -r["stale_w"])]
     if yellow:
-        msg.append("\n🟡 Sessizleşti (20+ hafta):")
+        msg.append(t("relationship_radar.report_yellow", weeks=STALE_YELLOW_WEEKS))
         msg += [f"- {fmt(r)}" for r in sorted(yellow, key=lambda r: -r["stale_w"])]
     if momentum:
-        msg.append("\n📉 Momentum düşüşü (15+ puan):")
-        msg += [f"- {r['name']}: son toplantı skoru {r['last_score']} ({r['drop']} puan düşük)"
+        msg.append(t("relationship_radar.report_momentum", points=MOMENTUM_DROP))
+        msg += ["- " + t("relationship_radar.row_momentum", name=r["name"], score=r["last_score"], drop=r["drop"])
                 for r in momentum]
     if waiting:
-        msg.append("\n⏳ Beklediklerin (açık maddeler):")
+        msg.append(t("relationship_radar.report_waiting"))
         for r in waiting:
-            msg.append(f"- {r['name']}: {len(r['waiting'])} madde")
+            msg.append("- " + t("relationship_radar.row_waiting", name=r["name"], n=len(r["waiting"])))
     return "\n".join(msg) if msg else ""
 
 
 def write_snapshot(rows):
     os.makedirs(os.path.dirname(OUT_FILE), exist_ok=True)
-    lines = ["---", "lang: tr",
+    week = t("relationship_radar.week_short")
+    lines = ["---", f"lang: {LANG}",
              "summary_en: Deterministic relationship radar: per-person last contact, cadence, "
              "Spiky score momentum, and open reciprocity from meeting corpus + TASKS.md.",
              f"compiled_at: {datetime.now().isoformat(timespec='seconds')}",
-             "type: relationships", "---", "# İlişki Radarı", "",
-             f"Güncelleme: {datetime.now().strftime('%Y-%m-%d %H:%M')}. "
-             f"Eşik: sessizlik {STALE_YELLOW_WEEKS}h sarı / {STALE_RED_WEEKS}h kırmızı, "
-             f"momentum {MOMENTUM_DROP}+ puan.", "",
-             "| Kişi | Kapsam | Son temas | Kadans (gün) | Son skor | Momentum | Bekliyorsun | Borçlusun |",
+             "type: relationships", "---", t("relationship_radar.snapshot_title"), "",
+             t("relationship_radar.snapshot_intro", updated=datetime.now().strftime('%Y-%m-%d %H:%M'),
+               yellow=STALE_YELLOW_WEEKS, red=STALE_RED_WEEKS, points=MOMENTUM_DROP), "",
+             t("relationship_radar.snapshot_table_header"),
              "|---|---|---|---|---|---|---|---|"]
     for r in sorted(rows, key=lambda r: -r["stale_w"]):
         cad = int(r["cadence_d"]) if r["cadence_d"] else "-"
         mom = f"-{r['drop']}" if r["drop"] else "-"
         lines.append(f"| [[{r['name']}]] | {r['scope']} | {r['last'].strftime('%Y-%m-%d')} "
-                     f"({int(r['stale_w'])}h) | {cad} | {r['last_score'] or '-'} | {mom} "
+                     f"({int(r['stale_w'])}{week}) | {cad} | {r['last_score'] or '-'} | {mom} "
                      f"| {len(r['waiting'])} | {len(r['owe'])} |")
     with open(OUT_FILE, "w") as fh:
         fh.write("\n".join(lines) + "\n")
@@ -233,16 +242,16 @@ def write_snapshot(rows):
 def main():
     rows = analyze()
     if not rows:
-        print("radar: veri yok")
+        print("radar: no data")
         return
     write_snapshot(rows)
     report = build_report(rows)
     if report:
-        send_telegram("🤝 İlişki radarı (haftalık):\n\n" + report +
-                      "\n\nDetay: .wiki/relationships/radar.md")
-        print(f"radar gonderildi ({len(rows)} kisi analiz edildi)")
+        send_telegram(t("relationship_radar.telegram_title") + "\n\n" + report +
+                      "\n\n" + t("relationship_radar.telegram_detail"))
+        print(f"radar sent ({len(rows)} people analysed)")
     else:
-        print(f"radar temiz ({len(rows)} kisi, bayrak yok)")
+        print(f"radar clean ({len(rows)} people, no flags)")
 
 
 if __name__ == "__main__":

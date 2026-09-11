@@ -5,8 +5,8 @@
 # thinking and dialectic units live here (Phase 0 T4). telegram, buzz-capture,
 # tasks, backup, watchdog, spiky, brief, reminder, thinkers, radar, content and
 # update timers are still hand-installed on the current worker.
-# Template unit'ler (buzz-persona@.service) kopyalanir ama instance'lari
-# .agents/buzz/install_personas.sh acar.
+# Template units (buzz-persona@.service) are copied here, but their instances
+# are started by .agents/buzz/install_personas.sh.
 set -eu
 cd "$(dirname "$0")"
 mkdir -p ~/.config/systemd/user

@@ -1,5 +1,7 @@
 # Agent Operating Rules
 
+Section names and briefing text below are given in English; in a live vault they follow `output_lang` in `_Agent-Context/PROFILE.md` (the Turkish locale in `tools/locale/tr` keeps the original names, e.g. "Sistem Sağlığı" for "System Health").
+
 ## Core Rules (Claude Code)
 
 ### Rule 1: Read Before You Speak
@@ -46,13 +48,13 @@ claude --context "_Agent-Context/CONTEXT.md"
 ## Briefing Convention (single source of truth)
 
 - All morning/daily briefings live in `Daily Briefings/` as `daily-briefing-YYYY-MM-DD.md` (or `.html` for styled versions). One file per day.
-- The morning half is produced by the Claude scheduled task `morning-briefing` (weekdays 07:00, `~/.claude/scheduled-tasks/morning-briefing/SKILL.md`; runs only while the desktop app is open). The evening half is appended by `tools/evening_closeout.py` on the worker at 21:00. A manual "brifing" session follows the same convention and must merge into the existing file, never create a second one.
+- The morning half is produced by the Claude scheduled task `morning-briefing` (weekdays 07:00, `~/.claude/scheduled-tasks/morning-briefing/SKILL.md`; runs only while the desktop app is open). The evening half is appended by `tools/evening_closeout.py` on the worker at 21:00. A manual "briefing" session (or the equivalent word in the owner's language) follows the same convention and must merge into the existing file, never create a second one.
 - Never write briefing files to the vault root or invent new name variants (morning-brief, morning-memo, etc. are retired).
-- Every briefing must start with a 3-line "Sistem Sağlığı" block sourced from `_Agent-Context/HEALTH.md` (written hourly by `tools/health_check.py`). If HEALTH.md reports a red flag, put it at the top of the briefing.
-- If `_Agent-Context/CRM.md` exists (written hourly by `.agents/scripts/crm_capture.py`, read-only pull from the CRM, no LLM), add a "CRM: Enterprise Hattı" section after the open promises: copy its "Bayraklar" and "Değişenler (son 24 saat)" bullets verbatim. Skip the section when both say "yok". A 🔴 CRM status joins the health block at the top. Ad hoc CRM questions and the Business Development screening use the Pipedrive MCP connector interactively, never the briefing. The same snapshot is posted to the Buzz channel `#crm` (identity `crm`, `.agents/scripts/buzz_crm_sync.sh`) whenever its body changes; that channel is the place to discuss accounts and the Business Development line with the assistant.
-- If `_Agent-Context/RESURFACE.md` is less than 7 days old, include its 5 notes as a short "Bu Hafta Yeniden Bak" section.
-- If `_Agent-Context/CONTEXT-DRIFT.md` reports drift (anything other than "Drift yok"), mention it in the briefing and ask the owner whether to apply the proposed CONTEXT.md updates.
-- Read `_Agent-Context/DIALECTIC-STATUS.md` and add one line: "Dün diyalektik: N konu, M/K persona cevabı" with a link to the filed note in `.wiki/digests/queries/` (the evening run, or the noon run if the evening did not happen). If yesterday has no line or the result is `error`, write "Diyalektik turu çalışmadı" in red next to the health block.
+- Every briefing must start with a 3-line "System Health" block sourced from `_Agent-Context/HEALTH.md` (written hourly by `tools/health_check.py`). If HEALTH.md reports a red flag, put it at the top of the briefing.
+- If `_Agent-Context/CRM.md` exists (written hourly by `.agents/scripts/crm_capture.py`, read-only pull from the CRM, no LLM), add a "CRM: Enterprise Line" section after the open promises: copy its "Flags" and "Changes (last 24h)" bullets verbatim. Skip the section when both say "none". A 🔴 CRM status joins the health block at the top. Ad hoc CRM questions and the Business Development screening use the Pipedrive MCP connector interactively, never the briefing. The same snapshot is posted to the Buzz channel `#crm` (identity `crm`, `.agents/scripts/buzz_crm_sync.sh`) whenever its body changes; that channel is the place to discuss accounts and the Business Development line with the assistant.
+- If `_Agent-Context/RESURFACE.md` is less than 7 days old, include its 5 notes as a short "Revisit This Week" section.
+- If `_Agent-Context/CONTEXT-DRIFT.md` reports drift (anything other than "No drift"), mention it in the briefing and ask the owner whether to apply the proposed CONTEXT.md updates.
+- Read `_Agent-Context/DIALECTIC-STATUS.md` and add one line: "Yesterday's dialectic: N topics, M/K persona replies" with a link to the filed note in `.wiki/digests/queries/` (the evening run, or the noon run if the evening did not happen). If yesterday has no line or the result is `error`, write "Dialectic round did not run" in red next to the health block.
 
 ---
 
@@ -66,7 +68,7 @@ claude --context "_Agent-Context/CONTEXT.md"
 ## Thinking Loop (Telegram)
 
 - `.agents/scripts/thinking_loop.py --ask` runs Sundays 19:00 on the worker (`brainless-thinking.timer`, unit files in `.agents/systemd/`). It sends ONE question by priority: decision due to grade, decision without a prediction, next Thinking Cadence step, stalest belief, then a seed prompt if no idea was captured in 14 days.
-- The owner answers by replying to that message (voice or text). `telegram_capture.py` routes the reply to the loop, which drafts the note change and sends a preview. Only "uygula" writes to `Thinking/`; "iptal" drops the draft; "geç" skips the question for the week.
+- The owner answers by replying to that message (voice or text). `telegram_capture.py` routes the reply to the loop, which drafts the note change and sends a preview. Only "apply" writes to `Thinking/`; "cancel" drops the draft; "skip" skips the question for the week (the words are per language in `tools/locale/<lang>/thinking_loop.json`).
 - Every applied answer is also filed to `.wiki/digests/queries/<date>-thinking-<kind>-<slug>.md` so the loopback compounds. The evening close-out and dashboard read the updated notes as usual.
 
 ## Slash Command Definitions

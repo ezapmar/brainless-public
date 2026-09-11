@@ -1,21 +1,24 @@
 #!/usr/bin/env python3
-"""_Agent-Context/TASKS.md <-> Google Tasks iki yonlu senkron (worker).
+"""_Agent-Context/TASKS.md <-> Google Tasks two-way sync (worker).
 
-Bolum -> liste eslesmesi: "## Sözlerim" -> Sözlerim, "## Bekliyorum" -> Bekliyorum.
-Satir formati: - [ ] Gorev metni | [[Toplanti]] | YYYY-MM-DD
-Google tarafinda baslik temiz gorev metni; toplanti+tarih notes alaninda.
+Section -> list mapping: "## <promises>" -> <promises>, "## <waiting>" -> <waiting>,
+where both names come from the locale (tools/locale/<lang>/gtasks_sync.json);
+headings in the current language and in English are both accepted when parsing.
+Line format: - [ ] Task text | [[Meeting]] | YYYY-MM-DD
+On the Google side the title is the clean task text; meeting+date go in the notes field.
 
-Yonler:
-  yerel yeni -> Google'a ekle (notes ile)
-  yerel [x]  -> Google'da tamamla
-  Google tamamlandi -> yerelde [x]
-  Google'da elle eklenen -> ilgili bolume satir olarak dus
+Directions:
+  local new   -> add to Google (with notes)
+  local [x]   -> complete on Google
+  Google completed -> [x] locally
+  added by hand on Google -> dropped as a line into the matching section
 
-Kimlik: tools/tasks-sync/token.json + .credentials.json (gitignore'da).
-Bagimliliklar: google-api-python-client, google-auth-oauthlib (venv ile calistir).
+Credentials: tools/tasks-sync/token.json + .credentials.json (gitignored).
+Dependencies: google-api-python-client, google-auth-oauthlib (run with the venv).
 """
 import os
 import re
+import sys
 from datetime import datetime
 
 from google.auth.transport.requests import Request
@@ -23,10 +26,19 @@ from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
 
 VAULT = os.environ.get("BRAINLESS_VAULT") or os.path.expanduser("~/projects/brainless")
+sys.path.insert(0, os.path.join(VAULT, "tools"))
+from i18n import t, t_list  # noqa: E402
+
 TASKS_FILE = os.path.join(VAULT, "_Agent-Context", "TASKS.md")
 CRED_DIR = os.path.join(VAULT, "tools", "tasks-sync")
 SCOPES = ["https://www.googleapis.com/auth/tasks"]
-SECTIONS = {"## Sözlerim": "Sözlerim", "## Bekliyorum": "Bekliyorum"}
+# canonical section key -> (heading written/inserted under, Google Tasks list name)
+SECTIONS = {key: ("## " + t(f"gtasks_sync.section_{key}"), t(f"gtasks_sync.section_{key}"))
+            for key in ("promises", "waiting")}
+# any accepted heading (current language or English) -> canonical section key
+HEADING_ALIASES = {"## " + name: key for key in SECTIONS
+                   for name in t_list(f"gtasks_sync.section_{key}")}
+SOURCE_MARKERS = t_list("gtasks_sync.note_source")
 
 
 def log(msg):
@@ -41,9 +53,9 @@ def get_service():
             creds.refresh(Request())
             with open(token, "w") as fh:
                 fh.write(creds.to_json())
-            os.chmod(token, 0o600)  # yenilenince izin gevsemesin
+            os.chmod(token, 0o600)  # permissions must not loosen after refresh
         else:
-            raise RuntimeError("Google token gecersiz; makinede yeniden auth gerekli")
+            raise RuntimeError("Google token invalid; re-auth needed on the machine")
     return build("tasks", "v1", credentials=creds, cache_discovery=False)
 
 
@@ -55,13 +67,13 @@ def get_list_id(service, title):
 
 
 def parse_local(lines):
-    """-> {section_header: [{idx, done, title, meeting, date}]}"""
-    out = {h: [] for h in SECTIONS}
+    """-> {section_key: [{idx, done, title, meeting, date}]}"""
+    out = {k: [] for k in SECTIONS}
     current = None
     for i, line in enumerate(lines):
         s = line.strip()
         if s.startswith("## "):
-            current = s if s in SECTIONS else None
+            current = HEADING_ALIASES.get(s)
             continue
         m = re.match(r"- \[( |x)\] (.+)", s)
         if m and current:
@@ -82,50 +94,50 @@ def main():
     service = get_service()
     changed = False
 
-    for header, list_name in SECTIONS.items():
-        # Satir eklemeleri indexleri kaydirir; her bolumde taze parse.
+    for key, (header, list_name) in SECTIONS.items():
+        # Line insertions shift the indexes; parse fresh for every section.
         local = parse_local(lines)
         list_id = get_list_id(service, list_name)
         remote = service.tasks().list(
             tasklist=list_id, showCompleted=True, showHidden=True,
             maxResults=100).execute().get("items", [])
-        remote_by_title = {t["title"].strip(): t for t in remote}
-        local_titles = {t["title"] for t in local[header]}
+        remote_by_title = {x["title"].strip(): x for x in remote}
+        local_titles = {x["title"] for x in local[key]}
 
-        for lt in local[header]:
+        for lt in local[key]:
             rt = remote_by_title.get(lt["title"])
             if rt is None:
                 if not lt["done"]:
                     notes = "\n".join(x for x in [
-                        f"Toplantı: {lt['meeting']}" if lt["meeting"] else "",
-                        f"Tarih: {lt['date']}" if lt["date"] else "",
-                        "Kaynak: brainless görev defteri"] if x)
+                        t("gtasks_sync.note_meeting", meeting=lt["meeting"]) if lt["meeting"] else "",
+                        t("gtasks_sync.note_date", date=lt["date"]) if lt["date"] else "",
+                        t("gtasks_sync.note_source")] if x)
                     service.tasks().insert(tasklist=list_id, body={
                         "title": lt["title"], "notes": notes}).execute()
-                    log(f"Google'a eklendi [{list_name}]: {lt['title']}")
+                    log(f"Added to Google [{list_name}]: {lt['title']}")
             else:
                 if lt["done"] and rt["status"] == "needsAction":
                     service.tasks().patch(tasklist=list_id, task=rt["id"],
                                           body={"status": "completed"}).execute()
-                    log(f"Google'da kapandi: {lt['title']}")
+                    log(f"Closed on Google: {lt['title']}")
                 elif not lt["done"] and rt["status"] == "completed":
                     lines[lt["idx"]] = lines[lt["idx"]].replace("- [ ]", "- [x]", 1)
                     changed = True
-                    log(f"Yerelde kapandi: {lt['title']}")
+                    log(f"Closed locally: {lt['title']}")
 
         for title, rt in remote_by_title.items():
             if title not in local_titles and rt["status"] == "needsAction" \
-                    and "brainless görev defteri" not in (rt.get("notes") or ""):
+                    and not any(m in (rt.get("notes") or "") for m in SOURCE_MARKERS):
                 row = f"- [ ] {title} | | {datetime.now().strftime('%Y-%m-%d')}\n"
                 for i, l in enumerate(lines):
-                    if l.strip() == header:
+                    if HEADING_ALIASES.get(l.strip()) == key:
                         end = i + 1
                         while end < len(lines) and not lines[end].startswith("## "):
                             end += 1
                         lines.insert(end, row)
                         break
                 changed = True
-                log(f"Google'dan alindi [{list_name}]: {title}")
+                log(f"Pulled from Google [{list_name}]: {title}")
                 local_titles.add(title)
 
     if changed:

@@ -1,0 +1,5 @@
+{
+  "tasks_header": "# Task Ledger\n\nSingle task ledger. Meeting promises come from Spiky reports (spiky_actions.py), daily capture actions from the nightly digest (nightly_processor.py), both automatically on {worker}.\nTo close one, tick the checkbox or complete it in Google Tasks; both directions sync within 30 minutes.",
+  "section_promises": "## Promises",
+  "section_waiting": "## Waiting"
+}

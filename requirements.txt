@@ -1,6 +1,6 @@
 # Core document conversion for the hourly pipeline (smart_processor.py).
 # IMPORTANT: pinned to 0.1.7 with explicit format extras. Do NOT use
-# markitdown[all] on Python 3.14 — its youtube-transcript-api pin is
+# markitdown[all] on Python 3.14: its youtube-transcript-api pin is
 # unsatisfiable there and pip silently downgrades markitdown to 0.0.2.
 markitdown[pdf,docx,xlsx,pptx]==0.1.7
 

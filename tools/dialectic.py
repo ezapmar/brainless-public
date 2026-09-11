@@ -92,7 +92,7 @@ def write_file(path, text):
 
 def no_dashes(text):
     """House rule: no em or en dashes anywhere in output, filenames included."""
-    return (text or "").replace("—", " - ").replace("–", "-").replace("  - ", " - ")
+    return (text or "").replace("\u2014", " - ").replace("\u2013", "-").replace("  - ", " - ")
 
 
 # ---------------------------------------------------------------- inputs
@@ -648,7 +648,7 @@ def main():
 
     if mode == "evening":
         heads = "\n".join(f"- {t['title']}" for t in day["topics"])
-        buzz_post_sh("brifing", "daily",
+        buzz_post_sh("briefing", "daily",
                      f"🗣️ Dialectic evening round: {len(day['topics'])} topics, {replies}/{expected} persona replies.\n"
                      f"{heads}\nNote: {path}")
 

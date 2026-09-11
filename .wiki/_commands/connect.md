@@ -9,7 +9,7 @@ Two note titles or concepts. Titles may be quoted if they contain spaces.
 Examples:
 - `/connect "Kolay Ticket" "Emergency Helper"`
 - `/connect beliefs decisions`
-- `/connect "Öznur Mete Albayrak" "Product Team"`
+- `/connect "Ada Lovelace" "Product Team"`
 
 If fewer than 2 inputs are given, ask for the missing one.
 
@@ -19,10 +19,10 @@ If fewer than 2 inputs are given, ask for the missing one.
 
 ## Behavior
 1. Resolve A and B to actual note paths. If either is ambiguous (multiple candidates), list options and ask which one.
-2. If either doesn't exist, say so — do not invent.
-3. Search the graph for the **shortest path** from A to B (undirected is fine — a wikilink in either direction counts as an edge).
+2. If either doesn't exist, say so, do not invent.
+3. Search the graph for the **shortest path** from A to B (undirected is fine, a wikilink in either direction counts as an edge).
 4. If a path exists, print it as a chain of `[[links]]`.
-5. Whether or not a path exists, propose **2–4 missing edges** — pairs of notes along or near the path that semantically relate but don't yet link. Justify each in one sentence.
+5. Whether or not a path exists, propose **2-4 missing edges**, pairs of notes along or near the path that semantically relate but don't yet link. Justify each in one sentence.
 6. For each proposed edge, output the **exact line** the owner can paste into the source note (e.g. `- Related: [[Target Note]]` under a `## Connects To` section).
 
 ## Output format
@@ -47,7 +47,7 @@ If fewer than 2 inputs are given, ask for the missing one.
 ### 2. …
 
 ## Graph health note
-<optional: "Note A has only 1 inbound link — consider surfacing it more">
+<optional: "Note A has only 1 inbound link, consider surfacing it more">
 ```
 
 ## Guardrails

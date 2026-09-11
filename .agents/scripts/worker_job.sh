@@ -1,7 +1,7 @@
 #!/bin/bash
-# Worker generic job runner: nightly ailesi (closeout, nightly, lint,
-# reconcile, dashboard, resurface) systemd timer'larindan bununla kosar.
-# Once pull (gunun capture'lari gelsin), sonra verilen tool, sonra aninda
+# Worker generic job runner: the nightly family (closeout, nightly, lint,
+# reconcile, dashboard, resurface) runs through this from its systemd timers.
+# Pull first (so the day's captures arrive), then the given tool, then an immediate
 # commit+push (worker_backup) so the primary machine finds the result in the morning.
 #
 # The git lock wraps ONLY pull and backup here, never the tool run: a long job

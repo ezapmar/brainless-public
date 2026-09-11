@@ -4,7 +4,7 @@ type: daily
 tags: [daily]
 ---
 
-# {{date}} — {{day}}
+# {{date}}: {{day}}
 
 ## Intentions
 - 

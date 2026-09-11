@@ -1,17 +1,17 @@
 #!/usr/bin/env python3
-"""Spiky toplanti raporu ingest'i (worker'de calisir).
+"""Spiky meeting report ingest (runs on the worker).
 
-Gmail'i IMAP ile yoklar, no-reply@report.spiky.ai raporlarini Inbox/Spiky/
-altina markdown not olarak dusurur. Rapor mailin govdesinde tam olarak var
-(ozet, aksiyonlar, skorlar, detayli dokum), o yuzden LLM'siz ve $0.
+Polls Gmail over IMAP and drops no-reply@report.spiky.ai reports under
+Inbox/Spiky/ as markdown notes. The report is fully present in the mail body
+(summary, actions, scores, detailed transcript), so no LLM and $0.
 
-State: .agents/state/spiky_uid (son islenen IMAP UID). Ilk calismada eski
-raporlari BOCA ETMEZ: mevcut en yuksek UID'yi baseline alir, sonrakiler akar.
-Geri doldurma: --backfill N (son N gunun raporlarini da isler).
+State: .agents/state/spiky_uid (last processed IMAP UID). The first run does
+NOT dump old reports: it takes the current highest UID as baseline, later ones flow.
+Backfill: --backfill N (also processes the reports of the last N days).
 
-Kimlik (repo disi, ~/.config/brainless/, 0600):
-  gmail_address      : IMAP hesabi
-  gmail_app_password : Google uygulama sifresi (2FA gerektirir)
+Credentials (outside the repo, ~/.config/brainless/, 0600):
+  gmail_address      : IMAP account
+  gmail_app_password : Google app password (requires 2FA)
 """
 import argparse
 import email
@@ -28,6 +28,7 @@ from html.parser import HTMLParser
 VAULT = os.environ.get("BRAINLESS_VAULT") or os.path.expanduser("~/projects/brainless")
 sys.path.insert(0, os.path.join(VAULT, "tools"))
 from transcript_filter import is_empty_transcript  # noqa: E402
+from i18n import t  # noqa: E402
 
 CONF_DIR = os.path.expanduser("~/.config/brainless")
 STATE_FILE = os.path.join(VAULT, ".agents", "state", "spiky_uid")
@@ -49,7 +50,7 @@ def read_file(path):
 
 
 class _TextExtractor(HTMLParser):
-    """Spiky maili cogu zaman salt text/html; blok yapisini koruyarak metne indir."""
+    """Spiky mail is usually text/html only; reduce to text while keeping the block structure."""
     BLOCK = {"p", "div", "tr", "table", "ul", "ol", "br", "h1", "h2", "h3", "h4"}
     SKIP = {"style", "script", "head", "title"}
 
@@ -108,70 +109,71 @@ def clean_body(text):
         text = text[:cut]
     text = re.sub("[\u200b-\u200f\u2060\ufeff\u00ad\u034f]", "", text)
     text = text.replace("\u202f", " ").replace("\u00a0", " ")
-    text = text.replace("\u2014", "-").replace("\u2013", "-")  # house style: dash yasagi
+    text = text.replace("\u2014", "-").replace("\u2013", "-")  # house style: dash ban
     text = re.sub(r"[ \t]+\n", "\n", text)
     text = re.sub(r"\n[ \t]+", "\n", text)
     return re.sub(r"\n{3,}", "\n\n", text).strip()
 
 
 def safe_name(title):
-    title = title.replace("—", "-").replace("–", "-")
-    return re.sub(r"[^\w\sÇçĞğİıÖöŞşÜü&.-]", "", title).strip()[:80] or "Rapor"
+    title = title.replace("\u2014", "-").replace("\u2013", "-")
+    return re.sub(r"[^\w\sÇçĞğİıÖöŞşÜü&.-]", "", title).strip()[:80] or t("spiky_capture.default_name")
 
 
 def process(uid, raw):
     msg = email.message_from_bytes(raw)
-    # IMAP FROM aramasi substring eslesir; "no-reply@report.spiky.ai" <x@y> gibi
-    # sahte gonderen gecebilir. Gercek From adresini birebir dogrula, yoksa
-    # saldirgan metni LLM prompt'larina sokan giris noktasi olur.
+    # The IMAP FROM search matches substrings; a spoofed sender such as
+    # "no-reply@report.spiky.ai" <x@y> would pass. Verify the real From address
+    # exactly, otherwise this becomes the entry point for attacker text into LLM prompts.
     sender = parseaddr(msg.get("From", ""))[1].strip().lower()
     if sender != SENDER.lower():
-        log(f"uid {uid}: sahte gonderen '{sender}', atlandi")
+        log(f"uid {uid}: spoofed sender '{sender}', skipped")
         return
     subject = str(make_header(decode_header(msg.get("Subject", ""))))
-    title = re.sub(r"^Spiky Report:\s*", "", subject).strip() or "Spiky Raporu"
+    title = re.sub(r"^Spiky Report:\s*", "", subject).strip() or t("spiky_capture.default_title")
     try:
         when = parsedate_to_datetime(msg["Date"]).astimezone()
     except Exception:
         when = datetime.now().astimezone()
     body = clean_body(plain_body(msg))
     if is_empty_transcript(body):
-        log(f"uid {uid}: bos/anlamsiz govde, atlandi")
+        log(f"uid {uid}: empty/meaningless body, skipped")
         return
-    body = body[:200_000]  # kotu niyetli/bozuk mail vault'u sisirmesin
+    body = body[:200_000]  # a malicious/broken mail must not bloat the vault
     os.makedirs(OUT_DIR, exist_ok=True)
     fname = f"{when.strftime('%Y-%m-%d')} {safe_name(title)}.md"
     path = os.path.join(OUT_DIR, fname)
-    if os.path.exists(path):  # ayni gun ayni baslik: saat ekle, ustune yazma
+    if os.path.exists(path):  # same day, same title: add the time, do not overwrite
         alt = os.path.join(OUT_DIR, f"{when.strftime('%Y-%m-%d %H%M')} {safe_name(title)}.md")
         if os.path.exists(alt):
-            return  # ayni rapor zaten islenmis (backfill tekrar kosuldu)
+            return  # the same report was already processed (backfill run again)
         path = alt
     with open(path, "w") as fh:
-        fh.write(f"# {title}\n\nTarih: {when.strftime('%Y-%m-%d %H:%M')}\n"
-                 f"Kaynak: Spiky raporu (email ingest, worker)\n\n---\n\n{body}\n")
-    log(f"Rapor yazildi: {path}")
+        fh.write(t("spiky_capture.note_header", title=title, when=when.strftime('%Y-%m-%d %H:%M'))
+                 + f"{body}\n")
+    log(f"Report written: {path}")
 
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--backfill", type=int, default=0, metavar="GUN",
-                    help="son N gunun raporlarini da isle")
+    ap.add_argument("--backfill", type=int, default=0, metavar="DAYS",
+                    help="also process the reports of the last N days")
     args = ap.parse_args()
 
     addr = read_file(os.path.join(CONF_DIR, "gmail_address"))
     pw = read_file(os.path.join(CONF_DIR, "gmail_app_password"))
     if not (addr and pw):
-        return  # kimlik yoksa sessizce cik (telegram_capture ile ayni davranis)
+        return  # no credentials: exit silently (same behaviour as telegram_capture)
 
     last = read_file(STATE_FILE)
-    # imaplib PEP 476 disinda kaldi: ssl_context verilmezse sertifika DOGRULANMAZ
-    # (CERT_NONE). Ofis aginda aktif MITM app password'u calabilir. Dogrulat.
+    # imaplib was left out of PEP 476: without an ssl_context the certificate is NOT
+    # verified (CERT_NONE). An active MITM on the office network could steal the app
+    # password. Verify it.
     M = imaplib.IMAP4_SSL("imap.gmail.com", ssl_context=ssl.create_default_context())
     M.login(addr, pw)
     folder = "INBOX"
     if args.backfill:
-        # Arsivlenmis raporlar INBOX'ta gorunmez; All Mail'i bul (dil bagimsiz, \All flag).
+        # Archived reports are not visible in INBOX; find All Mail (language independent, \All flag).
         typ, boxes = M.list()
         for line in boxes or []:
             s = line.decode(errors="replace")
@@ -193,11 +195,11 @@ def main():
         return
 
     if last is None and not args.backfill:
-        # Ilk calisma: baseline kur, eskiyi isleme.
+        # First run: set the baseline, do not process old mail.
         os.makedirs(os.path.dirname(STATE_FILE), exist_ok=True)
         with open(STATE_FILE, "w") as fh:
             fh.write(str(uids[-1]))
-        log(f"Baseline kuruldu (uid {uids[-1]}); yeni raporlar akmaya baslar.")
+        log(f"Baseline set (uid {uids[-1]}); new reports start flowing.")
         M.logout()
         return
 
@@ -209,9 +211,9 @@ def main():
             try:
                 process(uid, msgdata[0][1])
             except Exception as e:
-                log(f"uid {uid} hata: {e}")
+                log(f"uid {uid} error: {e}")
     if not args.backfill:
-        # Backfill All Mail UID'leriyle calisir; INBOX baseline'ina dokunma.
+        # Backfill works with All Mail UIDs; leave the INBOX baseline alone.
         top = max(uids[-1], int(last or 0))
         os.makedirs(os.path.dirname(STATE_FILE), exist_ok=True)
         with open(STATE_FILE, "w") as fh:

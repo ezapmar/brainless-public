@@ -1,0 +1,18 @@
+{
+  "source_label": "Source",
+  "source_voice": "voice note",
+  "source_text": "text note",
+  "source_image": "image",
+  "source_voice_prompt": "Buzz voice note",
+  "source_text_prompt": "Buzz text note",
+  "quick_note_title": "Quick Note",
+  "image_note_title": "Image Note",
+  "link_note_title": "Link note",
+  "caption_note": "({owner}'s note: {caption})",
+  "err_audio_download": "audio file could not be downloaded",
+  "err_transcript_empty": "transcript came back empty",
+  "err_image_download": "image could not be downloaded",
+  "err_no_content": "nothing to process (text, audio or image expected)",
+  "reply_saved": "Note saved: {title}\n{rel}",
+  "reply_failed": "This message could not be processed: {exc}. It did not reach the vault."
+}

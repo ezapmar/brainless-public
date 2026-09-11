@@ -11,8 +11,8 @@ briefing. Four blocks, in leverage order (see Thinking/Thinking Cadence.md):
   4. Resurfaced notes        - the freshest picks from RESURFACE.md, if still current
 
 Fully deterministic: no LLM call, so it is cheap, fast, and cannot fail
-silently. The single write is THINKING.md. Content language matches the vault
-(Turkish); code and comments stay English per repo policy.
+silently. The single write is THINKING.md. Content language follows the owner's
+output language (tools/locale); code and comments stay English per repo policy.
 
 Runs each morning via launchd (<prefix>.brainless.think).
 """
@@ -24,6 +24,7 @@ from datetime import date, datetime
 VAULT = os.environ.get("BRAINLESS_VAULT") or os.path.expanduser("~/projects/brainless")
 sys.path.insert(0, os.path.join(VAULT, "tools"))
 import calibrate  # noqa: E402  (reuses the decision-scan logic)
+from i18n import t, t_list  # noqa: E402
 
 AGENT = os.path.join(VAULT, "_Agent-Context")
 CADENCE_FILE = os.path.join(VAULT, "Thinking", "Thinking Cadence.md")
@@ -60,31 +61,31 @@ def cadence_step():
         with open(CADENCE_FILE, errors="replace") as fh:
             lines = fh.read().splitlines()
     except OSError:
-        return "_Kadans dosyası okunamadı (Thinking/Thinking Cadence.md)._"
+        return t("think_surface.cadence_unreadable")
     steps = [l for l in lines if l.strip().startswith("- [")]
     for l in steps:
         if l.strip().startswith("- [ ]"):
             return clean(l.strip()[5:].strip())
     if steps:
-        return "Tüm adımlar işaretli. W1'e dönüp yeni bir kararla döngüyü tekrar başlat."
-    return "_Kadans adımı bulunamadı._"
+        return t("think_surface.cadence_all_done")
+    return t("think_surface.cadence_none")
 
 
 def calibration_block():
     due, needs_pred, no_review = calibrate.scan()
     if not (due or needs_pred or no_review):
-        return "Tüm kararlar güncel, notlanacak bir şey yok.", 0
+        return t("think_surface.calib_all_current"), 0
     out = []
     if due:
-        out.append("**Notlanmayı bekliyor** (review tarihi geçti, sonuç yazılmadı):")
+        out.append(t("think_surface.calib_due"))
         for name, rev in due:
-            out.append(f"- {name}  (review: {rev})  ->  `/calibrate` ile tek satırda notla")
+            out.append(t("think_surface.calib_due_row", name=name, rev=rev))
     if needs_pred:
-        out.append("\n**Tahmin eksik** (karar verildi, kalibre tahmin yok):")
+        out.append(t("think_surface.calib_needs_pred"))
         for name in needs_pred:
             out.append(f"- {name}")
     if no_review:
-        out.append("\n**Review tarihi yok** (pending/deferred):")
+        out.append(t("think_surface.calib_no_review"))
         for name in no_review:
             out.append(f"- {name}")
     return "\n".join(out), len(due)
@@ -124,8 +125,11 @@ def drift_bullets():
             text = fh.read()
     except OSError:
         return []
-    # Bullets under the first "stale / looks wrong" heading.
-    m = re.search(r"##\s*Bayat[^\n]*\n(.*?)(?:\n##|\Z)", text, re.S)
+    # Bullets under the "stale / looks wrong" heading weekly_reconcile writes
+    # (current language or English, so older reports still parse).
+    heads = "|".join(re.escape(h.lstrip("# ").strip())
+                     for h in t_list("weekly_reconcile.heading_stale"))
+    m = re.search(r"##\s*(?:" + heads + r")[^\n]*\n(.*?)(?:\n##|\Z)", text, re.S)
     if not m:
         return []
     return [clean(l.strip()[2:]) for l in m.group(1).splitlines()
@@ -138,32 +142,29 @@ def provocation(needs_pred):
     idx = datetime.now().timetuple().tm_yday
     drift = drift_bullets()
     if drift:
-        return f"(drift) {drift[idx % len(drift)]}"
+        return t("think_surface.prov_drift", item=drift[idx % len(drift)])
     beliefs = stale_beliefs()
     if beliefs:
         name, days = beliefs[idx % len(beliefs)]
-        return (f"(bayat inanç) [[{name}]] {days} gündür sınanmadı. "
-                f"Bir dated karşı-örnek yaz ya da güveni güncelle (Cadence W7).")
+        return t("think_surface.prov_stale_belief", name=name, days=days)
     if needs_pred:
         name = needs_pred[idx % len(needs_pred)]
-        return (f"(tahmin eksik) [[{name}]] için tahmin + güven% gir; "
-                f"aksi halde yargın notlanamaz (Cadence W1).")
-    return "Bugün belirgin bir gerilim yok. Bir seed fikir yakala (Cadence W6)."
+        return t("think_surface.prov_needs_pred", name=name)
+    return t("think_surface.prov_none")
 
 
 def resurface_block():
     if not os.path.exists(RESURFACE_FILE):
-        return "_RESURFACE.md yok. `python3 tools/resurface.py` ile üret._"
+        return t("think_surface.resurface_missing")
     if age_days(RESURFACE_FILE) > RESURFACE_FRESH_DAYS:
-        return (f"_RESURFACE.md bayat ({age_days(RESURFACE_FILE)} gün). "
-                f"`/resurface` ya da `python3 tools/resurface.py` çalıştır._")
+        return t("think_surface.resurface_stale", days=age_days(RESURFACE_FILE))
     try:
         with open(RESURFACE_FILE, errors="replace") as fh:
             text = fh.read()
     except OSError:
-        return "_RESURFACE.md okunamadı._"
+        return t("think_surface.resurface_unreadable")
     bullets = [clean(l) for l in text.splitlines() if l.strip().startswith("- ")]
-    return "\n".join(bullets[:3]) if bullets else "_RESURFACE.md boş._"
+    return "\n".join(bullets[:3]) if bullets else t("think_surface.resurface_empty")
 
 
 def main():
@@ -171,25 +172,25 @@ def main():
     _, needs_pred, _ = calibrate.scan()
     now = datetime.now().strftime("%Y-%m-%d %H:%M")
 
-    body = f"""# Düşünce Yüzeyi
+    body = f"""{t("think_surface.title")}
 
-> Oluşturulma: {now}. Hafif ve günlük; operasyonel brifingden ayrı tutulur. `tools/think_surface.py` üretir, elle düzenleme.
+{t("think_surface.intro", now=now)}
 
-## 1. Bugünün adımı (Cadence)
+{t("think_surface.section_cadence")}
 {cadence_step()}
 
-## 2. Karar defteri (Calibration)
+{t("think_surface.section_calibration")}
 {cal_text}
 
-## 3. Günün provokasyonu
+{t("think_surface.section_provocation")}
 {provocation(needs_pred)}
 
-## 4. Yeniden yüzeye çıkanlar
+{t("think_surface.section_resurface")}
 {resurface_block()}
 """
     with open(OUT_FILE, "w") as fh:
         fh.write(body)
-    log(f"Yazıldı: {OUT_FILE} (notlanmayı bekleyen karar: {due_count})")
+    log(f"Written: {OUT_FILE} (decisions awaiting grading: {due_count})")
 
 
 if __name__ == "__main__":

@@ -1,0 +1,23 @@
+{
+  "artifact_patterns": [
+    "(please )?subscribe.*",
+    "thanks? for watching.*"
+  ],
+  "selftest_drop": [
+    "",
+    "   ",
+    ".",
+    "...",
+    "( applause )",
+    "Please subscribe to my channel",
+    "Thanks for watching!",
+    "so so so so so"
+  ],
+  "selftest_keep": [
+    "hospital",
+    "Sign the contract with Yakup tomorrow.",
+    "Cardiology appointment this week.",
+    "thank you",
+    "buy 3 cartons of milk"
+  ]
+}

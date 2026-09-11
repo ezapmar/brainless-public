@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-"""Toplanti oncesi otomatik brif (worker, 15 dk'da bir).
+"""Automatic pre-meeting brief (worker, every 15 minutes).
 
-Onumuzdeki ~45 dk icinde baslayan takvim etkinlikleri icin: katilimcilar,
-gecmis Spiky raporlarindan ozet, gorev defterindeki ilgili acik maddeler
-Claude ile tek brif'e derlenir ve Telegram'dan gonderilir.
+For calendar events starting within the next ~45 minutes: attendees, a gist
+from past Spiky reports and the related open items in the task ledger are
+compiled by Claude into one brief and sent over Telegram.
 
-Gereksinim: tools/tasks-sync/token_gcal.json (calendar.readonly) ve
-gtasks venv'in python'u (google kutuphaneleri). State: .agents/state/brief_done.
+Requires: tools/tasks-sync/token_gcal.json (calendar.readonly) and the gtasks
+venv python (google libraries). State: .agents/state/brief_done.
 """
 import os
 import re
@@ -22,7 +22,8 @@ VAULT = os.environ.get("BRAINLESS_VAULT") or os.path.expanduser("~/projects/brai
 sys.path.insert(0, os.path.join(VAULT, "tools"))
 sys.path.insert(0, os.path.join(VAULT, ".agents", "scripts"))
 from llm import run_prompt
-from owner_profile import OWNER, OWNER_FULL, WORKER  # noqa: E402
+from owner_profile import OWNER, OWNER_FULL, WORKER, output_lang_directive  # noqa: E402
+from i18n import t  # noqa: E402
 from watchdog import send_telegram
 
 TOKEN = os.path.join(VAULT, "tools", "tasks-sync", "token_gcal.json")
@@ -53,7 +54,7 @@ def get_service():
         creds.refresh(Request())
         with open(TOKEN, "w") as fh:
             fh.write(creds.to_json())
-        os.chmod(TOKEN, 0o600)  # yenilenince izin gevsemesin
+        os.chmod(TOKEN, 0o600)  # permissions must not loosen on refresh
     return build("calendar", "v3", credentials=creds, cache_discovery=False)
 
 
@@ -66,9 +67,9 @@ def upcoming_events(service):
     out = []
     for e in r.get("items", []):
         if "dateTime" not in e.get("start", {}):
-            continue  # tum gun etkinligi
-        # timeMin bitis saatine bakar: suren toplanti da doner. Brif sadece
-        # HENUZ BASLAMAMIS toplantiya gider.
+            continue  # all-day event
+        # timeMin looks at the end time: a running meeting is returned too. The brief
+        # goes only to a meeting that has NOT STARTED YET.
         if datetime.fromisoformat(e["start"]["dateTime"]) <= datetime.now(timezone.utc):
             continue
         declined = any(a.get("self") and a.get("responseStatus") == "declined"
@@ -114,39 +115,40 @@ def make_brief(event, spiky, tasks):
     start = datetime.fromisoformat(event["start"]["dateTime"]).strftime("%H:%M")
     attendee_names = [(a.get("displayName") or a.get("email", ""))
                       for a in event.get("attendees", []) if not a.get("self")]
-    attendees = ", ".join(attendee_names) or "(katilimci listesi yok)"
-    notes = "\n\n".join(f"### {f}\n{b}" for _, f, b in spiky) or "(gecmis toplanti notu bulunamadi)"
-    task_block = "\n".join(tasks) or "(ilgili acik madde yok)"
-    # Plan 3: katilimcilarin iliski sinyalleri (deterministik, LLM'siz).
+    attendees = ", ".join(attendee_names) or "(no attendee list)"
+    notes = "\n\n".join(f"### {f}\n{b}" for _, f, b in spiky) or "(no past meeting notes found)"
+    task_block = "\n".join(tasks) or "(no related open items)"
+    # Plan 3: relationship signals of the attendees (deterministic, no LLM).
     try:
         from relationship_radar import attendee_signals
         rel = attendee_signals(attendee_names + [event.get("summary", "")])
     except Exception as e:
-        log(f"iliski sinyali alinamadi: {e}")
+        log(f"relationship signals unavailable: {e}")
         rel = []
-    rel_block = "\n".join(rel) if rel else "(izlenen kisi eslesmedi)"
+    rel_block = "\n".join(rel) if rel else "(no tracked person matched)"
     context = (read_file(CONTEXT_FILE) or "")[:2000]
-    prompt = f"""Sen {OWNER} için toplantı hazırlık asistanısın. Aşağıdaki malzemeden KISA bir brif yaz (en fazla 12 satır, Telegram mesajı):
-- İlk satır: saat, toplantı adı, karşı taraf.
-- "Geçmiş": son görüşmelerin özü 2-3 madde (varsa).
-- "Açık maddeler": {OWNER} adlı sahibin bu kişilerle ilgili sözleri ve onlardan bekledikleri (varsa).
-- "İlişki": aşağıdaki İLİŞKİ SİNYALLERİ'nden önemli olanı 1-2 satır ver (momentum düşükse, uzun süredir görüşülmediyse, ya da açık madde varsa mutlaka belirt).
-- "Dikkat": tek cümlelik taktik not (varsa; zorlamadan).
-- Süsleme yok, doğrudan kullanılabilir bilgi. Sadece brif metnini döndür.
+    prompt = f"""You are the meeting preparation assistant of {OWNER}. From the material below write a SHORT brief (at most 12 lines, a Telegram message):
+- First line: time, meeting name, counterpart.
+- "{t("meeting_brief.label_history")}": the gist of the last conversations in 2-3 items (if any).
+- "{t("meeting_brief.label_open_items")}": the owner {OWNER}'s promises regarding these people and what is expected from them (if any).
+- "{t("meeting_brief.label_relationship")}": 1-2 lines on what matters from the RELATIONSHIP SIGNALS below (always mention it when momentum is low, when there has been no contact for a long time, or when there are open items).
+- "{t("meeting_brief.label_watch")}": a one-sentence tactical note (if any; do not force it).
+- No embellishment, directly usable information. Return only the brief text.
+- {output_lang_directive()}
 
-# TOPLANTI: {event.get('summary', '(bassiz)')} saat {start}
-# KATILIMCILAR: {attendees}
+# MEETING: {event.get('summary', '(untitled)')} at {start}
+# ATTENDEES: {attendees}
 
-# İLİŞKİ SİNYALLERİ (katılımcılar):
+# RELATIONSHIP SIGNALS (attendees):
 {rel_block}
 
-# GECMIS SPIKY NOTLARI:
+# PAST SPIKY NOTES:
 {notes[:7000]}
 
-# GOREV DEFTERI (ilgili satirlar):
+# TASK LEDGER (related rows):
 {task_block}
 
-# GENEL BAGLAM:
+# GENERAL CONTEXT:
 {context}"""
     return run_prompt(prompt, timeout=180)
 
@@ -157,18 +159,18 @@ def main():
     done = set((read_file(STATE_FILE) or "").splitlines())
     service = get_service()
     for event in upcoming_events(service):
-        # Ayni toplantiya birden fazla davet gelebiliyor; baslik+saat tekildir.
+        # The same meeting can arrive as several invitations; title+time is unique.
         eid = f"{event.get('summary', '')}|{event['start'].get('dateTime', '')}"
         if eid in done:
             continue
-        log(f"Brif hazirlaniyor: {event.get('summary')}")
+        log(f"Preparing brief: {event.get('summary')}")
         spiky, tasks = gather_context(name_tokens(event))
         brief = make_brief(event, spiky, tasks)
         if brief:
             send_telegram(f"📅 {brief}")
-            log("Brif gonderildi")
+            log("Brief sent")
         done.add(eid)
-    # Es zamanli calisan bir kopyanin yazdiklarini ezme: yazmadan once birlestir.
+    # Do not clobber what a concurrently running copy wrote: merge before writing.
     done |= set((read_file(STATE_FILE) or "").splitlines())
     os.makedirs(os.path.dirname(STATE_FILE), exist_ok=True)
     with open(STATE_FILE, "w") as fh:

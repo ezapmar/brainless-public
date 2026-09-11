@@ -1,0 +1,20 @@
+{
+  "pa_auto_line": "> Otomatik üretilir: `tools/build_dashboard.py` (Pzt 05:00 / Cum 21:00), kaynak `Work/*/notes.md` ve `Personal/*/notes.md`.",
+  "pa_hand_edit_line": "> Elle düzenleme bir sonraki çalıştırmada silinir; projeyi değiştirmek için kendi `notes.md` dosyasını güncelle.",
+  "pa_stale_line": "> {days} günden eski son log = ⚠️ bayat. Güncelleme: {time}",
+  "pa_active_heading": "## Aktif ({n})",
+  "pa_stale_flag": " ⚠️ bayat",
+  "pa_status_row": "- **Status**: {status}. Son log: {last}{flag}",
+  "none": "yok",
+  "pa_no_open_item": "açık madde yok",
+  "pa_homeless_heading": "## Ev bekleyen projeler ({n})",
+  "pa_homeless_note": "CONTEXT.md aktif diyor ama `notes.md` yok; dashboard ve derleyici bunları görmüyor. Şablon: `_Templates/Project.md`.",
+  "pa_folder_exists": "klasör var: `{path}/`",
+  "pa_no_folder": "klasör de yok",
+  "pa_parked_heading": "## Beklemede / kapanıyor ({n})",
+  "pa_parked_row": "- [{cat}] {name} ({status}, son log {last})",
+  "pa_archive_heading": "## Arşiv ({n})",
+  "days_left": "{n} gün kaldı",
+  "days_overdue": "{n} gün GEÇTİ",
+  "no_deadlines": "- (notes.md frontmatter'ında `deadline:` olan aktif proje yok)"
+}

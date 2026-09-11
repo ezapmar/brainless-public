@@ -1,0 +1,7 @@
+{
+  "label_promises": "Sözlerin",
+  "label_waiting": "Beklediklerin",
+  "item_age": "{title} ({age} gün)",
+  "header": "📋 Görev hatırlatması ({days}+ gündür açık):",
+  "more_items": "- ... +{n} madde daha (TASKS.md / Google Tasks)"
+}

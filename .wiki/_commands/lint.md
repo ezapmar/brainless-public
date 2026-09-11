@@ -16,7 +16,7 @@ argument-hint: (none)
 ## Output
 
 ```
-# Lint — <date>
+# Lint: <date>
 
 - broken: N | orphans: N | stale: N | fm_issues: N
 

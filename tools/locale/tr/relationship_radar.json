@@ -1,0 +1,17 @@
+{
+  "tasks_section_waiting": "Bekliyorum",
+  "tasks_section_promises": "Sözlerim",
+  "report_red": "🔴 Uzun sessizlik ({weeks}+ hafta):",
+  "report_yellow": "\n🟡 Sessizleşti ({weeks}+ hafta):",
+  "report_momentum": "\n📉 Momentum düşüşü ({points}+ puan):",
+  "report_waiting": "\n⏳ Beklediklerin (açık maddeler):",
+  "row_contact": "{name} ({scope}), son temas {weeks} hafta once",
+  "row_momentum": "{name}: son toplantı skoru {score} ({drop} puan düşük)",
+  "row_waiting": "{name}: {n} madde",
+  "snapshot_title": "# İlişki Radarı",
+  "snapshot_intro": "Güncelleme: {updated}. Eşik: sessizlik {yellow}h sarı / {red}h kırmızı, momentum {points}+ puan.",
+  "snapshot_table_header": "| Kişi | Kapsam | Son temas | Kadans (gün) | Son skor | Momentum | Bekliyorsun | Borçlusun |",
+  "week_short": "h",
+  "telegram_title": "🤝 İlişki radarı (haftalık):",
+  "telegram_detail": "Detay: .wiki/relationships/radar.md"
+}

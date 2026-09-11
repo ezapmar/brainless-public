@@ -1,42 +1,11 @@
 import os
-import subprocess
 import time
-import shutil
 import sys
 
 VAULT = os.environ.get("BRAINLESS_VAULT") or os.path.expanduser("~/projects/brainless")
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from owner_profile import COMPANY_AREA  # noqa: E402
-
-def get_markitdown_command():
-    """Return argv list for the current markitdown (updated library, no more fragile hardcoded venv)."""
-    # 1. Best: command in PATH (after pip --user or pipx install + PATH update in cron_wrapper.sh)
-    if cmd := shutil.which("markitdown"):
-        return [cmd]
-
-    # 2. Current interpreter has the package
-    try:
-        import markitdown  # noqa: F401
-        return [sys.executable, "-m", "markitdown"]
-    except ImportError:
-        pass
-
-    # 3. Common --user install locations for the CLI wrapper (Python 3.14 / 3.11 on macOS)
-    for ver in ("3.14", "3.11", "3.12", "3.13"):
-        candidate = os.path.expanduser(f"~/Library/Python/{ver}/bin/markitdown")
-        if os.path.isfile(candidate) and os.access(candidate, os.X_OK):
-            return [candidate]
-
-    # 4. Legacy fallback (will be removed later)
-    legacy = os.path.expanduser("~/Projects/markitdown/.venv/bin/markitdown")
-    if os.path.isfile(legacy):
-        return [legacy]
-
-    raise RuntimeError(
-        "markitdown CLI not found.\n"
-        "Update with: python3 -m pip install --break-system-packages --user markitdown\n"
-        "Then restart any watchers/cron."
-    )
+from markitdown_native import convert_to_file  # noqa: E402
 
 
 TARGET_DIRS = [
@@ -71,11 +40,8 @@ def process_file(filepath):
     try:
         os.makedirs(out_dir, exist_ok=True)
         print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] Converting {filepath}")
-        markit_cmd = get_markitdown_command()
-        subprocess.run(markit_cmd + [filepath, "-o", out_md_path], check=True)
+        convert_to_file(filepath, out_md_path)
         print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] Success: {out_md_path}")
-    except subprocess.CalledProcessError as e:
-        print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] Error converting {filepath}: {e}")
     except Exception as e:
         print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] Unexpected error on {filepath}: {e}")
 

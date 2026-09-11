@@ -1,0 +1,53 @@
+{
+  "apply_words": [
+    "uygula",
+    "yaz",
+    "evet uygula"
+  ],
+  "cancel_words": [
+    "iptal",
+    "vazgec",
+    "vazgeç"
+  ],
+  "skip_words": [
+    "gec",
+    "geç",
+    "atla"
+  ],
+  "answer_prefix": [
+    "cevap"
+  ],
+  "q_grade": "📊 Karar notlama: [[{name}]] (review {review}) hâlâ notlanmadı.\nTahmin neydi, gerçekte ne oldu, bu senin yargın hakkında ne öğretiyor? Sesli ya da yazılı anlat.",
+  "q_predict": "🔮 Tahmin: [[{name}]] kararı verildi ama ölçülebilir tahmin yok.\nNe olmasını bekliyorsun, yüzde kaç güvenle, ne zaman kontrol edelim?",
+  "q_cadence": "🎯 Kademe adımı: {step}\nBu hafta yaptın mı? Yaptıysan ne çıktı; yapmadıysan ne engelledi?",
+  "q_belief": "🧭 İnanç sınaması: [[{name}]] en son {date} tarihinde sınandı.\nSon haftalarda bu inancı doğrulayan ya da çürüten somut bir olay oldu mu? Bir örnek anlat; güvenin değişti mi?",
+  "q_seed": "🌱 Tohum: iki haftadır Thinking/Ideas'a yeni soru düşmedi.\nBu hafta zihninin dönüp durduğu soru ne? Bir cümle yeter, gerisini ben açarım.",
+  "pending_open": "⏳ Geçen haftanın sorusu hâlâ açık. Cevaplamak için o mesaja yanıt ver, atlamak için 'geç' yaz.\n\n{question}",
+  "ask_message": "🧠 Haftalık düşünme sorusu\n\n{question}\n\nBu mesaja yanıt vererek (swipe) sesli ya da yazılı cevapla. Atlamak için 'geç'.",
+  "preview_grade": "📊 [[{target}]] için Outcome taslağı\n\nSonuç ({score}): {outcome}\nDers: {lesson}\n\nCalibration.md satırı da dolacak.",
+  "preview_predict": "🔮 [[{target}]] için tahmin taslağı\n\nTahmin: {prediction}\nGüven: %{confidence}\nReview: {review}",
+  "preview_belief": "🧭 [[{target}]] için sınama kaydı\n\nOlay: {instance}\nHüküm: {verdict}\nGüven: {confidence}\nlast_challenged bugüne çekilecek.",
+  "preview_cadence": "🎯 Kademe adımı {done}\n\nNot: {note}\n(Thinking/Daily'ye capture olarak düşer.)",
+  "cadence_will_mark": "işaretlenecek ✅",
+  "cadence_stays_open": "açık kalacak",
+  "preview_seed": "🌱 Yeni tohum: {title}\n\n{idea}\n\nNeden: {why}\nBağlar: {connects}",
+  "note_grade_block": "- **Sonuç ({today}, {score}):** {outcome}\n- **Ders:** {lesson}\n",
+  "verdict_supports": "destekledi",
+  "verdict_challenges": "çürüttü",
+  "verdict_neutral": "nötr",
+  "note_belief_entry": "### {today}\n- Olay: {instance}\n- Hüküm: {verdict}\n",
+  "note_cadence_capture": "# Kademe adımı: {target}\n\n- Durum: {status}\n- Not: {note}\n\n#thinking #cadence\n\n---\nKaynak: Telegram düşünme döngüsü, {stamp}\n",
+  "cadence_done": "yapıldı",
+  "cadence_not_done": "yapılmadı",
+  "seed_default_name": "Tohum {today}",
+  "seed_source": "Telegram düşünme döngüsü",
+  "query_body": "# Düşünme döngüsü: {kind}\n\n## Cevap (ham)\n{answer}\n\n## Uygulanan\n```json\n{payload}\n```\n\nDokunulan: {touched}\n",
+  "applied": "✅ Uygulandı: {files}",
+  "cancelled": "Tamam, taslak silindi. Soru açık kalıyor; istersen yeniden cevapla ya da 'geç'.",
+  "skipped": "Atlandı. Gelecek hafta başka bir soru gelir.",
+  "transcribe_failed": "Ses transkript edilemedi; tekrar dener misin?",
+  "unsupported_message": "Bu mesaj tipini cevap olarak işleyemiyorum; ses ya da yazı gönder.",
+  "drafting": "Aldım, taslağı hazırlıyorum...",
+  "draft_failed": "Taslak üretilemedi (LLM boş döndü). Cevabın kaybolmadı; tekrar dene ya da 'geç'.",
+  "draft_footer": "\n\n'uygula' yazarsan nota işlerim; 'iptal' ile silerim."
+}

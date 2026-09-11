@@ -3,10 +3,10 @@
 
 Polls the Telegram bot for new messages every 2 minutes (launchd,
 <prefix>.brainless.telegram). Voice notes, audio files, video notes and
-audio/video documents are all transcribed LOCALLY with whisper.cpp (Turkish,
-large-v3-turbo); audio never leaves this machine. Anything the handler cannot
-process is logged AND answered in the chat, because the offset advances either
-way and a silently dropped message is gone for good.
+audio/video documents are all transcribed LOCALLY with whisper.cpp (the owner's
+language from PROFILE.md, large-v3-turbo); audio never leaves this machine.
+Anything the handler cannot process is logged AND answered in the chat, because
+the offset advances either way and a silently dropped message is gone for good.
 Claude then cleans the transcript (fixing mis-heard proper nouns against
 CONTEXT.md) and the result lands in Thinking/Daily/ as a normal capture,
 which the 23:00 nightly processor digests like any other note.
@@ -34,8 +34,9 @@ from datetime import datetime
 VAULT = os.environ.get("BRAINLESS_VAULT") or os.path.expanduser("~/projects/brainless")
 sys.path.insert(0, os.path.join(VAULT, "tools"))
 from llm import run_prompt
-from owner_profile import OWNER, OWNER_FULL, WORKER  # noqa: E402
+from owner_profile import OWNER, OWNER_FULL, WORKER, LANG, possessive, output_lang_directive  # noqa: E402
 from transcript_filter import is_empty_transcript  # noqa: E402
+from i18n import t  # noqa: E402
 
 CONF_DIR = os.path.expanduser("~/.config/brainless")
 TOKEN_FILE = os.path.join(CONF_DIR, "telegram_token")
@@ -96,11 +97,11 @@ def transcribe(token, file_id):
         subprocess.run([ffmpeg, "-y", "-i", raw, "-ar", "16000", "-ac", "1", wav],
                        check=True, capture_output=True, timeout=120)
         r = subprocess.run(
-            [WHISPER, "-m", MODEL, "-l", "tr", "-f", wav, "--no-timestamps"],
+            [WHISPER, "-m", MODEL, "-l", LANG, "-f", wav, "--no-timestamps"],
             capture_output=True, text=True, timeout=600,
         )
         if r.returncode != 0:
-            log(f"whisper hata: {r.stderr[:200]}")
+            log(f"whisper error: {r.stderr[:200]}")
             return None
         return r.stdout.strip()
 
@@ -110,8 +111,8 @@ LINKS_DIR = os.path.join(VAULT, "Inbox", "Links")
 
 
 def _is_public_host(host):
-    """SSRF korumasi: cozulen her adres global (internet) olmali; ozel/loopback/
-    link-local/metadata araligina cozen host reddedilir."""
+    """SSRF guard: every resolved address must be global (internet); a host that
+    resolves into a private/loopback/link-local/metadata range is rejected."""
     import ipaddress
     import socket
     try:
@@ -128,19 +129,19 @@ def _is_public_host(host):
 
 
 def fetch_page_text(url):
-    """Sayfayi indir ve okunur metne indir (spiky_capture'daki donusturucuyle)."""
+    """Download the page and reduce it to readable text (with spiky_capture's converter)."""
     from spiky_capture import html_to_text
     parsed = urllib.parse.urlparse(url)
     if parsed.scheme not in ("http", "https") or not parsed.hostname:
         return ""
-    if not _is_public_host(parsed.hostname):  # SSRF: ic ag/loopback/metadata reddi
-        log(f"Ozel/dahili adrese link reddedildi: {parsed.hostname}")
+    if not _is_public_host(parsed.hostname):  # SSRF: reject internal network/loopback/metadata
+        log(f"Link to a private/internal address rejected: {parsed.hostname}")
         return ""
     req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 (brainless)"})
     with urllib.request.urlopen(req, timeout=30) as resp:
         ctype = resp.headers.get("Content-Type", "")
         if not any(t in ctype for t in ("text/html", "text/plain", "application/xhtml", "")):
-            log(f"Metin olmayan icerik atlandi: {ctype}")
+            log(f"Non-text content skipped: {ctype}")
             return ""
         raw = resp.read(2_000_000)
     text = html_to_text(raw.decode("utf-8", "replace"))
@@ -149,22 +150,23 @@ def fetch_page_text(url):
 
 def make_link_note(url, page_text, comment):
     context = (read_file(CONTEXT_FILE) or "")[:3000]
-    comment_line = f"- {OWNER} adlı sahibin linkle birlikte yazdığı not: {comment}" if comment else ""
-    prompt = f"""Sen {OWNER} için 'brainless' sistemine not düşüren capture asistanısın.
-{OWNER} sana bir link gönderdi; aşağıdaki sayfa içeriğinden temiz bir okuma notu üret.
+    comment_line = f"- The note {OWNER} wrote along with the link: {comment}" if comment else ""
+    prompt = f"""You are the capture assistant that files notes into the 'brainless' system for {OWNER}.
+{OWNER} sent you a link; produce a clean reading note from the page content below.
 
-KURALLAR:
-- İlk satır: sayfanın başlığı (# ile).
-- 3-7 maddede özü ver; genel geçer laf değil, sayfanın asıl iddiası ve önemli detaylar.
-- {OWNER} adlı sahibin projeleriyle bir bağ görüyorsan tek cümleyle belirt ve [[wikilink]] kullan.
-- Son satır: uygunsa 1-3 etiket (#reading gibi).
-- Sadece not içeriğini döndür, başka hiçbir şey yazma.
+RULES:
+- First line: the page title (with #).
+- Give the essence in 3-7 bullets; not generic talk, the page's actual claim and the important details.
+- If you see a connection to {possessive()} projects, state it in one sentence and use a [[wikilink]].
+- Last line: 1-3 tags if appropriate (like #reading).
+- Return only the note content, write nothing else.
+- {output_lang_directive()}
 {comment_line}
 
-# {OWNER} İÇİN GÜNCEL BAĞLAM:
+# CURRENT CONTEXT FOR {OWNER}:
 {context}
 
-# SAYFA ({url}):
+# PAGE ({url}):
 {page_text[:12000]}"""
     return run_prompt(prompt, timeout=180)
 
@@ -172,11 +174,11 @@ KURALLAR:
 def handle_link(raw_text, url_match):
     url = url_match.group(0).rstrip(").,>]")
     comment = URL_RE.sub("", raw_text).strip()
-    log(f"Link alındı: {url}")
+    log(f"Link received: {url}")
     try:
         page = fetch_page_text(url)
     except Exception as e:
-        log(f"Sayfa çekilemedi: {e}")
+        log(f"Page could not be fetched: {e}")
         page = ""
     note = None
     if page:
@@ -188,8 +190,8 @@ def handle_link(raw_text, url_match):
     domain = re.sub(r"^www\.", "", urllib.parse.urlparse(url).netloc) or "link"
     path = os.path.join(LINKS_DIR, f"{stamp[:10]} {domain} {stamp[11:]}.md")
     with open(path, "w") as fh:
-        fh.write(note + f"\n\n---\nKaynak: {url}\nTelegram link, {stamp}\n")
-    log(f"Not yazıldı: {path}")
+        fh.write(note + f"\n\n---\n{t('telegram_capture.source_label')}: {url}\n{t('telegram_capture.source_telegram_link')}, {stamp}\n")
+    log(f"Note written: {path}")
     return note.splitlines()[0].lstrip("# ").strip()
 
 
@@ -212,61 +214,63 @@ def fetch_photo(token, msg, stamp):
 def make_photo_note(image_path, caption):
     context = (read_file(CONTEXT_FILE) or "")[:4000]
     date_str = datetime.now().strftime("%Y-%m-%d %H:%M")
-    caption_line = f"- {OWNER} adlı sahibin görsel altına yazdığı not: {caption}" if caption else ""
-    prompt = f"""Sen {OWNER} için 'brainless' sistemine not düşüren capture asistanısın.
-Önce Read aracıyla şu görseli aç ve incele: {image_path}
-Sonra görselden temiz bir vault notu üret (el yazısı, whiteboard, belge veya ekran görüntüsü olabilir).
+    caption_line = f"- The caption {OWNER} wrote under the image: {caption}" if caption else ""
+    prompt = f"""You are the capture assistant that files notes into the 'brainless' system for {OWNER}.
+First open and inspect this image with the Read tool: {image_path}
+Then produce a clean vault note from the image (it may be handwriting, a whiteboard, a document or a screenshot).
 
-KURALLAR:
-- Görseldeki metni olduğu gibi aktar (OCR); okunamayan yerleri [okunamadı] diye işaretle.
-- Görselde metin yoksa 1-2 cümleyle betimle.
-- Özel isimleri bağlamdaki doğru halleriyle düzelt.
-- Bahsedilen proje ve kişiler için [[wikilink]] kullan.
-- İlk satır: kısa başlık (# ile). Son satır: uygunsa 1-3 etiket (#work gibi).
-- Aksiyon varsa "- [ ]" görev satırı olarak yaz.
-- Sadece not içeriğini döndür, başka hiçbir şey yazma.
+RULES:
+- Transfer the text in the image as is (OCR); mark unreadable parts as {t('telegram_capture.unreadable_marker')}.
+- If the image has no text, describe it in 1-2 sentences.
+- Correct proper nouns to their right forms from the context.
+- Use [[wikilink]] for the projects and people mentioned.
+- First line: a short title (with #). Last line: 1-3 tags if appropriate (like #work).
+- If there is an action, write it as a "- [ ]" task line.
+- Return only the note content, write nothing else.
+- {output_lang_directive()}
 {caption_line}
 
-# {OWNER} İÇİN GÜNCEL BAĞLAM (isim düzeltmeleri için):
+# CURRENT CONTEXT FOR {OWNER} (for name corrections):
 {context}
 
-# GÖRSEL: {image_path} ({date_str})"""
+# IMAGE: {image_path} ({date_str})"""
     return run_prompt(prompt, timeout=240, allowed_tools=["Read"])
 
 
 def make_note(raw_text, source):
     context = (read_file(CONTEXT_FILE) or "")[:4000]
     date_str = datetime.now().strftime("%Y-%m-%d %H:%M")
-    prompt = f"""Sen {OWNER} için 'brainless' sistemine sesli/yazılı not düşüren capture asistanısın.
-Aşağıdaki ham metni temiz bir vault notuna çevir.
+    prompt = f"""You are the capture assistant that files voice/text notes into the 'brainless' system for {OWNER}.
+Turn the raw text below into a clean vault note.
 
-KURALLAR:
-- İçeriği DEĞİŞTİRME, sadece temizle: dolgu sözcüklerini at, cümleleri toparla.
-- Transkripsiyon hatası görünen özel isimleri bağlamdaki doğru halleriyle düzelt
-  (örnek: "top table" -> "cap table", "Gremory" -> "Greymore", "o ge ka" -> "OGK").
-- Bahsedilen proje ve kişiler için [[wikilink]] kullan.
-- İlk satır: kısa başlık (# ile). Son satır: uygunsa 1-3 etiket (#work gibi).
-- Aksiyon varsa "- [ ]" görev satırı olarak yaz.
-- Sadece not içeriğini döndür, başka hiçbir şey yazma.
+RULES:
+- Do NOT change the content, only clean it: drop filler words, tidy up the sentences.
+- Correct proper nouns that look like transcription errors to their right forms from the context
+  (example: "top table" -> "cap table", "Gremory" -> "Greymore", "o ge ka" -> "OGK").
+- Use [[wikilink]] for the projects and people mentioned.
+- First line: a short title (with #). Last line: 1-3 tags if appropriate (like #work).
+- If there is an action, write it as a "- [ ]" task line.
+- Return only the note content, write nothing else.
+- {output_lang_directive()}
 
-# {OWNER} İÇİN GÜNCEL BAĞLAM (isim düzeltmeleri için):
+# CURRENT CONTEXT FOR {OWNER} (for name corrections):
 {context}
 
-# HAM METİN ({source}, {date_str}):
+# RAW TEXT ({source}, {date_str}):
 {raw_text}"""
     return run_prompt(prompt, timeout=180)
 
 
-# Ses tasiyabilecek Telegram tipleri. 2026-09-03: yalnizca "voice" isleniyordu.
-# Telefondan dosya olarak ya da baska bir uygulamadan paylasilan kayit "audio",
-# "document" ya da "video_note" olarak gelir; bunlar sessizce dusuyordu ve
-# offset yine de ilerledigi icin mesaj kalici olarak kayboluyordu.
-# ffmpeg formati icerikten tanidigi icin hepsi ayni transkript yolundan gecer.
+# Telegram types that can carry audio. 2026-09-03: only "voice" was handled.
+# A recording shared as a file from the phone or from another app arrives as
+# "audio", "document" or "video_note"; those were dropped silently and, since
+# the offset advanced anyway, the message was lost for good.
+# ffmpeg detects the format from the content, so all go through the same transcript path.
 AUDIO_KEYS = ("voice", "audio", "video_note", "video")
 
 
 def audio_file_id(msg):
-    """Mesajdan transkript edilebilir file_id cikar. -> (file_id, sure) | None"""
+    """Extract a transcribable file_id from the message. -> (file_id, duration) | None"""
     for key in AUDIO_KEYS:
         part = msg.get(key)
         if isinstance(part, dict) and part.get("file_id"):
@@ -279,7 +283,7 @@ def audio_file_id(msg):
 
 def handle_message(token, msg, chat_id=None):
     def notify(text):
-        """Sessiz dusmeyi bitir: isleyemedigimiz her mesaji gonderene soyle."""
+        """End silent drops: tell the sender about every message we could not process."""
         if not chat_id:
             return
         try:
@@ -287,50 +291,49 @@ def handle_message(token, msg, chat_id=None):
         except Exception:
             pass
 
-    # Dusunme dongusu (thinking_loop.py): bekleyen bir haftalik soru varsa ve bu
-    # mesaj ona yanit ya da "uygula/iptal/gec" ise once o isler; siradan capture
-    # akisina girmez. Hata olursa mesaj normal capture olarak devam eder.
+    # Thinking loop (thinking_loop.py): if a weekly question is pending and this
+    # message is an answer to it or an apply/cancel/skip word, it is handled first
+    # and does not enter the ordinary capture flow. On error the message continues
+    # as a normal capture.
     try:
         import thinking_loop
         if thinking_loop.try_handle(token, msg, chat_id, transcribe, notify):
             return None
     except Exception as e:
-        log(f"thinking_loop hata, capture'a dusuluyor: {e}")
+        log(f"thinking_loop error, falling back to capture: {e}")
 
     if "text" in msg and msg["text"].startswith("/"):
-        return None  # bot komutu, sessizce gec
+        return None  # bot command, skip silently
 
     text = None
     source = None
     audio = audio_file_id(msg)
     if audio:
         file_id, duration = audio
-        log(f"Ses alındı ({duration} sn), transkript ediliyor...")
+        log(f"Audio received ({duration} s), transcribing...")
         text = transcribe(token, file_id)
-        source = "sesli not"
+        source = t("telegram_capture.source_voice")
         if not text:
-            log("Transkript bos dondu (20 MB siniri ya da whisper hatasi)")
-            notify("Ses alındı ama transkript edilemedi. Muhtemel sebep: 20 MB "
-                   "indirme sınırı ya da whisper hatası. Kayıt vault'a düşmedi.")
+            log("Transcript came back empty (20 MB limit or whisper error)")
+            notify(t("telegram_capture.reply_transcribe_failed"))
             return None
         if is_empty_transcript(text):
-            log("Anlamsiz transkript (sessizlik/whisper artefakti), atlandi")
-            notify("Ses alındı ama konuşma algılanmadı (sessizlik ya da whisper "
-                   "artefaktı). Kayıt vault'a düşmedi.")
+            log("Meaningless transcript (silence/whisper artefact), skipped")
+            notify(t("telegram_capture.reply_no_speech"))
             return None
     elif "photo" in msg:
-        log("Görsel alındı, işleniyor...")
+        log("Image received, processing...")
         stamp = datetime.now().strftime("%Y-%m-%d-%H%M%S")
         img = fetch_photo(token, msg, stamp)
         if not img:
             return None
         caption = msg.get("caption", "")
-        note = make_photo_note(img, caption) or f"# Görsel Not\n\n{caption}".rstrip()
+        note = make_photo_note(img, caption) or f"# {t('telegram_capture.image_note_title')}\n\n{caption}".rstrip()
         note += f"\n\n![[{os.path.basename(img)}]]"
         path = os.path.join(CAPTURE_DIR, f"{stamp}-telegram.md")
         with open(path, "w") as fh:
-            fh.write(note + f"\n\n---\nKaynak: Telegram görsel, {stamp}\n")
-        log(f"Not yazıldı: {path}")
+            fh.write(note + f"\n\n---\n{t('telegram_capture.source_label')}: {t('telegram_capture.source_telegram_image')}, {stamp}\n")
+        log(f"Note written: {path}")
         return note.splitlines()[0].lstrip("# ").strip()
     elif "text" in msg and not msg["text"].startswith("/"):
         raw = msg["text"].strip()
@@ -338,25 +341,24 @@ def handle_message(token, msg, chat_id=None):
         if m and len(URL_RE.sub("", raw).strip()) < 200:
             return handle_link(raw, m)
         text = raw
-        source = "yazılı not"
+        source = t("telegram_capture.source_text")
     if not text:
         kinds = ", ".join(
             k for k in msg
             if k not in ("message_id", "from", "chat", "date", "message_thread_id")
-        ) or "bos"
-        log(f"Desteklenmeyen mesaj tipi yoksayildi: {kinds}")
-        notify(f"Bu mesaj tipi işlenemiyor ({kinds}), vault'a düşmedi. "
-               "Sesli not, ses dosyası, fotoğraf ya da yazı gönderebilirsin.")
+        ) or t("telegram_capture.empty_kinds")
+        log(f"Unsupported message type ignored: {kinds}")
+        notify(t("telegram_capture.reply_unsupported", kinds=kinds))
         return None
 
-    note = make_note(text, source) or f"# Hızlı Not\n\n{text}"
+    note = make_note(text, source) or f"# {t('telegram_capture.quick_note_title')}\n\n{text}"
     stamp = datetime.now().strftime("%Y-%m-%d-%H%M%S")
     os.makedirs(CAPTURE_DIR, exist_ok=True)
     path = os.path.join(CAPTURE_DIR, f"{stamp}-telegram.md")
     with open(path, "w") as fh:
-        fh.write(note + f"\n\n---\nKaynak: Telegram {source}, {stamp}\n")
-    log(f"Not yazıldı: {path}")
-    title = note.splitlines()[0].lstrip("# ").strip() if note else "Not"
+        fh.write(note + f"\n\n---\n{t('telegram_capture.source_label')}: Telegram {source}, {stamp}\n")
+    log(f"Note written: {path}")
+    title = note.splitlines()[0].lstrip("# ").strip() if note else t("telegram_capture.note_title_fallback")
     return title
 
 
@@ -368,7 +370,7 @@ def main():
     try:
         offset = int(read_file(STATE_FILE) or 0)
     except ValueError:
-        offset = 0  # bozuk offset dosyasi poller'i kalici olarak oldurmesin
+        offset = 0  # a corrupt offset file must not kill the poller for good
     # Launchd fires this right after wake, sometimes before DNS is up;
     # retry briefly instead of losing the whole 2-minute slot.
     updates = None
@@ -378,17 +380,18 @@ def main():
             break
         except Exception as e:
             if attempt == 2:
-                log(f"getUpdates hata (3 deneme): {e}")
+                log(f"getUpdates error (3 attempts): {e}")
                 return
             time.sleep(5)
 
     allowed = read_file(CHAT_FILE)
-    # H5 fail-closed: read_file, dosya YOK ya da OKUNAMAZ ise None doner. Ikisini
-    # ayir. Dosya diskte varsa ama okunamiyorsa (izin/gecici hata) mesaj ISLENMEZ;
-    # yoksa yabanci bir mesaj whitelist'i kaciririr. Yeniden sahiplenme yalnizca
-    # operatorun acikca BRAINLESS_TG_ALLOW_ADOPT=1 verdigi kurulum turunda olur.
+    # H5 fail-closed: read_file returns None when the file is MISSING or UNREADABLE.
+    # Tell the two apart. If the file exists on disk but cannot be read
+    # (permission/transient error) messages are NOT processed; otherwise a foreign
+    # message could hijack the whitelist. Re-adoption happens only in a setup run
+    # where the operator explicitly sets BRAINLESS_TG_ALLOW_ADOPT=1.
     if allowed is None and os.path.exists(CHAT_FILE):
-        log("CHAT_FILE var ama okunamadi; guvenlik geregi tur atlandi")
+        log("CHAT_FILE exists but could not be read; round skipped for safety")
         touch_state(offset)
         return
     allow_adopt = os.environ.get("BRAINLESS_TG_ALLOW_ADOPT") == "1"
@@ -397,38 +400,38 @@ def main():
         msg = upd.get("message") or {}
         chat_id = str(msg.get("chat", {}).get("id", ""))
         if not chat_id:
-            # edited_message, channel_post vb: "message" yok. Offset yine de
-            # ilerledi, en azindan iz birak.
-            log(f"message tasimayan update atlandi: {sorted(upd)}")
+            # edited_message, channel_post etc: no "message". The offset advanced
+            # anyway, so at least leave a trace.
+            log(f"update without a message skipped: {sorted(upd)}")
             continue
         if allowed is None:
             if not allow_adopt:
-                # Kurulmamis ve adoption kapali: hicbir yabanciyi sahiplendirme.
-                log(f"Whitelist yok, adoption kapali; chat {chat_id} yoksayildi")
+                # Not set up and adoption disabled: never adopt a stranger.
+                log(f"No whitelist, adoption disabled; chat {chat_id} ignored")
                 continue
             os.makedirs(CONF_DIR, exist_ok=True)
             with open(CHAT_FILE, "w") as fh:
                 fh.write(chat_id)
             os.chmod(CHAT_FILE, 0o600)
             allowed = chat_id
-            log(f"Whitelist kilitlendi (adoption): chat {chat_id}")
+            log(f"Whitelist locked (adoption): chat {chat_id}")
             try:
                 api(token, "sendMessage",
                     {"chat_id": chat_id,
-                     "text": "Bağlandık. Sesli veya yazılı not at, vault'a düşeyim. 🧠"})
+                     "text": t("telegram_capture.reply_connected")})
             except Exception:
                 pass
             continue
         if chat_id != allowed:
-            log(f"Yetkisiz chat yoksayıldı: {chat_id}")
+            log(f"Unauthorized chat ignored: {chat_id}")
             continue
         try:
             title = handle_message(token, msg, chat_id)
             if title:
                 api(token, "sendMessage",
-                    {"chat_id": chat_id, "text": f"Vault'a düştü: {title}"})
+                    {"chat_id": chat_id, "text": t("telegram_capture.reply_saved", title=title)})
         except Exception as e:
-            log(f"Mesaj işleme hatası: {e}")
+            log(f"Message handling error: {e}")
 
     touch_state(offset)
 

@@ -20,7 +20,8 @@ from datetime import datetime, timedelta
 VAULT = os.environ.get("BRAINLESS_VAULT") or os.path.expanduser("~/projects/brainless")
 sys.path.insert(0, os.path.join(VAULT, "tools"))
 from llm import run_prompt
-from owner_profile import OWNER, lang_name  # noqa: E402
+from owner_profile import OWNER, output_lang_directive  # noqa: E402
+from i18n import t, t_list  # noqa: E402
 
 CONTEXT_FILE = os.path.join(VAULT, "_Agent-Context", "CONTEXT.md")
 REPORT_FILE = os.path.join(VAULT, "_Agent-Context", "CONTEXT-DRIFT.md")
@@ -63,60 +64,61 @@ def main():
         with open(CONTEXT_FILE, errors="replace") as fh:
             context_md = fh.read()
     except OSError as e:
-        log(f"CONTEXT.md okunamadı: {e}")
+        log(f"CONTEXT.md unreadable: {e}")
         return
 
     briefings = last_week_briefings()
     commits = week_commits()
     if not briefings and not commits:
-        log("Son 7 günde veri yok, mutabakat atlandı.")
+        log("No data in the last 7 days, reconciliation skipped.")
         return
 
     evidence = ""
     if briefings:
-        evidence += f"\n# SON 7 GÜNÜN BRİFİNG VE KAPANIŞLARI:\n{briefings}"
+        evidence += f"\n# BRIEFINGS AND CLOSE-OUTS OF THE LAST 7 DAYS:\n{briefings}"
     if commits:
-        evidence += f"\n# SON 7 GÜNÜN COMMIT BAŞLIKLARI:\n{commits}"
+        evidence += f"\n# COMMIT SUBJECTS OF THE LAST 7 DAYS:\n{commits}"
     evidence = evidence[:TOTAL_CAP]
 
     date_str = datetime.now().strftime("%Y-%m-%d")
-    prompt = f"""Sen {OWNER} için 'brainless' sisteminde haftalık hafıza mutabakatı asistanısın. Çıktı dili: {lang_name(native=True)}.
-Görev: CONTEXT.md (agent'ların giriş noktası) ile son 7 günün gerçekliğini karşılaştır, drift raporu yaz.
+    prompt = f"""You are the weekly memory reconciliation assistant of the 'brainless' system for {OWNER}. {output_lang_directive()}
+Task: compare CONTEXT.md (the agents' entry point) with the reality of the last 7 days and write a drift report.
 
-KURALLAR:
-- Sadece kanıta dayan; kanıtta olmayan hiçbir şeyi iddia etme.
-- Rapor kısa olsun (en fazla 25 satır). Drift yoksa tek satır yaz: "Drift yok, CONTEXT güncel."
-- CONTEXT'i sen değiştirmiyorsun; sadece öneriyorsun.
+RULES:
+- Rely on the evidence only; claim nothing that is not in the evidence.
+- Keep the report short (at most 25 lines). If there is no drift, write a single line: "{t("weekly_reconcile.no_drift")}"
+- You do not change CONTEXT; you only propose.
 
-RAPOR FORMATI (markdown):
-## Bayat veya Yanlış Görünen
-(CONTEXT'te olup gerçeklikle çelişen maddeler; madde başına 1 satır + kanıt kaynağı)
-## Eksik Yeni Gelişmeler
-(son 7 günde olup CONTEXT'e girmesi gereken şeyler)
-## Önerilen Güncellemeler
-(CONTEXT'e yazılmaya hazır, kısa taslak maddeler)
+REPORT FORMAT (markdown, use exactly these headings):
+{t("weekly_reconcile.heading_stale")}
+(items in CONTEXT that contradict reality; 1 line per item + the evidence source)
+{t("weekly_reconcile.heading_missing")}
+(things from the last 7 days that should enter CONTEXT)
+{t("weekly_reconcile.heading_proposed")}
+(short draft items ready to be written into CONTEXT)
 
-# MEVCUT CONTEXT.MD:
+# CURRENT CONTEXT.MD:
 {context_md}
 {evidence}"""
 
     result = run_prompt(prompt, timeout=300)
     if not result:
-        log("Claude çağrısı başarısız; rapor yazılmadı.")
+        log("LLM call failed; report not written.")
         return
 
     header = (
-        f"# CONTEXT Drift Raporu\n\n"
-        f"> Oluşturulma: {date_str}. Rapor salt öneridir; CONTEXT.md'yi {OWNER} onayıyla güncelleyin.\n\n"
+        t("weekly_reconcile.report_title") + "\n\n"
+        + t("weekly_reconcile.report_intro", date=date_str, owner=OWNER) + "\n\n"
     )
     with open(REPORT_FILE, "w") as fh:
         fh.write(header + result + "\n")
-    log(f"Rapor yazıldı: {REPORT_FILE}")
+    log(f"Report written: {REPORT_FILE}")
 
-    if "Drift yok" not in result and shutil.which("osascript"):  # macOS-only notification
+    no_drift = any(m in result for m in t_list("weekly_reconcile.no_drift_marker"))
+    if not no_drift and shutil.which("osascript"):  # macOS-only notification
         subprocess.run(
             ["osascript", "-e",
-             'display notification "Haftalık CONTEXT mutabakatı hazır: drift bulundu" with title "brainless"'],
+             f'display notification "{t("weekly_reconcile.notify_text")}" with title "brainless"'],
             check=False,
         )
 

@@ -1,4 +1,4 @@
-# Commands — the Intelligence Layer
+# Commands: the Intelligence Layer
 
 This folder is the **canonical contract** for every slash command your AI agents can run against the vault. Claude Code and Gemini CLI wrappers point back here, so editing a file in `.wiki/_commands/` changes the behavior of both agents at once.
 
@@ -17,7 +17,7 @@ This folder is the **canonical contract** for every slash command your AI agents
   weekly.md
   contradict.md
 
-.claude/commands/       ← Claude Code wrappers — invoke via `/context` etc.
+.claude/commands/       ← Claude Code wrappers, invoke via `/context` etc.
   context.md
   trace.md
   …
@@ -25,7 +25,7 @@ This folder is the **canonical contract** for every slash command your AI agents
 .gemini/commands/       ← (optional) Gemini CLI equivalents, TOML format
 ```
 
-**Golden rule:** edit `.wiki/_commands/<name>.md` to change what a command does. The wrappers are dumb — they only tell the agent to load the canonical file.
+**Golden rule:** edit `.wiki/_commands/<name>.md` to change what a command does. The wrappers are dumb, they only tell the agent to load the canonical file.
 
 ## How to use a command
 
@@ -48,7 +48,7 @@ Each command reads specific parts of the vault, reasons over them, and prints a 
 
 | Command | What it does | Reads from |
 |---|---|---|
-| `/context` | Snapshot of your current state — projects, priorities, staleness | `_Agent-Context/`, `.wiki/digests/` (last 7) |
+| `/context` | Snapshot of your current state, projects, priorities, staleness | `_Agent-Context/`, `.wiki/digests/` (last 7) |
 | `/trace <topic>` | Timeline of how your thinking on a topic evolved | whole vault, grep + dates |
 | `/connect <A> <B>` | Shortest link-path between two notes, plus proposed new edges | `[[links]]` across vault |
 | `/ideas [area]` | Generate atomic idea candidates from belief × project intersections | `Thinking/Beliefs/`, `.wiki/ideas/`, recent dailies |
@@ -60,22 +60,22 @@ Each command reads specific parts of the vault, reasons over them, and prints a 
 
 ## Install checklist
 
-- [ ] Claude Code wrappers exist in `.claude/commands/` (already created — one `.md` per command).
+- [ ] Claude Code wrappers exist in `.claude/commands/` (already created, one `.md` per command).
 - [ ] Restart Claude Code so it picks up the new commands. `/` autocomplete should list all 8.
-- [ ] (Optional) Mirror to Gemini CLI — see **Gemini parity** below.
-- [ ] Run `/context` as a smoke test — it's the lowest-risk command and validates that agents can read `_Agent-Context/`.
+- [ ] (Optional) Mirror to Gemini CLI, see **Gemini parity** below.
+- [ ] Run `/context` as a smoke test, it's the lowest-risk command and validates that agents can read `_Agent-Context/`.
 
 ## First-use order (recommended)
 
 Run these in order on your first day with commands installed. Each one reveals gaps that the next one helps fix:
 
-1. **`/context`** — confirms agents see your current state, flags drift between CONTEXT.md and recent dailies.
-2. **`/weekly`** — surfaces what you've actually been doing. Probably proposes updates to CONTEXT.md.
-3. **`/graduate 14`** — shows you which seeds (if any) are mature. Will likely return empty for now — that's a signal to seed `.wiki/ideas/` and `Thinking/Beliefs/`.
-4. **`/contradict`** — validates beliefs are self-consistent.
-5. **`/ideas`** — run this *after* you have ≥5 beliefs and ≥5 ideas written, otherwise output is generic.
+1. **`/context`**, confirms agents see your current state, flags drift between CONTEXT.md and recent dailies.
+2. **`/weekly`**, surfaces what you've actually been doing. Probably proposes updates to CONTEXT.md.
+3. **`/graduate 14`**, shows you which seeds (if any) are mature. Will likely return empty for now, that's a signal to seed `.wiki/ideas/` and `Thinking/Beliefs/`.
+4. **`/contradict`**, validates beliefs are self-consistent.
+5. **`/ideas`**, run this *after* you have ≥5 beliefs and ≥5 ideas written, otherwise output is generic.
 
-The rest (`/trace`, `/connect`, `/decide`) are on-demand — use when the specific question comes up.
+The rest (`/trace`, `/connect`, `/decide`) are on-demand, use when the specific question comes up.
 
 ## Customizing a command
 
@@ -106,12 +106,12 @@ Follow `.wiki/_commands/_shared-rules.md`.
 
 To change a command:
 1. Edit the canonical file in `.wiki/_commands/`.
-2. Nothing else needs to change — wrappers re-read it each invocation.
+2. Nothing else needs to change, wrappers re-read it each invocation.
 3. Commit the change. `.wiki/_commands/` is meant to be version-controlled so you can see how your own agent contracts evolve.
 
 ## Gemini parity
 
-Gemini CLI wrappers are in `.gemini/commands/` as `.toml` files (Gemini uses TOML, not Markdown). They are already created — one per command.
+Gemini CLI wrappers are in `.gemini/commands/` as `.toml` files (Gemini uses TOML, not Markdown). They are already created, one per command.
 
 Key differences from Claude Code:
 
@@ -120,10 +120,10 @@ Key differences from Claude Code:
 | File format | `.md` with YAML frontmatter | `.toml` |
 | Arguments | `$ARGUMENTS` | `{{args}}` |
 | File injection | reads files via tool calls | `@{path/to/file}` inlined at runtime |
-| Reload | restart required | `/commands reload` — instant |
+| Reload | restart required | `/commands reload`, instant |
 | Shell injection | not built-in | `!{shell command}` inside prompt |
 
-The Gemini TOML files use `@{.wiki/_commands/<name>.md}` to inject the canonical prompt directly — no copy-paste drift. Same source of truth, different wrapper syntax.
+The Gemini TOML files use `@{.wiki/_commands/<name>.md}` to inject the canonical prompt directly, no copy-paste drift. Same source of truth, different wrapper syntax.
 
 To reload after editing a Gemini command (no restart needed):
 ```
@@ -143,9 +143,9 @@ To reload after editing a Gemini command (no restart needed):
 
 Candidates to add once the core 8 are stable:
 
-- `/inbox` — process `Inbox/` into proper folders with suggested links
-- `/people <team>` — fill in empty person templates from meeting notes
-- `/link-orphans` — find notes with 0 `[[links]]` and propose connections
-- `/archive-stale` — projects with no log entry in 60+ days
+- `/inbox`, process `Inbox/` into proper folders with suggested links
+- `/people <team>`, fill in empty person templates from meeting notes
+- `/link-orphans`, find notes with 0 `[[links]]` and propose connections
+- `/archive-stale`, projects with no log entry in 60+ days
 
 Don't build these until the core 8 feel natural.

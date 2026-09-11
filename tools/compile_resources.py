@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-compile_resources.py — human-tree → .wiki compiler.
+compile_resources.py: human-tree → .wiki compiler.
 
 Walks the human-owned homes and compiles .wiki/ artifacts via Claude CLI:
 - Library/, Inbox/, Thinking/Daily/, Personal/, the company area (PROFILE.md) → .wiki/summaries/<slug>.md
@@ -35,8 +35,9 @@ WIKI = VAULT / ".wiki"
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from resolve_bin import resolve_claude
 from llm import run_prompt
-from owner_profile import OWNER, LANG, lang_name, CROSS_LINK_RULE  # noqa: E402
+from owner_profile import OWNER, LANG, lang_name, output_lang_directive, CROSS_LINK_RULE  # noqa: E402
 from owner_profile import COMPANY_AREA, GENERIC_PRIVATE_SEGMENTS, PRIVATE_SEGMENTS as PROFILE_PRIVATE_SEGMENTS  # noqa: E402
+from i18n import t, t_list  # noqa: E402
 
 CLAUDE = resolve_claude()
 # Per-source prompt cap; smaller-context providers can shrink it (Phase 0 T5).
@@ -55,19 +56,19 @@ SUMMARY_SOURCES = [
 
 # Privacy guard: NEVER summarize gitignored / sensitive homes into the tracked
 # .wiki layer. Mirrors .gitignore. A path is skipped if any segment matches.
-# NFC normalizasyonu ZORUNLU: macOS dosya adlarini NFD ile dondururken bu
-# dosyadaki string literalleri NFC; normalize edilmezse aksanli kisi adli
-# Turkce/aksanli klasorler guard'a takilmaz ve hassas veri .wiki'ye sizar
-# (2026-08-28 denetiminde 88 dosya bu yuzden GitHub'a dusmustu).
+# NFC normalisation is MANDATORY: macOS returns file names in NFD while the
+# string literals in this file are NFC; without normalising, accented folder
+# names (people's names, Turkish letters) slip past the guard and sensitive data
+# leaks into .wiki (the 2026-08-28 audit found 88 files on GitHub for this reason).
 def _nfc(s: str) -> str:
     return unicodedata.normalize("NFC", s)
 
 
 PRIVATE_SEGMENTS = {_nfc(s) for s in (*GENERIC_PRIVATE_SEGMENTS, *PROFILE_PRIVATE_SEGMENTS)}
 PRIVATE_SUFFIXES = (" - Health",)            # "<name> - Health" folders
-PRIVATE_NAME_PARTS = tuple(_nfc(p).casefold() for p in
-                           ("passport", "pasaport", "schengen", "kimlik", "nüfus", "nufus"))
-# Tam alt-yol eslesmeleri (segment adlari cok jenerik olan hassas alanlar).
+# Sensitive name fragments: the current language's list merged with English (locale data).
+PRIVATE_NAME_PARTS = tuple(_nfc(p).casefold() for p in t_list("compile_resources.private_name_parts"))
+# Full sub-path matches (sensitive areas whose segment names are too generic on their own).
 PRIVATE_PATH_PARTS = tuple(_nfc(p).casefold() for p in
                            (COMPANY_AREA.split("/")[-1] + "/Finance/Resources",))
 
@@ -83,8 +84,9 @@ def _is_private(path: Path) -> bool:
 
 
 # CROSS_LINK_RULE comes from _Agent-Context/PROFILE.md ("## Cross-link rule") via owner_profile.
-SUMMARY_HEADING = "## Özet (TR)" if LANG == "tr" else "## Summary"
-STATUS_HEADING = "## Durum (TR)" if LANG == "tr" else "## Status"
+SUMMARY_HEADING = t("compile_resources.summary_heading")
+STATUS_HEADING = t("compile_resources.status_heading")
+LINKS_HEADING = t("compile_resources.links_heading")
 
 
 def slugify(s: str) -> str:
@@ -107,10 +109,10 @@ _CLAUDE_CALLS = 0
 _CLAUDE_FAILURES = 0
 
 
-# Compile prompt'larina guvenilmeyen icerik (kaynak dosya govdeleri) giriyor;
-# arac kullanimi kapali olmali. Kapali degilse model agentic'e kayip takilabiliyor
-# (Visma/Talentics gibi zengin Work kaynaklarinda 150s+ timeout'un sebebi buydu),
-# ayrica settings allowlist'i kod calistirma/dosya yazma yetkisi verir (C2 sinifi).
+# Untrusted content (source file bodies) enters the compile prompts, so tool use
+# must be off. If it is not, the model can drift into agentic mode and get stuck
+# (this was the cause of the 150s+ timeouts on rich Work sources like Visma/Talentics),
+# and the settings allowlist would grant code execution / file writes (class C2).
 _DANGEROUS_TOOLS = ["Bash", "Write", "Edit", "MultiEdit", "NotebookEdit",
                     "WebFetch", "WebSearch", "Task"]
 
@@ -165,13 +167,13 @@ def clean_markdown_output(out: str) -> str:
 
 
 def sources_digest(paths) -> str:
-    """Kaynak kumesinin icerik parmak izi (yola gore sirali sha256, 12 hane).
+    """Content fingerprint of a source set (sha256 over path-sorted files, 12 hex digits).
 
-    Neden mtime yerine hash: iki makineli git kurulumunda `git pull/reset/checkout`
-    dosya mtime'ini ISLEM anina cekiyor, icerik anina degil. Sonuc: senkron sonrasi
-    uretilmis dosya her zaman "taze" gorunuyor ve BIR DAHA hic yeniden derlenmiyor
-    (2026-08-28: Visma ve Talentics dossier'lari bu yuzden 24 Agustos seed'inde
-    donmus kalmisti). Hash makineden ve senkrondan bagimsizdir.
+    Why a hash instead of mtime: in a two-machine git setup, `git pull/reset/checkout`
+    sets the file mtime to the moment of the OPERATION, not of the content. Result:
+    after a sync the generated file always looks "fresh" and is NEVER recompiled again
+    (2026-08-28: the Visma and Talentics dossiers stayed frozen at the 24 August seed
+    for this reason). A hash is independent of machine and sync.
     """
     h = hashlib.sha256()
     for p in sorted(paths, key=lambda x: str(x)):
@@ -187,7 +189,7 @@ _DIGEST_RE = re.compile(r"^sources_hash:\s*([0-9a-f]{6,})\s*$", re.M)
 
 
 def stored_digest(dst: Path) -> str | None:
-    """Uretilmis dosyanin frontmatter'indaki sources_hash (yoksa None)."""
+    """The sources_hash in the generated file's frontmatter (None when absent)."""
     if not dst.exists():
         return None
     try:
@@ -218,10 +220,10 @@ def stored_zk(dst: Path) -> str | None:
 
 
 def write_compiled(dst: Path, body: str, sources) -> None:
-    """Derlenmis ciktiyi sources_hash damgasiyla yaz (atomik: once tmp, sonra replace).
+    """Write the compiled output with a sources_hash stamp (atomic: tmp first, then replace).
 
-    Damgayi biz basiyoruz, model degil; boylece hash guvenilir. Atomik yazim,
-    yarim kalmis bir cagrinin dosyayi bozmasini engeller.
+    We stamp it ourselves, not the model, so the hash is trustworthy. The atomic
+    write keeps a half-finished call from corrupting the file.
     """
     text = clean_markdown_output(body).rstrip("\n") + "\n"
     digest = sources_digest(sources)
@@ -239,7 +241,7 @@ def needs_rebuild(src: Path, dst: Path, full: bool) -> bool:
     if full or not dst.exists():
         return True
     stored = stored_digest(dst)
-    if stored is not None:                      # damgali dosyalarda hash otoritedir
+    if stored is not None:                      # for stamped files the hash is the authority
         return stored != sources_digest([src])
     return src.stat().st_mtime > dst.stat().st_mtime
 
@@ -282,7 +284,7 @@ SOURCE CONTENT:
 Produce a concise wiki summary. Output ONLY markdown with this structure:
 
 ---
-lang: tr
+lang: {LANG}
 summary_en: <2-3 sentence English summary>
 source: {rel}
 compiled_at: {datetime.now().isoformat(timespec='seconds')}
@@ -297,17 +299,19 @@ status: seed
 - bullet
 - bullet
 
-## Bağlantılar
+{LINKS_HEADING}
 <!-- Leave empty. Article backlinks are injected automatically by the articles phase.
-     If you must reference another note, use its PLAIN title only — e.g. [[Calm is contagious]].
+     If you must reference another note, use its PLAIN title only, e.g. [[Calm is contagious]].
      NEVER use a path like [[.wiki/articles/...]] or [[wiki/...]]: those do not resolve in Obsidian. -->
 
-## Cross-effects (varsa)
-<personal↔work etkileri>
+{t("compile_resources.cross_effects_heading")}
+<personal↔work effects>
+
+{output_lang_directive()}
 """
     out = call_claude(prompt)
     if not out:
-        print(f"[FAIL] summary {src.relative_to(VAULT)}: uretilemedi", file=sys.stderr)
+        print(f"[FAIL] summary {src.relative_to(VAULT)}: not produced", file=sys.stderr)
         return False
     write_compiled(dst, out, [src])
     print(f"[ok] {dst.relative_to(VAULT)}")
@@ -363,7 +367,7 @@ PROJECT FILES:
 Produce ONLY markdown:
 
 ---
-lang: tr
+lang: {LANG}
 summary_en: <2-3 sentences>
 source: {proj_dir.relative_to(VAULT)}/
 compiled_at: {datetime.now().isoformat(timespec='seconds')}
@@ -372,14 +376,16 @@ status: seed
 # {proj_dir.name}
 
 {STATUS_HEADING}
-## Açık İşler / Open Threads
-## Kararlar / Decisions
-## Bağlantılar
+{t("compile_resources.open_threads_heading")}
+{t("compile_resources.decisions_heading")}
+{LINKS_HEADING}
 ## Cross-effects (personal↔work)
+
+{output_lang_directive()}
 """
             out = call_claude(prompt)
             if not out:
-                print(f"[FAIL] project {proj_dir.name}: uretilemedi", file=sys.stderr)
+                print(f"[FAIL] project {proj_dir.name}: not produced", file=sys.stderr)
                 continue
             write_compiled(dst, out, [notes])
             print(f"[ok] {dst.relative_to(VAULT)}")
@@ -388,7 +394,7 @@ status: seed
 
 
 def _inject_backlink(summary_stem: str, article_slug: str):
-    """Add a resolvable backlink to an article into a member summary's Bağlantılar."""
+    """Add a resolvable backlink to an article into a member summary's links section."""
     sp = WIKI / "summaries" / f"{summary_stem}.md"
     if not sp.exists():
         return
@@ -396,10 +402,12 @@ def _inject_backlink(summary_stem: str, article_slug: str):
     link = f"- [[{article_slug}]]"
     if link in txt:
         return
-    if "## Bağlantılar" in txt:
-        txt = txt.replace("## Bağlantılar\n", f"## Bağlantılar\n{link}\n", 1)
+    # Accept the heading in the current language or in English (existing vaults).
+    heading = next((h for h in t_list("compile_resources.links_heading") if h in txt), None)
+    if heading:
+        txt = txt.replace(f"{heading}\n", f"{heading}\n{link}\n", 1)
     else:
-        txt = txt.rstrip() + f"\n\n## Bağlantılar\n{link}\n"
+        txt = txt.rstrip() + f"\n\n{LINKS_HEADING}\n{link}\n"
     sp.write_text(txt)
 
 
@@ -445,7 +453,7 @@ Output ONLY valid JSON, no preamble.
     for art in data.get("articles", []):
         slug = art["slug"]
         members = art.get("members", [])
-        # Skip empty-member articles — an article with no summaries behind it is
+        # Skip empty-member articles: an article with no summaries behind it is
         # an orphan that just creates broken navigation.
         if not members:
             continue
@@ -453,7 +461,7 @@ Output ONLY valid JSON, no preamble.
         # Member links use the summary's basename so Obsidian resolves them.
         members_md = "\n".join(f"- [[{m}]]" for m in members)
         body = f"""---
-lang: tr
+lang: {LANG}
 summary_en: {art.get('title','')}
 compiled_at: {datetime.now().isoformat(timespec='seconds')}
 status: seed
@@ -500,8 +508,8 @@ def phase_ideas(dry: bool, full: bool):
 SOURCE:
 {blob[:60000]}
 
-Output JSON: {{"ideas": [{{"slug": "kebab", "title": "Title", "tr": "<TR body>", "en": "<EN summary>"}}, ...]}}
-Output ONLY valid JSON.
+Output JSON: {{"ideas": [{{"slug": "kebab", "title": "Title", "body": "<idea body in {lang_name()}>", "en": "<English summary>"}}, ...]}}
+Output ONLY valid JSON. For the body: {output_lang_directive()}
 """
     out = call_claude(prompt, timeout=240)
     if not out:
@@ -522,7 +530,7 @@ Output ONLY valid JSON.
         # Consecutive new ideas get consecutive minutes so ids in one run never collide.
         zk = stored_zk(dst) or (now + timedelta(minutes=i)).strftime("%Y%m%d%H%M")
         body = f"""---
-lang: tr
+lang: {LANG}
 summary_en: {idea.get('en','')}
 zk: {zk}
 compiled_at: {datetime.now().isoformat(timespec='seconds')}
@@ -530,7 +538,7 @@ status: seed
 ---
 # {idea.get('title', slug)}
 
-{idea.get('tr','')}
+{idea.get('body','')}
 """
         dst.write_text(body)
         print(f"[ok] {dst.relative_to(VAULT)}")
@@ -560,7 +568,7 @@ def phase_index(dry: bool, full: bool):
             sections.append(f"- [[{p.stem}]]")
         sections.append("")
     body = f"""---
-lang: tr
+lang: {LANG}
 summary_en: Auto-generated index of the LLM-owned wiki.
 compiled_at: {datetime.now().isoformat(timespec='seconds')}
 ---
@@ -575,8 +583,8 @@ _Auto-generated by tools/compile_resources.py. Do not edit by hand._
 
 # ─── Phase: entities (auto-maintained dossiers) ─────────────────
 ENTITY_REGISTRY = VAULT / "_Agent-Context" / "entities.md"
-# Varlik kaynagi taranan alanlar: toplanti korpusu, gunluk yakalama, digest'ler,
-# ve insan proje alanlari (private guard her dosyada ayrica uygulanir).
+# Areas scanned for entity sources: meeting corpus, daily capture, digests,
+# and the human project areas (the private guard is applied per file as well).
 ENTITY_SOURCE_ROOTS = [
     VAULT / "Inbox" / "Spiky",
     VAULT / "Thinking" / "Daily",
@@ -584,12 +592,12 @@ ENTITY_SOURCE_ROOTS = [
     VAULT / "Work",
     VAULT / "Personal",
 ]
-ENTITY_MAX_SOURCES = 18   # en yeni N eslesme (maliyet siniri)
+ENTITY_MAX_SOURCES = 18   # newest N matches (cost cap)
 TASKS_FILE = VAULT / "_Agent-Context" / "TASKS.md"
 
 
 def parse_entity_registry():
-    """entities.md -> [(ad, tip, [takma adlar])]. Yorum/bos satir atlanir."""
+    """entities.md -> [(name, type, [aliases])]. Comment/blank lines are skipped."""
     out = []
     if not ENTITY_REGISTRY.exists():
         return out
@@ -607,7 +615,7 @@ def parse_entity_registry():
 
 
 def _entity_matches(terms):
-    """Terimlerden birini iceren kaynak dosyalari (private haric), en yeni once."""
+    """Source files containing any of the terms (private excluded), newest first."""
     low_terms = [_nfc(t).casefold() for t in terms if t]
     hits = []
     for root in ENTITY_SOURCE_ROOTS:
@@ -627,7 +635,7 @@ def _entity_matches(terms):
 
 
 def _entity_tasks(terms):
-    """TASKS.md'de bu varligi anan acik maddeler."""
+    """Open items in TASKS.md that mention this entity."""
     if not TASKS_FILE.exists():
         return []
     low = [t.casefold() for t in terms if t]
@@ -647,12 +655,12 @@ def phase_entities(dry: bool, full: bool):
         sources = _entity_matches(terms)
         if not sources:
             continue
-        # Bayatlik testi hash ile (mtime git senkronunda yalan soyluyor, bkz.
-        # sources_digest). Damgasiz eski seed'ler otomatik yeniden derlenir.
+        # Staleness test by hash (mtime lies after a git sync, see sources_digest).
+        # Old unstamped seeds are recompiled automatically.
         if not (full or stored_digest(dst) != sources_digest(sources)):
             continue
         if dry:
-            print(f"[dry] entity {name} ({etype}) <- {len(sources)} kaynak")
+            print(f"[dry] entity {name} ({etype}) <- {len(sources)} source(s)")
             n += 1
             continue
         blob = ""
@@ -662,31 +670,33 @@ def phase_entities(dry: bool, full: bool):
             except Exception:
                 pass
         tasks = _entity_tasks(terms)
-        task_block = "\n".join(tasks) if tasks else "(TASKS.md'de acik madde yok)"
-        alias_note = f"Takma adlar/yazim varyantlari (transkripsiyon hatasi olarak duzelt): {', '.join(aliases)}" if aliases else ""
-        prompt = f"""'{name}' ({etype}) icin kendini gunceleyen bir varlik dosyasi (dossier) derle.
-Kaynaklardaki bu kisi/sirket/proje ile ilgili her seyi tek canli sayfada topla.
+        task_block = "\n".join(tasks) if tasks else "(no open items in TASKS.md)"
+        alias_note = f"Aliases/spelling variants (fix them as transcription errors): {', '.join(aliases)}" if aliases else ""
+        timeline_heading = t("compile_resources.entity_timeline_heading").lstrip("# ")
+        prompt = f"""Compile a self-updating entity file (dossier) for '{name}' ({etype}).
+Gather everything in the sources about this person/company/project into one living page.
 
 {CROSS_LINK_RULE}
 
-KURALLAR:
-- SADECE kaynaklardaki bilgiyi kullan; uydurma yok. Emin olmadigin yeri yazma.
+RULES:
+- Use ONLY information from the sources; no invention. Leave out anything you are not sure about.
 - {alias_note}
-- Tarihli etkileşimleri "Zaman Çizgisi" altinda kronolojik ver (kaynak dosya adiyla).
-- Iliskili kisi/sirket/proje/toplanti icin [[wikilink]] kullan.
-- Em dash / en dash KULLANMA.
-- SADECE markdown dondur.
+- List dated interactions chronologically under "{timeline_heading}" (with the source file name).
+- Use [[wikilink]] for related people/companies/projects/meetings.
+- Do NOT use em dashes or en dashes.
+- Return ONLY markdown.
+- {output_lang_directive()}
 
-TASKS.md ACIK MADDELER (bu varlikla ilgili):
+TASKS.md OPEN ITEMS (related to this entity):
 {task_block}
 
-KAYNAKLAR:
+SOURCES:
 {blob[:40000]}
 
-Ciktinin sablonu:
+Output template:
 
 ---
-lang: tr
+lang: {LANG}
 summary_en: <2-3 sentence English gist>
 type: entity
 entity_type: {etype}
@@ -695,28 +705,28 @@ status: seed
 ---
 # {name}
 
-## Özet
-## Zaman Çizgisi
-## Açık Maddeler
-## İlişkiler
-## Kaynaklar
+{t("compile_resources.entity_summary_heading")}
+{t("compile_resources.entity_timeline_heading")}
+{t("compile_resources.entity_open_items_heading")}
+{t("compile_resources.entity_relations_heading")}
+{t("compile_resources.entity_sources_heading")}
 """
         out = call_claude(prompt)
         if not out and len(sources) > 4:
-            # Tek deneme yetmezse yariya indirilmis kaynakla bir kez daha dene;
-            # aksi halde bir timeout o varligi kalici bosluk birakiyor.
-            print(f"[retry] {name} (kaynak {len(sources)} -> {len(sources)//2})")
+            # If one attempt is not enough, try once more with the sources halved;
+            # otherwise a timeout leaves that entity as a permanent gap.
+            print(f"[retry] {name} (sources {len(sources)} -> {len(sources)//2})")
             half = sources[:len(sources) // 2]
             small = "".join(f"\n--- {p.relative_to(VAULT)} ---\n" + p.read_text()[:3000]
                             for p in half)
-            out = call_claude(prompt.split("KAYNAKLAR:")[0] + "KAYNAKLAR:\n" + small[:20000],
+            out = call_claude(prompt.split("SOURCES:")[0] + "SOURCES:\n" + small[:20000],
                               timeout=240)
             if out:
-                sources = half          # damga gercekten kullanilan kumeyi yansitsin
+                sources = half          # the stamp must reflect the set actually used
         if not out:
-            # Basarisiz varligi ADIYLA bildir: sessiz bosluk, bayat dosyayi
-            # "guncel" sanmaya yol aciyordu. Mevcut dosyaya DOKUNULMAZ.
-            print(f"[FAIL] entity {name}: uretilemedi, mevcut dosya korundu", file=sys.stderr)
+            # Report the failed entity BY NAME: a silent gap led to mistaking a stale
+            # file for a "current" one. The existing file is NOT touched.
+            print(f"[FAIL] entity {name}: not produced, existing file kept", file=sys.stderr)
             continue
         write_compiled(dst, out, sources)
         print(f"[ok] {dst.relative_to(VAULT)}")

@@ -1,0 +1,8 @@
+{
+  "draft_word": "Draft",
+  "drafts_filename": "{stamp} weekly drafts.md",
+  "file_title": "# Weekly Content Drafts ({stamp})",
+  "file_source_line": "Source: content_engine.py ({worker}). Publishing decision and editing stay with {owner}.",
+  "telegram_header": "✍️ Weekly content drafts are ready:",
+  "telegram_vault_line": "Vault: Inbox/Content Drafts/{filename}"
+}

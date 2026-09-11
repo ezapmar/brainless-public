@@ -26,5 +26,5 @@ tags: [idea, status/seed]
 - 
 
 ## Next Action
-<!-- One concrete next step, or "none — just marinate" -->
+<!-- One concrete next step, or "none, just marinate" -->
 

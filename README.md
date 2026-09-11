@@ -421,7 +421,9 @@ starts to cost you.
 
 - The default path assumes a Claude subscription. The OpenAI-compatible path works but
   I have tested it less.
-- Turkish and English are the two output languages. Others will need prompt edits.
+- `output_lang` in `PROFILE.md` sets the language of every LLM output. Fixed labels and
+  bot replies ship in English and Turkish (`tools/locale/`); another language is a new
+  locale directory.
 - The five personas are my shelf. Yours may be different, and should be.
 - I am not a decision scientist. I am an operator who got tired of being wrong in the
   same way twice.

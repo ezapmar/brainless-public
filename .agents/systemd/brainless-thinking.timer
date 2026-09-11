@@ -1,5 +1,5 @@
 [Unit]
-Description=brainless: Pazar 19:00 dusunme sorusu
+Description=brainless: Sunday 19:00 thinking question
 
 [Timer]
 OnCalendar=Sun 19:00

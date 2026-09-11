@@ -1,0 +1,21 @@
+{
+  "artifact_patterns": [
+    "altyazı.*",
+    "(kanala |lütfen )?abone ol.*"
+  ],
+  "selftest_drop": [
+    "[Müzik]",
+    "Altyazı M.K.",
+    "altyazılar hukukunuz",
+    "Abone olmayı unutmayın",
+    "Kanala abone olun"
+  ],
+  "selftest_keep": [
+    "hastane",
+    "Yarın Yakup ile sözleşmeyi imzala.",
+    "Kardiyoloji randevusu bu hafta.",
+    "Dünya için okul evrakı",
+    "teşekkür ederim",
+    "3 kutu süt al"
+  ]
+}

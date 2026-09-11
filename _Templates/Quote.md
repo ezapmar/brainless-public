@@ -8,7 +8,7 @@ tags: [resource/quote]
 
 > {{quote}}
 
-— {{author}}
+- {{author}}
 
 ## Why This Matters to Me
 

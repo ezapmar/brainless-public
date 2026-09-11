@@ -1,0 +1,17 @@
+{
+  "source_label": "Kaynak",
+  "source_voice": "sesli not",
+  "source_text": "yazılı not",
+  "source_telegram_link": "Telegram link",
+  "source_telegram_image": "Telegram görsel",
+  "quick_note_title": "Hızlı Not",
+  "image_note_title": "Görsel Not",
+  "note_title_fallback": "Not",
+  "empty_kinds": "bos",
+  "unreadable_marker": "[okunamadı]",
+  "reply_connected": "Bağlandık. Sesli veya yazılı not at, vault'a düşeyim. 🧠",
+  "reply_saved": "Vault'a düştü: {title}",
+  "reply_transcribe_failed": "Ses alındı ama transkript edilemedi. Muhtemel sebep: 20 MB indirme sınırı ya da whisper hatası. Kayıt vault'a düşmedi.",
+  "reply_no_speech": "Ses alındı ama konuşma algılanmadı (sessizlik ya da whisper artefaktı). Kayıt vault'a düşmedi.",
+  "reply_unsupported": "Bu mesaj tipi işlenemiyor ({kinds}), vault'a düşmedi. Sesli not, ses dosyası, fotoğraf ya da yazı gönderebilirsin."
+}

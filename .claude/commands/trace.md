@@ -12,4 +12,4 @@ User arguments: $ARGUMENTS
 ## Loopback (required)
 After producing your answer, file the full result so the wiki compounds:
 `python3 tools/file_query.py trace "<short title>"` (pipe the markdown to stdin).
-Outputs land in `.wiki/digests/queries/` — required by `_shared-rules.md`.
+Outputs land in `.wiki/digests/queries/`, required by `_shared-rules.md`.

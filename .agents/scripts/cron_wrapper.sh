@@ -1,8 +1,9 @@
 #!/bin/bash
-# Enhanced PATH so markitdown (and other user tools) are discoverable.
-# markitdown (with document extras) is installed via:
+# Enhanced PATH so user tools (claude, node) are discoverable.
+# markitdown is used as a Python library (see tools/markitdown_native.py), not
+# the CLI, so it no longer needs to be on PATH: only importable. Install it via:
 #   python3 -m pip install --break-system-packages --user 'markitdown[pdf,docx,xlsx,pptx]==0.1.7'
-# NOTE: do NOT use markitdown[all] on Python 3.14 — its youtube-transcript-api
+# NOTE: do NOT use markitdown[all] on Python 3.14: its youtube-transcript-api
 # pin is unsatisfiable there and pip will silently downgrade markitdown to 0.0.2.
 # Resolve user-script and node bin dirs dynamically so a Python/node version
 # bump doesn't silently break the cron job (no pinned v22.19.0 / 3.14 paths).
@@ -32,7 +33,7 @@ status=$?
 # it instead of letting it rot silently (the processor also fires its own
 # notification with detail; this is the belt-and-suspenders fallback).
 if [ "$status" -ne 0 ]; then
-  osascript -e 'display notification "smart_processor exited with errors — check logs/smart_processor.log" with title "brainless"' 2>/dev/null
+  osascript -e 'display notification "smart_processor exited with errors, check logs/smart_processor.log" with title "brainless"' 2>/dev/null
 fi
 
 # Hourly CRM snapshot (read-only, no LLM). Silent no-op without a token in

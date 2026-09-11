@@ -4,8 +4,8 @@ type: decision
 tags: [decision]
 status: pending
 confidence:        # calibrated probability this decision proves right, e.g. 70%
-review:            # YYYY-MM-DD — when to grade this against reality (do not leave blank)
-default_risk:      # ego | emotion | social | inertia | none — which bias most threatens this call
+review:            # YYYY-MM-DD, when to grade this against reality (do not leave blank)
+default_risk:      # ego | emotion | social | inertia | none, which bias most threatens this call
 ---
 
 # Decision: {{title}}
@@ -27,19 +27,19 @@ default_risk:      # ego | emotion | social | inertia | none — which bias most
 - Pros / Cons / Second-order effects:
 ### Option B:
 - Pros / Cons / Second-order effects:
-### Option C (kill the binary — force a third path):
+### Option C (kill the binary: force a third path):
 - Pros / Cons / Second-order effects:
 
 ## Decision
 <!-- What did you decide and why? -->
 
 
-## Prediction (calibration — the part that makes judgment compound)
+## Prediction (calibration: the part that makes judgment compound)
 - **Prediction:** <!-- a falsifiable statement of what you expect to happen -->
 - **Confidence:** %
 - **Review on:** YYYY-MM-DD
 
-## Outcome (grade on the review date — DO NOT skip)
+## Outcome (grade on the review date: DO NOT skip)
 <!-- What actually happened vs. what you predicted? What does this teach about your judgment? -->
 - _Pending review._
 

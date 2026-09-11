@@ -1,0 +1,18 @@
+{
+  "source_label": "Kaynak",
+  "source_voice": "sesli not",
+  "source_text": "yazılı not",
+  "source_image": "görsel",
+  "source_voice_prompt": "Buzz sesli not",
+  "source_text_prompt": "Buzz yazılı not",
+  "quick_note_title": "Hızlı Not",
+  "image_note_title": "Görsel Not",
+  "link_note_title": "Link notu",
+  "caption_note": "({owner} notu: {caption})",
+  "err_audio_download": "ses dosyası indirilemedi",
+  "err_transcript_empty": "transkript boş döndü",
+  "err_image_download": "görsel indirilemedi",
+  "err_no_content": "işlenebilir içerik yok (metin, ses ya da görsel bekleniyor)",
+  "reply_saved": "Not düştü: {title}\n{rel}",
+  "reply_failed": "Bu mesaj işlenemedi: {exc}. Vault'a düşmedi."
+}

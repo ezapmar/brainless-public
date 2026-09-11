@@ -1,0 +1,20 @@
+{
+  "pa_auto_line": "> Generated automatically by `tools/build_dashboard.py` (Mon 05:00 / Fri 21:00) from `Work/*/notes.md` and `Personal/*/notes.md`.",
+  "pa_hand_edit_line": "> Hand edits are erased on the next run; to change a project, update its own `notes.md`.",
+  "pa_stale_line": "> Last log older than {days} days = ⚠️ stale. Updated: {time}",
+  "pa_active_heading": "## Active ({n})",
+  "pa_stale_flag": " ⚠️ stale",
+  "pa_status_row": "- **Status**: {status}. Last log: {last}{flag}",
+  "none": "none",
+  "pa_no_open_item": "no open item",
+  "pa_homeless_heading": "## Projects awaiting a home ({n})",
+  "pa_homeless_note": "CONTEXT.md says active but there is no `notes.md`; the dashboard and the compiler do not see these. Template: `_Templates/Project.md`.",
+  "pa_folder_exists": "folder exists: `{path}/`",
+  "pa_no_folder": "no folder either",
+  "pa_parked_heading": "## On hold / winding down ({n})",
+  "pa_parked_row": "- [{cat}] {name} ({status}, last log {last})",
+  "pa_archive_heading": "## Archive ({n})",
+  "days_left": "{n} days left",
+  "days_overdue": "{n} days OVERDUE",
+  "no_deadlines": "- (no active project with `deadline:` in its notes.md frontmatter)"
+}

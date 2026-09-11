@@ -18,6 +18,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from resolve_bin import resolve_claude
 from llm import run_prompt  # noqa: E402
 from owner_profile import OWNER, lang_name, CROSS_LINK_RULE  # noqa: E402
+from i18n import t, t_list  # noqa: E402
 
 CLAUDE_PATH = resolve_claude()
 
@@ -73,10 +74,10 @@ lang: en
 compiled_at: {date_str}
 source: Thinking/Daily/
 ---
-# {date_str} — Daily Digest
+# {date_str} - Daily Digest
 ## Executive Summary (3 sentences)
 ## Daily Notes (cleaned and enriched)
-## Connections (linked projects and ideas — link to .wiki/articles/ and .wiki/projects/)
+## Connections (linked projects and ideas, link to .wiki/articles/ and .wiki/projects/)
 ## Personal↔Work Cross-effects (if any)
 ## Action Items (extractions for TASKS.md)
 (Only {OWNER}'s OWN next actions, one per line as "- [ ] ...", imperative, max 12 words each, {lang_name()}. No tags, no wikilinks, no tasks that belong to other people. Skip vague items.)
@@ -98,7 +99,9 @@ Output ONLY the markdown content. No preamble.
 
 
 TASKS_FILE = os.path.join(VAULT_ROOT, '_Agent-Context/TASKS.md')
-TASKS_SECTION = "## Sözlerim"
+TASKS_SECTION = t("nightly_processor.tasks_section")
+# Existing ledgers may carry the heading in another language; accept all of them.
+TASKS_SECTIONS = t_list("nightly_processor.tasks_section")
 
 
 def _clean_task(text, limit=160):
@@ -112,8 +115,8 @@ def _clean_task(text, limit=160):
 
 
 def sync_tasks(summary, date_str):
-    """Append the digest's action items to _Agent-Context/TASKS.md under
-    '## Sözlerim' in the ledger format `- [ ] text | [[source]] | date`, so
+    """Append the digest's action items to _Agent-Context/TASKS.md under the
+    promises section in the ledger format `- [ ] text | [[source]] | date`, so
     gtasks_sync (Google Tasks) and task_reminder (Telegram) see them."""
     if "## Action Items" not in summary:
         return
@@ -127,7 +130,7 @@ def sync_tasks(summary, date_str):
         with open(TASKS_FILE) as f:
             content = f.read()
     except OSError:
-        content = "# Görev Defteri\n\n## Sözlerim\n\n## Bekliyorum\n"
+        content = t("nightly_processor.ledger_template")
     existing = {m.group(1).split(" | ")[0].strip().casefold()
                 for m in re.finditer(r"- \[[ x]\] (.+)", content)}
     rows = [f"- [ ] {t} | [[{date_str}]] | {date_str}\n"
@@ -136,10 +139,13 @@ def sync_tasks(summary, date_str):
         print("Tasks: nothing new (all already in ledger)")
         return
     lines = content.splitlines(keepends=True)
-    if TASKS_SECTION not in [l.strip() for l in lines]:
-        lines.append(f"\n{TASKS_SECTION}\n")
+    stripped = [l.strip() for l in lines]
+    section = next((h for h in TASKS_SECTIONS if h in stripped), None)
+    if section is None:
+        section = TASKS_SECTION
+        lines.append(f"\n{section}\n")
     for idx, l in enumerate(lines):
-        if l.strip() == TASKS_SECTION:
+        if l.strip() == section:
             end = idx + 1
             while end < len(lines) and not lines[end].startswith("## "):
                 end += 1

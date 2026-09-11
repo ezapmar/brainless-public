@@ -1,5 +1,5 @@
 [Unit]
-Description=brainless: haftalik dusunme sorusu (Telegram)
+Description=brainless: weekly thinking question (Telegram)
 After=network-online.target
 OnFailure=brainless-notify-failure@%n.service
 

@@ -1,0 +1,10 @@
+{
+  "header": "🐶 brainless watchdog:\n\n",
+  "mac_silent": "The last commit the Mac pushed to GitHub was {hours} hours ago (threshold {threshold} hours). This does not mean 'no commit was made'. Check in order: 1) is the push failing (logs/vault_backup.log on the Mac), 2) is the backup job running, 3) is the machine off.",
+  "mac_no_commit": "No Mac-signed commit in the last 100 commits.",
+  "health_red": "HEALTH.md is red: {line}",
+  "units_failed": "Failing jobs on Linux: {units}",
+  "dialectic_missing": "Dialectic round did not run: {missing}; journalctl --user -u brainless-dialectic",
+  "dialectic_error": "Dialectic round failed: {error}",
+  "llm_auth": "LLM auth error on Linux (last call {stamp}); check llm_status"
+}

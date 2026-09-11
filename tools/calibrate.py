@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""calibrate.py — close the decision feedback loop.
+"""calibrate.py: close the decision feedback loop.
 
 Surfaces decisions that need attention so judgment can compound:
   - DUE TO GRADE : review date has passed but Outcome is still "Pending review"
@@ -63,7 +63,7 @@ def scan():
 def main():
     due, needs_pred, no_review = scan()
     if not (due or needs_pred or no_review):
-        print("✅ All decisions calibrated — nothing due to grade.")
+        print("✅ All decisions calibrated, nothing due to grade.")
         return
     if due:
         print("📊 DUE TO GRADE (review date passed, outcome not written):")

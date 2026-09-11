@@ -4,11 +4,11 @@
 # stopped on 2026-07-21. Runs from launchd (<prefix>.brainless.backup).
 cd "${BRAINLESS_VAULT:-$HOME/projects/brainless}" || exit 1
 
-# 2026-09-03: iki gun boyunca lokal commit atildi ama push dustu. Log'da
-# "ssh: connect to host github.com port 22" vardi: launchd job'i Mac uykudan
-# uyanirken atesliyor, Wi-Fi henuz bagli degil. Watchdog bunu "Mac 63 saattir
-# commit atmadi" diye raporladi. Asagidaki ag beklemesi ve push retry'i o
-# senaryo icin.
+# 2026-09-03: for two days local commits were made but the push failed. The log
+# showed "ssh: connect to host github.com port 22": launchd fires the job while
+# the Mac is waking from sleep and Wi-Fi is not connected yet. The watchdog
+# reported it as "the Mac has not committed for 63 hours". The network wait and
+# the push retry below exist for that scenario.
 github_reachable() {
   ssh -o BatchMode=yes -o ConnectTimeout=5 -T git@github.com 2>&1 \
     | grep -q "successfully authenticated"
@@ -23,25 +23,25 @@ wait_for_github() {
   return 1
 }
 
-# Rebase yarida kalmissa (onceki kosuda cakisma olmus) repo kilitli kalir ve
-# sonraki her pull/push duser. Temizle ve haber ver, elle cozulsun.
+# If a rebase was left half-done (a conflict in the previous run) the repo stays
+# locked and every later pull/push fails. Clean up and notify; resolve by hand.
 if [ -d .git/rebase-merge ] || [ -d .git/rebase-apply ]; then
   git rebase --abort || true
-  osascript -e 'display notification "Yarim kalan rebase temizlendi, elle senkron gerekiyor" with title "brainless backup"' 2>/dev/null
-  echo "$(date '+%Y-%m-%d %H:%M:%S') yarim kalan rebase abort edildi"
+  osascript -e 'display notification "Half-finished rebase cleaned up, manual sync needed" with title "brainless backup"' 2>/dev/null
+  echo "$(date '+%Y-%m-%d %H:%M:%S') half-finished rebase aborted"
 fi
 
 if wait_for_github; then
-  # Worker'in push'ladigi capture'lari al (2026-08-26'dan beri
-  # Telegram dinleyicisi ofisteki Linux makinede calisiyor).
+  # Fetch the captures the worker pushed (since 2026-08-26 the Telegram
+  # listener runs on the always-on Linux machine).
   git pull --rebase --autostash --quiet origin master || true
   if [ -d .git/rebase-merge ] || [ -d .git/rebase-apply ]; then
     git rebase --abort || true
-    osascript -e 'display notification "Pull cakismasi: elle senkron gerekiyor" with title "brainless backup"' 2>/dev/null
-    echo "$(date '+%Y-%m-%d %H:%M:%S') pull cakismasi, rebase abort edildi"
+    osascript -e 'display notification "Pull conflict: manual sync needed" with title "brainless backup"' 2>/dev/null
+    echo "$(date '+%Y-%m-%d %H:%M:%S') pull conflict, rebase aborted"
   fi
 else
-  echo "$(date '+%Y-%m-%d %H:%M:%S') github erisilemiyor, pull atlandi"
+  echo "$(date '+%Y-%m-%d %H:%M:%S') github unreachable, pull skipped"
 fi
 
 # Guard: GitHub hard-rejects blobs over 100 MB and a single oversized file
@@ -50,8 +50,8 @@ find . -type f -size +95M -not -path "./.git/*" -not -path "./_Backup/*" -not -p
   rel="${f#./}"
   if ! git check-ignore -q "$rel"; then
     echo "$rel" >> .gitignore
-    # Dosya adini AppleScript'e SOKMA (tirnak/ters bolu enjeksiyonu); sabit metin.
-    osascript -e 'display notification "95MB+ dosya gitignore edildi (log: vault_backup.log)" with title "brainless backup"' 2>/dev/null
+    # Do NOT pass the file name into AppleScript (quote/backslash injection); fixed text.
+    osascript -e 'display notification "95MB+ file added to gitignore (log: vault_backup.log)" with title "brainless backup"' 2>/dev/null
     echo "95MB+ gitignore: $rel"
   fi
 done
@@ -69,8 +69,8 @@ if [ -f .agents/state/no_push ]; then
 fi
 
 # Push regardless of whether this run committed; earlier commits may be unpushed.
-# 3 deneme: her basarisiz denemeden sonra once senkronize ol (non-fast-forward
-# ihtimali), sonra artan bekleme ile tekrar dene.
+# 3 attempts: after each failed attempt sync first (possible non-fast-forward),
+# then retry with an increasing wait.
 push_ok=0
 for attempt in 1 2 3; do
   if git push origin master --quiet; then
@@ -82,7 +82,7 @@ for attempt in 1 2 3; do
   git pull --rebase --autostash --quiet origin master || true
   if [ -d .git/rebase-merge ] || [ -d .git/rebase-apply ]; then
     git rebase --abort || true
-    echo "$(date '+%Y-%m-%d %H:%M:%S') push retry sirasinda cakisma, rebase abort edildi"
+    echo "$(date '+%Y-%m-%d %H:%M:%S') conflict during push retry, rebase aborted"
     break
   fi
 done

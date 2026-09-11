@@ -1,0 +1,8 @@
+{
+  "digest_title": "# Weekly Reading Synthesis ({stamp})",
+  "digest_source_line": "Source: thinker_digest.py ({worker}). {n_new} new posts, {n_links} forwarded links.",
+  "notify_ready": "📚 Weekly reading synthesis is ready ({n_new} new posts{links_part})\n",
+  "notify_links_part": ", {n_links} of your links",
+  "notify_authors": "Authors: {who}\n",
+  "notify_vault": "\nVault: {path}"
+}
