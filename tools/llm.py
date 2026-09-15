@@ -16,7 +16,9 @@ the whole batch brain can move off Claude by setting a few env vars. Every
 caller goes through run_prompt and never names a provider, so switching costs
 one file, not six.
 
-  claude-cli        : the Claude Code CLI (`claude -p`). Default; unchanged.
+  claude-cli        : the Claude Code CLI (`claude -p`). Default. Pinned to
+                      Opus 4.8 via --model; override with BRAINLESS_CLAUDE_MODEL
+                      (empty string falls back to the CLI default).
   openai-compatible : any OpenAI-style /chat/completions endpoint, driven by
                       BRAINLESS_LLM_BASE_URL / _API_KEY / _MODEL. Covers xAI
                       Grok (https://api.x.ai/v1), OpenAI, Together, Ollama,
@@ -76,6 +78,12 @@ def _run_claude_cli(prompt: str, timeout: int, allowed_tools=None) -> str | None
     env = os.environ.copy()
     env["PATH"] = os.path.dirname(claude) + os.pathsep + env.get("PATH", "")
     cmd = [claude, "-p", prompt.replace("\x00", "")]  # argv does not accept null bytes
+    # Pin the batch brain to a specific model so the pipeline does not silently
+    # drift when the CLI default changes. Overridable via env; empty string means
+    # "use the CLI default" (do not pass --model at all).
+    model = os.environ.get("BRAINLESS_CLAUDE_MODEL", "claude-opus-4-8").strip()
+    if model:
+        cmd += ["--model", model]
     # The deny list beats allow; whatever settings say, these tools stay closed.
     cmd += ["--disallowedTools", *_DANGEROUS_TOOLS]
     if allowed_tools:

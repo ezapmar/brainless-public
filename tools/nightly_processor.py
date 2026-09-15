@@ -14,6 +14,9 @@ ARCHIVE_DIR = os.path.join(VAULT_ROOT, 'Archive/Daily-Captures')
 DIGESTS_DIR = os.path.join(VAULT_ROOT, '.wiki/digests')
 PROJECTS_WORK_DIR = os.path.join(VAULT_ROOT, 'Work')
 PROJECTS_PERSONAL_DIR = os.path.join(VAULT_ROOT, 'Personal')
+# The compile makes serial LLM calls of up to 300s each. 30 minutes cut a large
+# backlog short every night (Sep 8-10, 2026); 90 minutes lets it drain.
+COMPILE_TIMEOUT = int(os.environ.get("BRAINLESS_COMPILE_TIMEOUT", "5400"))
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from resolve_bin import resolve_claude
 from llm import run_prompt  # noqa: E402
@@ -195,7 +198,7 @@ def main():
             try:
                 subprocess.run(
                     [sys.executable, os.path.join(VAULT_ROOT, 'tools/compile_resources.py')],
-                    cwd=VAULT_ROOT, check=False, timeout=1800,
+                    cwd=VAULT_ROOT, check=False, timeout=COMPILE_TIMEOUT,
                 )
             except Exception as e:
                 print(f"compile_resources error: {e}")

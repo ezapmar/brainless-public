@@ -161,6 +161,55 @@ def check_crm():
         add(label, "RED", t("health_check.crm_error", ago=age, detail=detail[:70]))
 
 
+def check_morning_briefing():
+    """The morning briefing is a Claude scheduled task that only fires while the
+    desktop app is open, so it fails silently. On weekdays after 08:30 the
+    day's file must exist under Daily Briefings/ and carry the health block;
+    a missing morning half is WARN, never RED (the evening close-out still
+    opens the file). Weekends and early hours are reported as not due."""
+    label = t("health_check.morning_briefing")
+    now = datetime.now()
+    if now.weekday() >= 5 or (now.hour, now.minute) < (8, 30):
+        add(label, "OK", t("health_check.morning_not_due"))
+        return
+    path = os.path.join(VAULT, "Daily Briefings", f"daily-briefing-{now.strftime('%Y-%m-%d')}.md")
+    if not os.path.exists(path):
+        add(label, "WARN", t("health_check.morning_missing"))
+        return
+    try:
+        with open(path, errors="replace") as fh:
+            text = fh.read()
+    except OSError:
+        add(label, "WARN", t("health_check.morning_missing"))
+        return
+    block = t("health_check.title").lstrip("# ").strip()
+    if block in text or "System Health" in text:
+        add(label, "OK", t("health_check.morning_ok"))
+    else:
+        add(label, "WARN", t("health_check.morning_no_block"))
+
+
+def check_kill_criteria():
+    """The quit rule with a date (tools/kill_criteria.py). A breached criterion is a
+    RED row: the owner wrote down when to stop and the date passed with the box
+    still open. This call also refreshes _Agent-Context/KILL-CRITERIA.md, which
+    the briefing copies next to the health block."""
+    label = t("health_check.kill_criteria")
+    try:
+        import kill_criteria
+        res = kill_criteria.write()
+    except Exception as e:
+        add(label, "WARN", t("health_check.kill_unreadable", error=str(e)[:80]))
+        return
+    if res["breached"]:
+        first = res["breached"][0]
+        add(label, "RED", t("health_check.kill_breached", n=len(res["breached"]),
+                            first=f"{first['project']} ({first['date'].isoformat()}: {first['condition'][:60]})"))
+    else:
+        add(label, "OK", t("health_check.kill_ok", due=len(res["due"]), days=kill_criteria.DUE_SOON_DAYS,
+                           missing=len(res["missing"])))
+
+
 def check_log_errors():
     """Recent error lines in the processor logs."""
     # nightly log lives on the worker now; the stale Mac file must not WARN.
@@ -260,6 +309,8 @@ def main():
     # Mac log trace. The aggregate pulse is below, the detail is in the Linux watchdog.
     check_worker()
     check_dialectic()
+    check_morning_briefing()
+    check_kill_criteria()
     check_llm_auth()
     check_crm()
     check_log_errors()

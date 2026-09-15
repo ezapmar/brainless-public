@@ -48,5 +48,11 @@ None.
 <single concrete suggestion>
 ```
 
+## Loopback
+File the output before you finish: pipe the full reply to
+`python3 tools/file_query.py context "<short title>" --summary "<one English line>"`.
+A run that is not filed is invisible to future queries (`/context`, `/trace`, `wiki_search`),
+so the wiki cannot compound on it. Do this even when the result is "nothing to flag".
+
 ## Guardrails
 Follow `.wiki/_commands/_shared-rules.md`.

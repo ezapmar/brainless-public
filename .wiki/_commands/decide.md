@@ -97,6 +97,12 @@ After the paste-ready note, add a short agent commentary:
 - Tension detected: <e.g. "Option A contradicts your 'Calm is contagious' belief, worth a second read">
 ```
 
+## Loopback
+File the output before you finish: pipe the full reply to
+`python3 tools/file_query.py decide "<short title>" --summary "<one English line>"`.
+A run that is not filed is invisible to future queries (`/context`, `/trace`, `wiki_search`),
+so the wiki cannot compound on it. Do this even when the result is "nothing to flag".
+
 ## Guardrails
 Follow `.wiki/_commands/_shared-rules.md`.
 Never save the decision note yourself. Output is paste-ready for the owner to drop into `Thinking/Decisions/`.

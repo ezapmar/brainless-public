@@ -56,6 +56,12 @@ status: seed
 Reply `apply 1,2` to write the stubs, or paste them yourself. Human-tree targets stay proposals.
 ```
 
+## Loopback
+File the output before you finish: pipe the full reply to
+`python3 tools/file_query.py backlog "<short title>" --summary "<one English line>"`.
+A run that is not filed is invisible to future queries (`/context`, `/trace`, `wiki_search`),
+so the wiki cannot compound on it. Do this even when the result is "nothing to flag".
+
 ## Guardrails
 Follow `.wiki/_commands/_shared-rules.md`.
 `.wiki/entities/`, `.wiki/articles/`, `.wiki/ideas/` are LLM-owned, you may write there, but only on an explicit `apply`, one commit per batch. Never invent demand that isn't in the lint report (no hallucinated targets).

@@ -17,6 +17,7 @@ output language (tools/locale); code and comments stay English per repo policy.
 Runs each morning via launchd (<prefix>.brainless.think).
 """
 import os
+import subprocess
 import re
 import sys
 from datetime import date, datetime
@@ -55,6 +56,36 @@ def age_days(path):
         return 10**6
 
 
+def cadence_stuck_note():
+    """How long the current step has been the current step: days since the
+    last commit that changed the number of checked boxes in the cadence file
+    (formatting-only commits do not count). Falls back to the file's first
+    commit. A step that has waited more than two weeks gets the note; the
+    daily nudge alone is evidently not working."""
+    def checked(text):
+        return sum(1 for l in text.splitlines() if l.strip().startswith("- [x]"))
+    try:
+        rel = os.path.relpath(CADENCE_FILE, VAULT)
+        log = subprocess.run(["git", "log", "--format=%H %ct", "--", rel], cwd=VAULT,
+                             capture_output=True, text=True, timeout=30).stdout.split()
+        commits = list(zip(log[0::2], log[1::2]))  # newest first
+        if not commits:
+            return ""
+        with open(CADENCE_FILE, errors="replace") as fh:
+            now_checked = checked(fh.read())
+        since = int(commits[-1][1])
+        for sha, ct in commits:
+            text = subprocess.run(["git", "show", f"{sha}:{rel}"], cwd=VAULT,
+                                  capture_output=True, text=True, timeout=30).stdout
+            if checked(text) != now_checked:
+                break
+            since = int(ct)
+    except (OSError, ValueError, subprocess.SubprocessError):
+        return ""
+    days = (datetime.now() - datetime.fromtimestamp(since)).days
+    return t("think_surface.cadence_stuck", days=days) if days > 14 else ""
+
+
 def cadence_step():
     """First unchecked '- [ ]' line in the cadence; wrap to top when all done."""
     try:
@@ -65,7 +96,7 @@ def cadence_step():
     steps = [l for l in lines if l.strip().startswith("- [")]
     for l in steps:
         if l.strip().startswith("- [ ]"):
-            return clean(l.strip()[5:].strip())
+            return clean(l.strip()[5:].strip()) + cadence_stuck_note()
     if steps:
         return t("think_surface.cadence_all_done")
     return t("think_surface.cadence_none")
@@ -137,9 +168,17 @@ def drift_bullets():
 
 
 def provocation(needs_pred):
-    """One sharp item. Priority: fresh drift > stale belief > missing prediction.
+    """One sharp item. Priority: breached kill criterion > fresh drift > stale belief > missing prediction.
     Rotates the pick by day-of-year so the poke changes daily."""
     idx = datetime.now().timetuple().tm_yday
+    try:
+        import kill_criteria
+        breached = kill_criteria.scan()["breached"]
+    except Exception:
+        breached = []
+    if breached:
+        b = breached[idx % len(breached)]
+        return t("think_surface.prov_kill", project=b["project"], date=b["date"].isoformat(), condition=b["condition"])
     drift = drift_bullets()
     if drift:
         return t("think_surface.prov_drift", item=drift[idx % len(drift)])

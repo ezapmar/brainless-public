@@ -137,6 +137,16 @@ def next_action(text):
     return ""
 
 
+def next_kill_criterion(text):
+    """Earliest open '- [ ] YYYY-MM-DD | condition | consequence' line of ## Kill Criteria, or ''."""
+    import kill_criteria
+    rows = [r for r in kill_criteria.criteria_lines(text) if not r[0]]
+    if not rows:
+        return ""
+    _, d, cond, cons = sorted(rows, key=lambda r: r[1])[0]
+    return f"{d.isoformat()} | {cond}" + (f" | {cons}" if cons else "")
+
+
 def last_log_date(text):
     dates = LOG_DATE_RE.findall(text)
     return max(dates) if dates else ""
@@ -181,6 +191,7 @@ def build_projects_active(now):
             "outcome": first_line(section(text, "Outcome")),
             "current": first_line(section(text, "Current Status")),
             "next": next_action(text),
+            "kill": next_kill_criterion(text),
             "last": last_log_date(text) or meta.get("date", ""),
         }
         try:
@@ -217,6 +228,7 @@ def build_projects_active(now):
         if r["current"]:
             L.append(f"- **Current**: {r['current']}")
         L.append(f"- **Next action**: {r['next'] or t('build_dashboard.pa_no_open_item')}")
+        L.append(t("build_dashboard.pa_kill_row", crit=r["kill"]) if r["kill"] else t("build_dashboard.pa_kill_none"))
         L.append(f"- **Link**: [[{r['name']}]] (`{r['cat']}/{r['name']}/notes.md`)")
         L.append("")
 
@@ -328,6 +340,25 @@ def main():
         L.append(t("build_dashboard.no_deadlines"))
     for name, st, tgt in decisions:
         L.append(f"- **Decision [{st}]:** {name}" + (f" → {tgt}" if tgt else ""))
+    L.append("")
+
+    # Kill criteria: the quit rule with a date (tools/kill_criteria.py). Breaches go red.
+    import kill_criteria  # local import: kill_criteria imports this module for project discovery
+    kc = kill_criteria.scan()
+    L.append(t("build_dashboard.kill_heading"))
+    for i in kc["breached"]:
+        L.append(t("build_dashboard.kill_breached_row", project=i["project"], date=i["date"].isoformat(),
+                   condition=i["condition"], consequence=(" | " + i["consequence"]) if i["consequence"] else "",
+                   days=-i["days"]))
+    for i in kc["due"]:
+        L.append(t("build_dashboard.kill_due_row", project=i["project"], date=i["date"].isoformat(),
+                   condition=i["condition"], consequence=(" | " + i["consequence"]) if i["consequence"] else "",
+                   days=i["days"]))
+    if not (kc["breached"] or kc["due"]):
+        L.append(t("build_dashboard.kill_none", days=kill_criteria.DUE_SOON_DAYS))
+    if kc["missing"]:
+        names = ", ".join(n for _, n, _ in kc["missing"][:8]) + (" …" if len(kc["missing"]) > 8 else "")
+        L.append(t("build_dashboard.kill_missing_line", n=len(kc["missing"]), names=names))
     L.append("")
 
     step = next_cadence_step()

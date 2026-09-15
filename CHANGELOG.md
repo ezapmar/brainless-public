@@ -3,6 +3,38 @@
 All notable changes to the public brainless engine. Dates are the day of the public
 push. The private vault this is exported from has its own history.
 
+## Unreleased
+
+- Dialectic scorecard. Round one is isolated (one Buzz root per persona, so nobody
+  reads anyone else before answering); round two is one root that quotes every
+  round one reply. Replies end with `Vote:` (YES, NO, CONDITIONAL) and `Number:`
+  (NN%), round two also with `New evidence:`. `score_topic()` turns those lines into
+  a deterministic per-topic scorecard (affirmation rate, who moved and whether they
+  cited evidence, a unanimity warning) that is filed with the note, posted to the
+  channel and fed to the synthesis. Rounds append to
+  `.agents/state/dialectic_scores.jsonl`; the worker writes the rolling 30 day view
+  to `_Agent-Context/DIALECTIC-SCORECARD.md` with two flags: sycophancy
+  (affirmation above 60 percent) and a persona that never votes NO.
+  `brainless dialectic --scorecard` prints it. Persona rules and the `/dialectic`
+  command carry the same headings; redeploy the personas after upgrading.
+- Kill criteria. Every project `notes.md` may carry a `## Kill Criteria` section of
+  `- [ ] YYYY-MM-DD | condition | consequence` lines (the project template has it).
+  `tools/kill_criteria.py` scans them deterministically: a past date with an open
+  box is a breach. Breaches turn the new health check row red, are written to
+  `_Agent-Context/KILL-CRITERIA.md` for the briefing, lead the dashboard's new
+  Kill criteria section and the think surface's provocation; PROJECTS-ACTIVE
+  shows each project's next criterion, and projects without one are listed.
+- Vault topic fallback: on a day with no captures the evening dialectic argues one
+  thing the vault is waiting on (a decision past review, a decided note without a
+  prediction, a pending decision near review, a stale belief, a live question),
+  rotated with a 14 day cooldown, instead of idling.
+- Health check: a "Morning briefing" row goes yellow on weekdays after 08:30 when the
+  day's briefing is missing or lacks the health block.
+- Think surface: the cadence step says how many days it has waited when it exceeds
+  two weeks.
+- Every thinking command prompt now ends with a Loopback step that files its
+  output through `file_query.py`.
+
 ## 0.1.3 (2026-09-11)
 
 - The engine is English end to end: every comment, docstring, log line, help

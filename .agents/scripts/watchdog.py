@@ -8,9 +8,14 @@ Reports silent breakages via Telegram. Checks:
   2. HEALTH.md red: the committed HEALTH.md status line shows the red icon
   3. Linux jobs: a brainless-* unit is in systemctl --user failed state
   4. LLM auth: the last LLM call on this machine returned an auth error
+  5. Power (--power, every 5 minutes): the charger has been unplugged for
+     POWER_GRACE_MINUTES, or the battery is below POWER_LOW_PERCENT and not
+     charging. A laptop worker shuts down when its battery runs out.
 
 The same topic is reported once per 12 hours (state: .agents/state/watchdog_state.json,
-gitignored). It does not write to the vault or push; it only reads and messages.
+gitignored); power topics repeat every POWER_DEDUPE_HOURS while the problem lasts
+(state: watchdog_power_state.json). It does not write to the vault or push; it
+only reads and messages.
 """
 import json
 import os
@@ -29,6 +34,11 @@ CONF_DIR = os.path.expanduser("~/.config/brainless")
 STATE_FILE = os.path.join(VAULT, ".agents", "state", "watchdog_state.json")
 MAC_SILENCE_HOURS = 26
 DEDUPE_HOURS = 12
+POWER_STATE_FILE = os.path.join(VAULT, ".agents", "state", "watchdog_power_state.json")
+POWER_SUPPLY_DIR = "/sys/class/power_supply"
+POWER_GRACE_MINUTES = 10
+POWER_LOW_PERCENT = 30
+POWER_DEDUPE_HOURS = 1
 
 
 def log(msg):
@@ -160,22 +170,62 @@ def check_llm_auth(issues):
         issues["llm-auth"] = t("watchdog.llm_auth", stamp=stamp)
 
 
-def main():
-    issues = {}
-    for check in (check_mac_silence, check_health_red, check_failed_units, check_llm_auth,
-                  check_dialectic):
-        try:
-            check(issues)
-        except Exception as e:
-            log(f"{check.__name__} error: {e}")
+def check_power(issues, state, now):
+    """Mains or USB-C power online counts as plugged in. The first unplugged
+    sighting is kept in state, so a brief unplug inside the grace window stays
+    quiet. Machines without a battery are skipped."""
+    supplies = {}
+    for name in sorted(os.listdir(POWER_SUPPLY_DIR)):
+        path = os.path.join(POWER_SUPPLY_DIR, name)
+        supplies[name] = (read_file(os.path.join(path, "type")),
+                          read_file(os.path.join(path, "online")),
+                          read_file(os.path.join(path, "capacity")),
+                          read_file(os.path.join(path, "status")))
+    batteries = [s for s in supplies.values() if s[0] == "Battery" and s[2]]
+    if not batteries:
+        return
+    plugged = any(s[0] in ("Mains", "USB") and s[1] == "1" for s in supplies.values())
+    capacity = min(int(b[2]) for b in batteries)
+    charging = any(b[3] in ("Charging", "Full") for b in batteries)
+    if plugged:
+        state.pop("unplugged_since", None)
+    else:
+        since = state.setdefault("unplugged_since", now)
+        minutes = (now - since) / 60
+        if minutes >= POWER_GRACE_MINUTES:
+            issues["power-unplugged"] = t("watchdog.power_unplugged",
+                                          minutes=f"{minutes:.0f}", capacity=capacity)
+    if capacity < POWER_LOW_PERCENT and not charging:
+        issues["power-battery-low"] = t("watchdog.power_battery_low",
+                                        capacity=capacity, threshold=POWER_LOW_PERCENT)
 
+
+def main():
+    power_mode = "--power" in sys.argv[1:]
+    state_file = POWER_STATE_FILE if power_mode else STATE_FILE
+    dedupe_hours = POWER_DEDUPE_HOURS if power_mode else DEDUPE_HOURS
     try:
-        state = json.loads(read_file(STATE_FILE) or "{}")
+        state = json.loads(read_file(state_file) or "{}")
     except ValueError:
         state = {}
     now = time.time()
+
+    issues = {}
+    if power_mode:
+        try:
+            check_power(issues, state, now)
+        except Exception as e:
+            log(f"check_power error: {e}")
+    else:
+        for check in (check_mac_silence, check_health_red, check_failed_units,
+                      check_llm_auth, check_dialectic):
+            try:
+                check(issues)
+            except Exception as e:
+                log(f"{check.__name__} error: {e}")
+
     fresh = {k: v for k, v in issues.items()
-             if now - state.get(k, 0) > DEDUPE_HOURS * 3600}
+             if now - state.get(k, 0) > dedupe_hours * 3600}
 
     if fresh:
         text = t("watchdog.header") + "\n".join(f"- {v}" for v in fresh.values())
@@ -185,8 +235,8 @@ def main():
     else:
         log(f"Clean ({len(issues)} known topics)" if issues else "Clean")
 
-    os.makedirs(os.path.dirname(STATE_FILE), exist_ok=True)
-    with open(STATE_FILE, "w") as fh:
+    os.makedirs(os.path.dirname(state_file), exist_ok=True)
+    with open(state_file, "w") as fh:
         json.dump(state, fh)
 
 

@@ -16,8 +16,9 @@ produces four outputs, deterministically and without an LLM:
                                     (<iso>\t<ok|auth|error>\t<detail>).
 
 Person data (name, e-mail, phone) is DELIBERATELY not fetched: the provider mapping
-passes organisation and deal fields only. This boundary stays in code until the
-customer data policy is settled.
+passes organisation and deal fields only. The boundary lives in code, not in a
+setting; the written policy is the "CRM Data: Privacy and Masking" section of
+_Agent-Context/AGENT-RULES.md.
 
 Provider seam: Provider base + PipedriveProvider. For another CRM add a class that
 implements the same five methods; callers never see provider fields.

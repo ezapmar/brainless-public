@@ -40,5 +40,14 @@
   "dialectic_empty": "status file empty",
   "dialectic_unparsable": "unparsable line: {line}",
   "dialectic_last_run": "last run {date} {slot} ({result}, {ago})",
-  "notify_title": "brainless RED FLAG"
+  "notify_title": "brainless RED FLAG",
+  "morning_briefing": "Morning briefing",
+  "morning_ok": "today's file exists and carries the health block",
+  "morning_no_block": "today's file exists but has no health block (scheduled task may not have run)",
+  "morning_missing": "not produced today (desktop app scheduled task, weekdays 07:00); the evening close-out will open the file",
+  "morning_not_due": "not due yet",
+  "kill_criteria": "Kill criteria",
+  "kill_breached": "{n} breached, first: {first}",
+  "kill_ok": "no breach, {due} due within {days} days, {missing} projects without criteria",
+  "kill_unreadable": "scan failed: {error}"
 }

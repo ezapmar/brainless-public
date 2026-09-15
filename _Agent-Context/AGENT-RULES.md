@@ -52,9 +52,51 @@ claude --context "_Agent-Context/CONTEXT.md"
 - Never write briefing files to the vault root or invent new name variants (morning-brief, morning-memo, etc. are retired).
 - Every briefing must start with a 3-line "System Health" block sourced from `_Agent-Context/HEALTH.md` (written hourly by `tools/health_check.py`). If HEALTH.md reports a red flag, put it at the top of the briefing.
 - If `_Agent-Context/CRM.md` exists (written hourly by `.agents/scripts/crm_capture.py`, read-only pull from the CRM, no LLM), add a "CRM: Enterprise Line" section after the open promises: copy its "Flags" and "Changes (last 24h)" bullets verbatim. Skip the section when both say "none". A 🔴 CRM status joins the health block at the top. Ad hoc CRM questions and the Business Development screening use the Pipedrive MCP connector interactively, never the briefing. The same snapshot is posted to the Buzz channel `#crm` (identity `crm`, `.agents/scripts/buzz_crm_sync.sh`) whenever its body changes; that channel is the place to discuss accounts and the Business Development line with the assistant.
+- Read `_Agent-Context/KILL-CRITERIA.md` (written hourly by `tools/kill_criteria.py` through the health check). If its Breached list is not empty, put those lines verbatim, in red, directly under the System Health block: the owner wrote down in advance when to stop and the date has passed. Add the "Due within 14 days" lines under the open promises. Never soften or reinterpret a breached line; the decision (apply the consequence or move the date with a reason) is the owner's.
 - If `_Agent-Context/RESURFACE.md` is less than 7 days old, include its 5 notes as a short "Revisit This Week" section.
 - If `_Agent-Context/CONTEXT-DRIFT.md` reports drift (anything other than "No drift"), mention it in the briefing and ask the owner whether to apply the proposed CONTEXT.md updates.
-- Read `_Agent-Context/DIALECTIC-STATUS.md` and add one line: "Yesterday's dialectic: N topics, M/K persona replies" with a link to the filed note in `.wiki/digests/queries/` (the evening run, or the noon run if the evening did not happen). If yesterday has no line or the result is `error`, write "Dialectic round did not run" in red next to the health block.
+- Read `_Agent-Context/DIALECTIC-STATUS.md` and add one line: "Yesterday's dialectic: N topics, M/K persona replies, affirm NN%, unanimous a/b, moved c/d" (the numbers are in the status line) with a link to the filed note in `.wiki/digests/queries/` (the evening run, or the noon run if the evening did not happen). If yesterday has no line or the result is `error`, write "Dialectic round did not run" in red next to the health block. If `_Agent-Context/DIALECTIC-SCORECARD.md` lists a flag under "## Flags" (sycophancy above 60 percent, or a persona that never votes NO), repeat that flag in one line; it means the debate is agreeing with the owner too easily.
+
+---
+
+## CRM Data: Privacy and Masking
+
+Scope: everything that originates in the CRM (Pipedrive today): the hourly snapshot (`_Agent-Context/CRM.md`), the event logs (`Inbox/CRM/`), the Buzz channel `#crm`, interactive work through the CRM's MCP connector, and every note, digest, briefing or message derived from any of these. The CRM is the system of record; the vault holds a minimised, derived copy. Legal frame: KVKK for the Turkish entity, UK GDPR for the UK entity. Working principle: data minimisation.
+
+### Three tiers
+
+| Tier | What | Rule |
+|---|---|---|
+| A: organisation and deal | Organisation name, deal title, pipeline, stage, value and currency, dates (last activity, next step, expected close, stage change), lost reason, flags, deal owner (the owner's own staff), company-level custom fields (employee count, sector, HR tech stack, lead source, competitors), CRM deal and organisation ids and links | May be written wherever CRM output is allowed (see "Where it may go") |
+| B: external contact persons | Name, job title, e-mail, phone, LinkedIn or other profile URL, CRM person id, anything else that identifies a person at a customer or partner | Never written. Refer to the person by role at the organisation ("their HR director", "the CFO there"). If one person must be followed through a single document, use a pseudonym that is stable inside that document only ("Contact 1, HR"). Detail stays in the CRM; cite the deal link instead |
+| C: content that never leaves the CRM | Verbatim e-mail bodies and signatures, attachments, cc addresses, personal e-mail addresses, national ID numbers, IBAN or bank details, salary or payroll data of a customer's employees, tenant ids, credentials, API tokens | Never written, not even masked. If found in a note, drop it |
+
+### How masking works
+
+- Scheduled path (`.agents/scripts/crm_capture.py`): Tier A is enforced in the normaliser, not by a config flag. Person fields are never requested from the API. Do not add person fields to the provider mapping; any change to the field list runs `--self-test`, and the fixture keeps its invented organisation names.
+- Interactive path (MCP connector): the assistant may read person data while reasoning about an account. Everything it writes (loopback digest, Buzz message, briefing line, draft for a human area) is reduced to Tier A plus Tier B masking before it is filed. Each digest says so in its scope section and links every row to its CRM record so the detail can be looked up at the source.
+- Quotes: a short customer statement from a note or e-mail may be quoted when it carries no speaker identity ("we were looking for a card-based system"). Never quote a header, a signature, or a sentence that names the writer.
+- Internal staff (deal owners, sales leads, a former owner in a reassignment): name and role are allowed; their personal contact details are not.
+- Deal and organisation titles are copied as they stand in the CRM, because they are the organisation-level identifier; a sole trader's business name is a business name. A deal whose title is a bare person's name is a CRM data quality issue: rename it in the CRM to the organisation, do not mask it in the vault.
+- The HR platform connector has its own pseudonym masking for employee data; this section covers the CRM only.
+
+### Where it may go
+
+| Destination | Allowed |
+|---|---|
+| `_Agent-Context/CRM.md`, `Inbox/CRM/`, Buzz `#crm`, `Daily Briefings/` (copied verbatim from CRM.md) | Tier A only, produced by the script |
+| `.wiki/digests/queries/*crm*`, `.wiki/summaries/` built from `Inbox/CRM/` | Tier A, Tier B masked |
+| Human areas (`Work/`, `Thinking/`) | Same masking, and only after the owner's "yes, apply" (rule 2) |
+| Public repo (`tools/export_public.py`) | Nothing CRM-derived. `Inbox/`, `Daily Briefings/`, `.wiki/digests/` and `_Agent-Context/CRM.md` are already excluded; keep them excluded. Docs and fixtures use invented organisation names only |
+| Assistant memory (`~/.claude/projects/<vault>/memory/`) | Tier A facts about the pipeline are fine; never Tier B or C |
+| Chat transcripts | Never paste a token or a contact's details. A token that lands in a transcript is regenerated the same day |
+
+### Retention and repair
+
+- `Inbox/CRM/` logs are event-only and stay as long as the organisation is tracked; the compiler summarises them like any Inbox note.
+- Tier B content found in the private repo: remove it in a normal commit and note the fix in that day's briefing.
+- Tier C content (a secret or special-category data) found in the repo: rewrite history (git filter-repo, force-push) and rotate the secret.
+- A deletion or correction request from a customer or contact is handled in the CRM; the vault copy follows on the next run, or is removed by hand if it sits in a digest.
 
 ---
 

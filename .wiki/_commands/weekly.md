@@ -58,6 +58,12 @@ Summary: <2 sentences>
 <optional: list of files changed most in window, flag any that were created and then not touched again, half-finished notes>
 ```
 
+## Loopback
+File the output before you finish: pipe the full reply to
+`python3 tools/file_query.py weekly "<short title>" --summary "<one English line>"`.
+A run that is not filed is invisible to future queries (`/context`, `/trace`, `wiki_search`),
+so the wiki cannot compound on it. Do this even when the result is "nothing to flag".
+
 ## Guardrails
 Follow `.wiki/_commands/_shared-rules.md`.
 Do not apply the CONTEXT.md diff automatically. Show the diff; The owner applies.

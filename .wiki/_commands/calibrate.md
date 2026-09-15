@@ -42,3 +42,9 @@ drafts; the owner approves in one line. Never invent an outcome.
 - Never write an Outcome, Prediction, or Confidence the owner did not state.
 - Match `_Templates/Decision.md` section names exactly.
 - Em/en dashes are banned in all writes, including the scoreboard.
+
+## Loopback
+File the output before you finish: pipe the full reply to
+`python3 tools/file_query.py calibrate "<short title>" --summary "<one English line>"`.
+A run that is not filed is invisible to future queries (`/context`, `/trace`, `wiki_search`),
+so the wiki cannot compound on it. Do this even when the result is "nothing to flag".

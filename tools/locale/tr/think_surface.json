@@ -20,5 +20,7 @@
   "section_cadence": "## 1. Bugünün adımı (Cadence)",
   "section_calibration": "## 2. Karar defteri (Calibration)",
   "section_provocation": "## 3. Günün provokasyonu",
-  "section_resurface": "## 4. Yeniden yüzeye çıkanlar"
+  "section_resurface": "## 4. Yeniden yüzeye çıkanlar",
+  "cadence_stuck": " _(bu adım {days} gündür bekliyor; Pazar Telegram döngüsü ilk bu adımı sorar)_",
+  "prov_kill": "(kill criteria ihlali) **{project}**: {date} | {condition}. Bugün karar ver: sonucu uygula ya da tarihi yeni gerekçeyle taşı."
 }
