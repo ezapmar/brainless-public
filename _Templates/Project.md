@@ -26,6 +26,13 @@ deadline_note:
 <!-- Update this weekly -->
 
 
+## Kill Criteria
+<!-- Annie Duke's quit rule: decide NOW what would make you stop or re-scope, with a date.
+     One line each, parsed by tools/kill_criteria.py:  - [ ] YYYY-MM-DD | condition | consequence
+     "If on <date> <condition> holds, then <consequence>" (stop, re-scope, escalate, archive).
+     Tick the box when the criterion is resolved; a past date with an open box is a breach and turns red in the briefing. -->
+- [ ] 
+
 ## Related Ideas
 - [[]]
 

@@ -1,0 +1,9 @@
+[Unit]
+Description=brainless: power watchdog (charger unplugged or battery low)
+OnFailure=brainless-notify-failure@%n.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=%h/projects/brainless
+# No git lock: this check only reads /sys and sends a message.
+ExecStart=/usr/bin/python3 %h/projects/brainless/.agents/scripts/watchdog.py --power

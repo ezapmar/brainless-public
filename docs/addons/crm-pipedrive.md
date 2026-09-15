@@ -25,6 +25,11 @@ e-mails, phones, `person_id`, `cc_email`) are never requested from the API and n
 written. This is enforced in the normaliser, not in a config flag, so a future provider
 cannot leak them by accident.
 
+The interactive side (an assistant working through the CRM's MCP connector) is
+covered by the "CRM Data: Privacy and Masking" section of
+`_Agent-Context/AGENT-RULES.md`: the same organisation and deal boundary, external
+contacts referred to by role only, every written row linked back to its CRM record.
+
 ## Setup (Pipedrive)
 
 1. Get your personal API token in Pipedrive: profile menu, then

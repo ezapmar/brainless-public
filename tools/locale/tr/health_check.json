@@ -40,5 +40,14 @@
   "dialectic_empty": "status file empty",
   "dialectic_unparsable": "unparsable line: {line}",
   "dialectic_last_run": "last run {date} {slot} ({result}, {ago})",
-  "notify_title": "brainless KIRMIZI BAYRAK"
+  "notify_title": "brainless KIRMIZI BAYRAK",
+  "morning_briefing": "Sabah brifingi",
+  "morning_ok": "bugünkü dosya var, sağlık bloğu içeriyor",
+  "morning_no_block": "bugünkü dosya var ama sağlık bloğu yok (scheduled task çalışmamış olabilir)",
+  "morning_missing": "bugün üretilmedi (desktop app scheduled task, hafta içi 07:00); akşam kapanışı dosyayı açacak",
+  "morning_not_due": "henüz vakti gelmedi",
+  "kill_criteria": "Kill criteria",
+  "kill_breached": "{n} ihlal, ilki: {first}",
+  "kill_ok": "ihlal yok, {due} kriter {days} gün içinde, {missing} projede kriter yok",
+  "kill_unreadable": "taranamadı: {error}"
 }

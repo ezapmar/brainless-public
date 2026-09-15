@@ -53,6 +53,12 @@ Optional scope keyword: `beliefs`, `decisions`, `all` (default).
 <if all clean, state so, this is a valid output>
 ```
 
+## Loopback
+File the output before you finish: pipe the full reply to
+`python3 tools/file_query.py contradict "<short title>" --summary "<one English line>"`.
+A run that is not filed is invisible to future queries (`/context`, `/trace`, `wiki_search`),
+so the wiki cannot compound on it. Do this even when the result is "nothing to flag".
+
 ## Guardrails
 Follow `.wiki/_commands/_shared-rules.md`.
 Tone: neutral. You are not accusing the owner of inconsistency, you are surfacing friction for their own review. Contradictions are often signal of evolving thinking, not error.

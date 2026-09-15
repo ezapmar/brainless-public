@@ -98,9 +98,15 @@ def main():
         # Line insertions shift the indexes; parse fresh for every section.
         local = parse_local(lines)
         list_id = get_list_id(service, list_name)
-        remote = service.tasks().list(
-            tasklist=list_id, showCompleted=True, showHidden=True,
-            maxResults=100).execute().get("items", [])
+        remote, page = [], None
+        while True:
+            resp = service.tasks().list(
+                tasklist=list_id, showCompleted=True, showHidden=True,
+                maxResults=100, pageToken=page).execute()
+            remote += resp.get("items", [])
+            page = resp.get("nextPageToken")
+            if not page:
+                break
         remote_by_title = {x["title"].strip(): x for x in remote}
         local_titles = {x["title"] for x in local[key]}
 

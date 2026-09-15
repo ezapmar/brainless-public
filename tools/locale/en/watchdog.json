@@ -6,5 +6,7 @@
   "units_failed": "Failing jobs on Linux: {units}",
   "dialectic_missing": "Dialectic round did not run: {missing}; journalctl --user -u brainless-dialectic",
   "dialectic_error": "Dialectic round failed: {error}",
-  "llm_auth": "LLM auth error on Linux (last call {stamp}); check llm_status"
+  "llm_auth": "LLM auth error on Linux (last call {stamp}); check llm_status",
+  "power_unplugged": "The worker has been off the charger for {minutes} minutes (battery {capacity}%). It shuts down when the battery runs out; check the charger cable.",
+  "power_battery_low": "Worker battery at {capacity}% and not charging (threshold {threshold}%). Plug in the charger now."
 }

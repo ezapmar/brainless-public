@@ -37,6 +37,7 @@ brainless <command> [args]
   compile [--dry-run|--full-rebuild|--only <phase>]   build .wiki/ from your notes
   search "<query>" [--k N] [--json]                    search the compiled wiki
   dialectic "<thesis>" [--run noon|evening] [--buzz]   five personas argue it (local by default)
+  dialectic --scorecard                                 print the rolling 30 day dialectic scorecard
   lint [--fix] [--fix-links] [--dry-run]               wiki integrity checks and repairs
   calibrate                                            decisions due for grading, missing predictions
   health                                               refresh and print _Agent-Context/HEALTH.md

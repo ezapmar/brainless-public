@@ -16,5 +16,12 @@
   "pa_archive_heading": "## Arşiv ({n})",
   "days_left": "{n} gün kaldı",
   "days_overdue": "{n} gün GEÇTİ",
-  "no_deadlines": "- (notes.md frontmatter'ında `deadline:` olan aktif proje yok)"
+  "no_deadlines": "- (notes.md frontmatter'ında `deadline:` olan aktif proje yok)",
+  "kill_heading": "## 🛑 Kill criteria",
+  "kill_breached_row": "- <span style=\"color:red\">**{project}:** {date} | {condition}{consequence} ({days} gün GEÇTİ)</span>",
+  "kill_due_row": "- **{project}:** {date} | {condition}{consequence} ({days} gün kaldı)",
+  "kill_none": "- ihlal yok, {days} gün içinde kriter yok",
+  "kill_missing_line": "- _Kriter yazılmamış proje: {n} ({names}). Detay: `_Agent-Context/KILL-CRITERIA.md`_",
+  "pa_kill_row": "- **Kill**: {crit}",
+  "pa_kill_none": "- **Kill**: kriter yok (yaz: `## Kill Criteria`, `- [ ] YYYY-MM-DD | koşul | sonuç`)"
 }

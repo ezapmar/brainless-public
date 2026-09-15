@@ -43,3 +43,6 @@ Lead with the answer. No preamble ("Sure! I'll now…"). No trailing summary of 
 
 ## Scope discipline
 Only do what the command asks. Don't volunteer extra analysis, refactoring suggestions, or "while I was at it, I also noticed…" unless the command explicitly invites it.
+
+## CRM data
+Anything derived from the CRM (the snapshot `_Agent-Context/CRM.md`, `Inbox/CRM/`, MCP connector output) follows the "CRM Data: Privacy and Masking" section of `_Agent-Context/AGENT-RULES.md`: organisation and deal level only, external contacts by role and never by name, no e-mail bodies or contact details, every row linked to its CRM record. Say in the digest's scope section that this masking was applied.

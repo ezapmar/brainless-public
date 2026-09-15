@@ -42,11 +42,15 @@ That is the whole product. Everything else is plumbing.
 3. **Write what you believe and what you decided, as bets.** Beliefs live in
    `Thinking/Beliefs/`, each with "what would change my mind". Decisions live in
    `Thinking/Decisions/`, each with a prediction, a confidence and a review date.
-4. **Argue before you act.** Five personas test a thesis in two rounds. Round one, each
-   applies its own method. Round two, each picks the strongest objection from the
-   others and answers it. A moderator writes the synthesis: the best counterargument,
-   what would have to be true, a cheap dated test, a probability, and any clash with
-   your own beliefs.
+4. **Argue before you act.** Five personas test a thesis in two rounds. Round one is
+   isolated: each persona gets its own thread and applies its own method without
+   seeing the others, then votes YES, NO or CONDITIONAL with a probability. Round
+   two, each reads the others, picks the strongest objection, answers it, votes
+   again and names the new evidence that moved it, or "none". A script scores the
+   round (affirmation rate, who moved, whether they cited evidence, a unanimity
+   warning) before a moderator writes the synthesis: the best counterargument, what
+   would have to be true, a cheap dated test, a probability, and any clash with your
+   own beliefs. A rolling scorecard flags when the debate agrees with you too easily.
 5. **Grade yourself.** When a review date passes, the system nags until you write the
    outcome. Ten years of ungraded decisions is one year repeated ten times.
 6. **Keep it yours.** Nothing writes into your notes without you. Every command
@@ -280,7 +284,7 @@ The worker's timers, installed verbatim by `.agents/systemd/install.sh`:
 
 | When | Runs | What it does |
 |---|---|---|
-| 12:30 and 21:20 | `tools/dialectic.py` | five personas argue the day's new notes, moderator posts to `#dialectic` and files the synthesis and the bet |
+| 12:30 and 21:20 | `tools/dialectic.py` | five personas argue the day's new notes (isolated round one, quoted round two), moderator posts the scorecard and synthesis to `#dialectic` and files them; on a silent day the evening run argues one vault topic instead |
 | 21:00 | `closeout` | propose one seed idea, one decision worth writing down, one contradiction with your beliefs |
 | 23:00 | `nightly` | write the digest, archive the raw capture, compile `.wiki/`, lint |
 | Mon 05:00, Fri 21:00 | `dashboard` | rebuild the active-projects view from every `notes.md` |

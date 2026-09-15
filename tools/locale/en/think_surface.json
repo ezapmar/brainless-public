@@ -20,5 +20,7 @@
   "section_cadence": "## 1. Today's step (Cadence)",
   "section_calibration": "## 2. Decision ledger (Calibration)",
   "section_provocation": "## 3. Provocation of the day",
-  "section_resurface": "## 4. Resurfaced notes"
+  "section_resurface": "## 4. Resurfaced notes",
+  "cadence_stuck": " _(this step has waited {days} days; the Sunday Telegram loop asks it first)_",
+  "prov_kill": "(kill criteria breach) **{project}**: {date} | {condition}. Decide today: apply the consequence or move the date with a written reason."
 }

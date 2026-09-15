@@ -16,5 +16,12 @@
   "pa_archive_heading": "## Archive ({n})",
   "days_left": "{n} days left",
   "days_overdue": "{n} days OVERDUE",
-  "no_deadlines": "- (no active project with `deadline:` in its notes.md frontmatter)"
+  "no_deadlines": "- (no active project with `deadline:` in its notes.md frontmatter)",
+  "kill_heading": "## 🛑 Kill criteria",
+  "kill_breached_row": "- <span style=\"color:red\">**{project}:** {date} | {condition}{consequence} ({days} days OVERDUE)</span>",
+  "kill_due_row": "- **{project}:** {date} | {condition}{consequence} ({days} days left)",
+  "kill_none": "- no breach, nothing due within {days} days",
+  "kill_missing_line": "- _Projects without criteria: {n} ({names}). Detail: `_Agent-Context/KILL-CRITERIA.md`_",
+  "pa_kill_row": "- **Kill**: {crit}",
+  "pa_kill_none": "- **Kill**: none written (add `## Kill Criteria`, `- [ ] YYYY-MM-DD | condition | consequence`)"
 }
