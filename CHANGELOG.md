@@ -3,7 +3,7 @@
 All notable changes to the public brainless engine. Dates are the day of the public
 push. The private vault this is exported from has its own history.
 
-## Unreleased
+## 0.1.4 (2026-09-15)
 
 - Dialectic scorecard. Round one is isolated (one Buzz root per persona, so nobody
   reads anyone else before answering); round two is one root that quotes every
