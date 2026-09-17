@@ -3,7 +3,7 @@
 All notable changes to the public brainless engine. Dates are the day of the public
 push. The private vault this is exported from has its own history.
 
-## Unreleased
+## 0.1.6 (2026-09-18)
 
 - Add `docs/scripts.md`: a reference for every Python script in `tools/` and
   `.agents/scripts/`, each with a definition, a description and the design
