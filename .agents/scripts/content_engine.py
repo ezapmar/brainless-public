@@ -18,7 +18,8 @@ from owner_profile import OWNER, OWNER_FULL, WORKER, output_lang_directive  # no
 from i18n import t  # noqa: E402
 from watchdog import send_telegram
 
-GUIDE = os.path.join(VAULT, "Personal", "Content", "content", "uretim-rehberi.md")
+GUIDE = os.path.join(VAULT, "Writings", "Editor", "Rehberler", "uretim-rehberi.md")
+EDITOR_RULES = os.path.join(VAULT, "Writings", "Editor", "Editör Kuralları.md")
 SOURCES = ["Inbox/Spiky", "Inbox/Links", "Thinking/Daily"]
 OUT_DIR = os.path.join(VAULT, "Inbox", "Content Drafts")
 LOOKBACK_DAYS = 7
@@ -59,11 +60,13 @@ def main():
     if not material:
         log("No material this week")
         return
-    guide = read_file(GUIDE, 6000)
+    guide = read_file(GUIDE, 12000)
+    rules = read_file(EDITOR_RULES, 16000)
     prompt = f"""You are the content assistant for {OWNER}. From the weekly material below, write 2-3 LinkedIn post drafts, staying faithful to the voice in the production guide.
 
 RULES:
 - The voice and format rules in the guide are binding; founder voice, personal observation + a clear idea.
+- The editing rules are binding too: check every draft against them (voice tics, translated phrasing, word choice) before returning it.
 - Sensitive company internals (financial figures, customer names, M&A talks) are NEVER used; at most an anonymised general lesson may be drawn from them.
 - Each draft: "## {t('content_engine.draft_word')} N: <title>" + one line on which material it grew from + the post text.
 - Return only the drafts.
@@ -71,6 +74,9 @@ RULES:
 
 # PRODUCTION GUIDE:
 {guide}
+
+# EDITING RULES:
+{rules}
 
 # THIS WEEK'S MATERIAL:
 {material[:30000]}"""

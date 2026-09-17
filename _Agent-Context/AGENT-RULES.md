@@ -52,6 +52,7 @@ claude --context "_Agent-Context/CONTEXT.md"
 - Never write briefing files to the vault root or invent new name variants (morning-brief, morning-memo, etc. are retired).
 - Every briefing must start with a 3-line "System Health" block sourced from `_Agent-Context/HEALTH.md` (written hourly by `tools/health_check.py`). If HEALTH.md reports a red flag, put it at the top of the briefing.
 - If `_Agent-Context/CRM.md` exists (written hourly by `.agents/scripts/crm_capture.py`, read-only pull from the CRM, no LLM), add a "CRM: Enterprise Line" section after the open promises: copy its "Flags" and "Changes (last 24h)" bullets verbatim. Skip the section when both say "none". A 🔴 CRM status joins the health block at the top. Ad hoc CRM questions and the Business Development screening use the Pipedrive MCP connector interactively, never the briefing. The same snapshot is posted to the Buzz channel `#crm` (identity `crm`, `.agents/scripts/buzz_crm_sync.sh`) whenever its body changes; that channel is the place to discuss accounts and the Business Development line with the assistant.
+- Deployment-specific briefing blocks (for example a finance flag) are listed in `_Agent-Context/AGENT-RULES-PRIVATE.md` under "Briefing Convention: Private Additions". If that file exists, read it and apply those bullets as part of this convention.
 - Read `_Agent-Context/KILL-CRITERIA.md` (written hourly by `tools/kill_criteria.py` through the health check). If its Breached list is not empty, put those lines verbatim, in red, directly under the System Health block: the owner wrote down in advance when to stop and the date has passed. Add the "Due within 14 days" lines under the open promises. Never soften or reinterpret a breached line; the decision (apply the consequence or move the date with a reason) is the owner's.
 - If `_Agent-Context/RESURFACE.md` is less than 7 days old, include its 5 notes as a short "Revisit This Week" section.
 - If `_Agent-Context/CONTEXT-DRIFT.md` reports drift (anything other than "No drift"), mention it in the briefing and ask the owner whether to apply the proposed CONTEXT.md updates.
@@ -97,6 +98,28 @@ Scope: everything that originates in the CRM (Pipedrive today): the hourly snaps
 - Tier B content found in the private repo: remove it in a normal commit and note the fix in that day's briefing.
 - Tier C content (a secret or special-category data) found in the repo: rewrite history (git filter-repo, force-push) and rotate the secret.
 - A deletion or correction request from a customer or contact is handled in the CRM; the vault copy follows on the next run, or is removed by hand if it sits in a digest.
+
+---
+
+## Finance Data: Privacy and Masking
+
+Finance material (management packs, the finance team's tables, tax and restructuring documents, the cap table, investor reports, and anything derived from them) follows the same three-tier idea as "CRM Data" above: company-level aggregates may be written, named third parties tied to an amount are masked, raw sensitive content is never written. The binding rules name the company's folders, source files and machines, so they live in `_Agent-Context/AGENT-RULES-PRIVATE.md` (section "Finance Data: Privacy and Masking"), which is never exported. Read that section before touching any finance material; if the file does not exist, this deployment has no finance area.
+
+Public repo (`tools/export_public.py`): nothing finance-derived. The finance tooling folder is excluded from the export; docs and fixtures use invented figures only.
+
+---
+
+## Email Drafts: No URLs Through the Gmail Connector
+
+Tested 2026-09-17. The Gmail MCP connector rewrites every web URL into a `google.com/url?q=...&source=gmail&ust=...` redirect at write time (`create_draft`, `update_draft`, `send_message`), before the Gmail editor ever opens the draft. It looks like tracking, and once the `ust` timestamp passes the recipient gets a Google "Redirect notice" page. Three external mails went out this way before the cause was found.
+
+- All of these get wrapped: plain-text body, `htmlBody` with an explicit `<a href>`, bare URL text in HTML, a bare domain without scheme (`example.com`), the `www.` form, a named anchor, a URL split across spans. A schemeless `//host` href turns into `javascript:void(0)`. Only `mailto:` survives.
+- Rule: never put a web URL or a bare domain in any body sent through the connector. Write company and profile names as words. Email addresses are fine.
+- If a link is needed, add it afterwards inside Gmail's own editor: the owner pastes it, or the agent types it through the browser extension (click into the compose body first, then type). Text typed in the editor is saved with a plain href and stays plain after close and reopen. Check in the DOM that the href has no `google.com/url` before calling the draft clean.
+- Signature links belong in the owner's Gmail signature, inserted in the editor.
+- After every `create_draft`, read the draft back and scan `htmlBody` and `plaintextBody` for `google.com/url`. If it is there, fix it before reporting the draft as ready.
+- A draft opened in the Gmail web UI gets a new draft id; `get_draft` on the old id then returns "not found". That is not data loss.
+- Same spirit for any outreach copy: no UTM parameters, no shorteners, no redirect wrappers.
 
 ---
 

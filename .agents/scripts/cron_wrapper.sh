@@ -48,4 +48,20 @@ bash .agents/scripts/buzz_crm_sync.sh >> "$CRM_LOG" 2>&1
 # Hourly heartbeat: refresh _Agent-Context/HEALTH.md (cheap, no LLM calls).
 python3 tools/health_check.py >> logs/health_check.log 2>&1
 
+# Commit the regenerated context blocks right here so the working tree does not
+# sit dirty for up to a day between the 21:30 vault_backup. These three files
+# are deterministic status blocks (no LLM), rewritten every run; the always-on
+# machine already commits its generated output at generation time via
+# worker_job.sh, and this applies the same discipline to the laptop.
+# Local commit only, scoped to the generated files by pathspec so human-authored
+# vault edits are never swept in. vault_backup.sh keeps ownership of the push
+# (its network-wait and rebase-recovery logic stays the single place for that).
+GEN_FILES=()
+for f in _Agent-Context/CRM.md _Agent-Context/HEALTH.md _Agent-Context/KILL-CRITERIA.md; do
+  [ -f "$f" ] && GEN_FILES+=("$f")
+done
+if [ "${#GEN_FILES[@]}" -gt 0 ] && ! git diff --quiet -- "${GEN_FILES[@]}" 2>/dev/null; then
+  git commit --quiet -m "context refresh: $(date '+%F-%H%M')" -- "${GEN_FILES[@]}" 2>/dev/null || true
+fi
+
 exit "$status"
