@@ -3,6 +3,12 @@
 All notable changes to the public brainless engine. Dates are the day of the public
 push. The private vault this is exported from has its own history.
 
+## Unreleased
+
+- Add `docs/scripts.md`: a reference for every Python script in `tools/` and
+  `.agents/scripts/`, each with a definition, a description and the design
+  philosophy behind it, plus a map of how the scripts relate. Linked from the README.
+
 ## 0.1.5 (2026-09-18)
 
 - Add the Today queue: at most one decision, one commitment, and one evidence
