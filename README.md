@@ -32,13 +32,17 @@ That is the whole product. Everything else is plumbing.
 
 ## The goal, step by step
 
-1. **Capture everything, filter later.** Voice notes, photos, links, documents, half
-   sentences. They land in `Inbox/` and `Thinking/Daily/` as Markdown. Nothing is
-   judged at capture time.
+1. **Capture everything, filter later.** Handwritten pages, voice notes, photos,
+   links, documents, half sentences, Telegram messages and Buzz `#inbox` posts. They
+   land in `Inbox/`, `Inbox/Links/` and `Thinking/Daily/` as Markdown. Nothing is
+   judged at capture time. The [capture flow guide](docs/capture-flow.md) maps every
+   entrance and every scheduled job.
 2. **Let the machine read so you do not have to.** A compiler turns every note into a
    summary, clusters summaries into articles, mirrors project status, and writes a daily
-   digest into `.wiki/`. You own the notes. The machine owns `.wiki/` and can rebuild it
-   from scratch any time.
+   digest into `.wiki/`. Obsidian is the surface: every input becomes Markdown, Graph
+   view follows explicit `[[wikilinks]]`, and Smart Connections shows related notes
+   that do not have a written edge yet. You own the notes. The machine owns `.wiki/`
+   and can rebuild it from scratch any time.
 3. **Write what you believe and what you decided, as bets.** Beliefs live in
    `Thinking/Beliefs/`, each with "what would change my mind". Decisions live in
    `Thinking/Decisions/`, each with a prediction, a confidence and a review date.
@@ -164,9 +168,16 @@ with your beliefs. At 23:00 the nightly job writes the digest, archives the raw 
 compiles and lints. Every analysis is filed back into `.wiki/digests/queries/`, so
 tomorrow's question can build on today's answer.
 
-**The LLM never gets tools.** Context is embedded in the prompt. It cannot read, write,
-move or delete anything. That is the reason a script can run unattended against a folder
-that holds your life.
+The LLM is the connective tissue in that loop. Local whisper.cpp transcribes voice;
+Claude reads handwritten images and cleans the text, fixes names against the current
+context, and adds links between a capture and the notes it touches. The original
+image, source document or raw conversion stays recoverable. A failed model call does
+not erase the input.
+
+**The text-processing LLM never gets general file tools.** Context is embedded in the
+prompt. It cannot read, write, move or delete anything. Image OCR is the narrow
+exception: the image reader receives only the specific image it needs. That is the
+reason a script can run unattended against a folder that holds your life.
 
 ---
 
