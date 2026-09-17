@@ -163,6 +163,10 @@ The rule is enforced by who owns which folder.
 | `tools/` | engine | compiler, lint, search, filer, calibration, dialectic |
 | `.agents/` | engine | scheduled jobs, systemd units, persona definitions |
 
+Every script in `tools/` and `.agents/scripts/` is described in the
+[scripts reference](docs/scripts.md): what it is, what it does, and why it is built the
+way it is.
+
 A project is any folder under `Work/` or `Personal/` with a `notes.md`. Project mirrors
 track changes across all permitted source files and exclude private descendants. Use
 `## Next Action` in a project note for its next concrete step. `## Kill Criteria` stays
