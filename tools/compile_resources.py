@@ -166,7 +166,7 @@ def clean_markdown_output(out: str) -> str:
     return body.strip()
 
 
-def sources_digest(paths) -> str:
+def sources_digest(paths, *, scope="") -> str:
     """Content fingerprint of a source set (sha256 over path-sorted files, 12 hex digits).
 
     Why a hash instead of mtime: in a two-machine git setup, `git pull/reset/checkout`
@@ -176,6 +176,8 @@ def sources_digest(paths) -> str:
     for this reason). A hash is independent of machine and sync.
     """
     h = hashlib.sha256()
+    if scope:
+        h.update(scope.encode() + b"\0")
     for p in sorted(paths, key=lambda x: str(x)):
         try:
             h.update(str(p).encode())
@@ -219,14 +221,14 @@ def stored_zk(dst: Path) -> str | None:
     return m.group(1) if m else None
 
 
-def write_compiled(dst: Path, body: str, sources) -> None:
+def write_compiled(dst: Path, body: str, sources, *, scope="") -> None:
     """Write the compiled output with a sources_hash stamp (atomic: tmp first, then replace).
 
     We stamp it ourselves, not the model, so the hash is trustworthy. The atomic
     write keeps a half-finished call from corrupting the file.
     """
     text = clean_markdown_output(body).rstrip("\n") + "\n"
-    digest = sources_digest(sources)
+    digest = sources_digest(sources, scope=scope)
     if text.startswith("---\n"):
         end = text.find("\n---", 4)
         if end != -1:
@@ -341,22 +343,27 @@ def phase_projects(dry: bool, full: bool):
             if _is_private(proj_dir):
                 continue
             notes = proj_dir / "notes.md"
-            if not notes.exists():
+            if not notes.exists() or _is_private(notes):
                 continue
+            sources = sorted(iter_sources([proj_dir]))
             dst = WIKI / "projects" / cat / f"{proj_dir.name}.md"
-            if not needs_rebuild(notes, dst, full):
+            # Version the dependency policy so old notes-only mirrors are also
+            # rebuilt when their other inputs are now excluded for privacy.
+            scope = "project-files-v1"
+            if not full and stored_digest(dst) == sources_digest(sources, scope=scope):
                 continue
             if dry:
                 print(f"[dry] mirror {notes.relative_to(VAULT)} → {dst.relative_to(VAULT)}")
                 n += 1
                 continue
-            # Aggregate all files in the project folder
+            # Read exactly the permitted files used by the freshness check.
             blob = ""
-            for p in sorted(proj_dir.rglob("*.md")):
-                try:
+            try:
+                for p in sources:
                     blob += f"\n--- {p.relative_to(proj_dir)} ---\n" + p.read_text()[:8000]
-                except Exception:
-                    pass
+            except (OSError, UnicodeError) as e:
+                print(f"[FAIL] project {proj_dir.name}: {e}", file=sys.stderr)
+                continue
             prompt = f"""Compile a status mirror for project '{proj_dir.name}' (category: {cat}).
 
 {CROSS_LINK_RULE}
@@ -387,7 +394,7 @@ status: seed
             if not out:
                 print(f"[FAIL] project {proj_dir.name}: not produced", file=sys.stderr)
                 continue
-            write_compiled(dst, out, [notes])
+            write_compiled(dst, out, sources, scope=scope)
             print(f"[ok] {dst.relative_to(VAULT)}")
             n += 1
     print(f"phase projects: {n} mirror(s)")

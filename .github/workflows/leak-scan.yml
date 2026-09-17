@@ -10,3 +10,5 @@ jobs:
           python-version: '3.x'
       - name: Scan the tree for owner references and secrets
         run: python3 tools/export_public.py --scan-only --out .
+      - name: Run offline regression tests
+        run: python3 -B -m unittest discover -s tools/tests -v

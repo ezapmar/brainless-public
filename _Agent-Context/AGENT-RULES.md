@@ -109,6 +109,8 @@ Scope: everything that originates in the CRM (Pipedrive today): the hourly snaps
 
 ## Thinking Loop (Telegram)
 
+- The daily `task_reminder.py` sends the bounded Today queue (one decision, one commitment, and one evidence item when available). `TODAY.md` is the local surface; `today_telegram.py` accepts only replies to the queue's own messages and revision-bound buttons. Answers are drafts until the owner explicitly applies them.
+
 - `.agents/scripts/thinking_loop.py --ask` runs Sundays 19:00 on the worker (`brainless-thinking.timer`, unit files in `.agents/systemd/`). It sends ONE question by priority: decision due to grade, decision without a prediction, next Thinking Cadence step, stalest belief, then a seed prompt if no idea was captured in 14 days.
 - The owner answers by replying to that message (voice or text). `telegram_capture.py` routes the reply to the loop, which drafts the note change and sends a preview. Only "apply" writes to `Thinking/`; "cancel" drops the draft; "skip" skips the question for the week (the words are per language in `tools/locale/<lang>/thinking_loop.json`).
 - Every applied answer is also filed to `.wiki/digests/queries/<date>-thinking-<kind>-<slug>.md` so the loopback compounds. The evening close-out and dashboard read the updated notes as usual.

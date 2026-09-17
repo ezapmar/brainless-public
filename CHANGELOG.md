@@ -3,6 +3,25 @@
 All notable changes to the public brainless engine. Dates are the day of the public
 push. The private vault this is exported from has its own history.
 
+## Unreleased
+
+- Add the Today queue: at most one decision, one commitment, and one evidence
+  review. Telegram supports preview, apply, edit, defer, and dismiss. Repeated
+  deferrals ask for a blocker or smaller step; seven-day completion counts and
+  source links appear in TODAY.md. The existing morning reminder sends the queue.
+- Record approved decision outcomes in calibration and recover interrupted Today
+  writes without duplicating entries. See `docs/today-queue.md`.
+- Preserve original documents and raw conversions after processing. Failed,
+  missing, or empty AI summaries now trigger retries; generated output is
+  validated before replacing an existing summary.
+- Apply project privacy checks to every descendant source file.
+- Rebuild project mirrors when any permitted source changes, is added, renamed,
+  or removed. Existing mirrors rebuild once under the new dependency policy.
+- Keep kill criteria out of dashboard actions and open loops. Prefer explicit
+  Next Action sections, now included in the project template.
+- Add offline regression tests for document retention, project privacy, dashboard
+  actions, and the Today queue; run them in public CI.
+
 ## 0.1.4 (2026-09-15)
 
 - Dialectic scorecard. Round one is isolated (one Buzz root per persona, so nobody

@@ -26,6 +26,10 @@ deadline_note:
 <!-- Update this weekly -->
 
 
+## Next Action
+<!-- One concrete action to move this project forward. -->
+- [ ]
+
 ## Kill Criteria
 <!-- Annie Duke's quit rule: decide NOW what would make you stop or re-scope, with a date.
      One line each, parsed by tools/kill_criteria.py:  - [ ] YYYY-MM-DD | condition | consequence
@@ -40,4 +44,3 @@ deadline_note:
 <!-- Append dated entries as you work -->
 ### {{date}}
 - 
-

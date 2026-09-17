@@ -46,8 +46,9 @@ def scan():
         meta = fm(text)
         status = meta.get("status", "").lower()
         rev = parse_date(meta.get("review", "")) or parse_date(meta.get("revisit", ""))
-        graded = "_Pending review._" not in text and "## Outcome" in text and \
-            not re.search(r"## Outcome.*?\n.*?_Pending review\._", text, re.S)
+        graded = bool(parse_date(meta.get("graded", ""))) or (
+            "_Pending review._" not in text and "## Outcome" in text and
+            not re.search(r"## Outcome.*?\n.*?_Pending review\._", text, re.S))
         has_pred = bool(meta.get("confidence")) or "**Prediction:**" in text and \
             not re.search(r"\*\*Prediction:\*\*\s*<!--", text)
 
