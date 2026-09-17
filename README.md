@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="docs/assets/brainless-logo.svg" alt="brainless logo" width="180">
+</p>
+
 # brainless
 
 **Watson for curious minds. A helper for decision makers.**

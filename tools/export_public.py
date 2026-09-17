@@ -246,6 +246,9 @@ def write_tree(out):
     return n
 
 
+BINARY_EXT = (".png", ".jpg", ".jpeg", ".gif", ".webp", ".ico")
+
+
 def leak_scan(out):
     findings = []
     for dirpath, dirnames, filenames in os.walk(out):
@@ -253,6 +256,10 @@ def leak_scan(out):
         for fn in filenames:
             p = os.path.join(dirpath, fn)
             r = os.path.relpath(p, out)
+            # Raster images are compressed bytes: a word scan of them only finds noise
+            # (a PNG matched the e-mail pattern). SVG is text and stays in the scan.
+            if fn.lower().endswith(BINARY_EXT):
+                continue
             try:
                 with open(p, errors="replace") as fh:
                     text = fh.read()
