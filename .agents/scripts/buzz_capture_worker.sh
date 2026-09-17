@@ -8,11 +8,11 @@ export MISE_QUIET=1
 VAULT="${BRAINLESS_VAULT:-$HOME/projects/brainless}"
 cd "$VAULT" || exit 1
 
-git pull --rebase --quiet || true
+git pull --rebase --autostash --quiet || true
 python3 .agents/scripts/buzz_capture.py
 
 git add "Thinking" "Inbox" 2>/dev/null
 if ! git diff --cached --quiet; then
   git commit --quiet -m "buzz capture: $(date +%F-%H%M) ($WORKER)"
-  git pull --rebase --quiet && git push --quiet
+  git pull --rebase --autostash --quiet && git push --quiet
 fi

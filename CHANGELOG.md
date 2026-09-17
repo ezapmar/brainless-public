@@ -3,7 +3,7 @@
 All notable changes to the public brainless engine. Dates are the day of the public
 push. The private vault this is exported from has its own history.
 
-## Unreleased
+## 0.1.5 (2026-09-18)
 
 - Add the Today queue: at most one decision, one commitment, and one evidence
   review. Telegram supports preview, apply, edit, defer, and dismiss. Repeated
@@ -21,6 +21,16 @@ push. The private vault this is exported from has its own history.
   Next Action sections, now included in the project template.
 - Add offline regression tests for document retention, project privacy, dashboard
   actions, and the Today queue; run them in public CI.
+- Rewrite the README around one loop and add `docs/capture-flow.md` on the
+  capture flow and the Obsidian network.
+- Keep private finance tooling out of the export. `tools/export_public.py` now
+  excludes the finance folder, because a fixture of real figures passes any word
+  scan. Deployment-specific agent rules move to a private companion file that
+  `_Agent-Context/AGENT-RULES.md` points to and the export never lists.
+- Workers pull with `--autostash`, the cron wrapper commits its regenerated
+  context blocks locally so the tree does not sit dirty, and the content engine
+  reads the editing rules alongside the production guide.
+- `VERSION` catches up: 0.1.4 shipped with the file still reading 0.1.3.
 
 ## 0.1.4 (2026-09-15)
 

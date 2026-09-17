@@ -55,6 +55,10 @@ EXCLUDE = [
     "tools/__pycache__",
     "tools/tasks-sync",
     "tools/logs",
+    # Private finance oversight tooling. Its self-test embeds real figures from a
+    # monthly pack, which no word scan can catch; AGENT-RULES says nothing
+    # finance-derived reaches the public repo, so the folder never ships.
+    "tools/finance",
     ".agents/scripts/__pycache__",
     ".agents/scripts/omarchy_job.sh",
     ".agents/scripts/omarchy_backup.sh",

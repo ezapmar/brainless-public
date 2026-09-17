@@ -9,11 +9,11 @@ export MISE_QUIET=1  # mise's info lines mix into claude stdout and leak into th
 VAULT="${BRAINLESS_VAULT:-$HOME/projects/brainless}"
 cd "$VAULT" || exit 1
 
-git pull --rebase --quiet || true
+git pull --rebase --autostash --quiet || true
 python3 .agents/scripts/telegram_capture.py
 
 git add "Thinking" "Inbox" ".wiki/digests/queries" 2>/dev/null  # the thinking loop writes under Thinking/
 if ! git diff --cached --quiet; then
   git commit --quiet -m "telegram capture: $(date +%F-%H%M) ($WORKER)"
-  git pull --rebase --quiet && git push --quiet
+  git pull --rebase --autostash --quiet && git push --quiet
 fi
