@@ -1,0 +1,94 @@
+# Today queue
+
+Today selects at most three items, with no model calls during selection:
+
+1. A pending decision due within 14 days, a deferred decision whose review date
+   has arrived, or a decided note with an overdue, ungraded outcome.
+2. The oldest unfinished commitment in the ledger's Promises or Waiting section,
+   captured at least two days ago. Undated commitments remain eligible.
+3. A source from the current resurfacing list (less than seven days old), falling
+   back to a belief note when there is no eligible resurfaced source.
+
+Private and missing sources are excluded. Each item includes its source path;
+the local note uses Obsidian links. Empty categories stay empty. Completing an
+item does not refill its slot that day.
+
+## Local use
+
+```bash
+brainless today                 # read-only preview
+brainless today --build         # save _Agent-Context/TODAY.md and queue state
+brainless today --send          # deliver to the configured Telegram chat
+```
+
+For scripted or local interaction, use the item ID printed in the note:
+
+```bash
+brainless today --action ITEM_ID answer --text "Run a two-week pilot."
+brainless today --action ITEM_ID apply
+brainless today --action ITEM_ID defer --text YYYY-MM-DD
+brainless today --action ITEM_ID dismiss --text "No longer relevant."
+```
+
+The date supplied to `defer` must be in the future. IDs above are placeholders;
+the command prints the actual IDs. `edit` discards a preview and accepts a new
+answer. For a commitment, the new answer becomes a proposed task title.
+
+## Telegram
+
+The existing `.agents/scripts/task_reminder.py` entry point now sends Today
+instead of the old stale-task list. Existing daily reminder schedules need no
+new timer once their checkout has been updated. Installations without a reminder
+schedule can use the local commands or schedule that entry point themselves.
+
+The existing Telegram capture poller handles `/today`, replies to Today messages,
+and inline buttons. Credentials stay in `~/.config/brainless/telegram_token` and
+`telegram_chat_id`. The poller enforces its existing chat whitelist before routing
+messages or buttons. Today does not claim unaddressed `apply` messages that might
+belong to the weekly thinking loop.
+
+- **Apply:** a commitment is marked complete. A decision or evidence response
+  requires a preview first. Applying a task-title edit leaves the task open.
+- **Edit:** reply with revised wording, then inspect and apply the new preview.
+- **Defer:** reply with a future `YYYY-MM-DD` date.
+- **Dismiss:** reply with a reason; the source remains unchanged. The item stays
+  suppressed until its source changes.
+
+Voice replies use the existing transcription path. Answers are recorded as the
+owner supplied them, without an LLM rewriting or expanding them.
+
+After two deferrals, the prompt asks for a blocker or smaller next step. Applying
+that answer records the blocker and pauses the item for seven days; it does not
+mark the original decision or commitment complete.
+
+## Recorded changes
+
+A decision answer appends a dated Decision section and sets `status: decided`.
+An outcome answer appends a dated Outcome section, sets `graded`, and updates the
+matching Calibration table row when one exists. Evidence reviews and blockers
+are recorded in `.wiki/digests/queries/`, without modifying their source notes.
+Every applied action has a receipt there. Seven-day counts appear in TODAY.md.
+
+Queue state, delivery IDs, deferrals, draft revisions, and a recovery journal live
+in the gitignored `.agents/state/today_queue.json`. Run the Telegram sender and
+poller against the same vault on one machine: this state is intentionally local.
+Back up that state with the worker if you need to preserve dismissal history.
+
+Buttons are tied to draft revisions. Changed sources and ambiguous duplicate task
+rows cannot be overwritten by an old preview. Approved writes can resume after a
+process interruption. A stale source requires review at the source or the next
+day's rebuilt queue.
+
+Successful sends are remembered individually, so ordinary reruns and partial
+batch retries send only outstanding items. As with the existing bot, a network
+timeout after Telegram accepted a message but before it returned the message ID
+can still produce a duplicate on retry.
+
+## Verification
+
+```bash
+python3 -B -m unittest discover -s tools/tests -v
+```
+
+Tests use a fictional vault and mocked Telegram responses. No credentials,
+messages to real chats, or model calls are needed.

@@ -291,6 +291,16 @@ def handle_message(token, msg, chat_id=None):
         except Exception:
             pass
 
+    # Today replies must never fall through to an unrelated weekly approval or capture.
+    try:
+        from today_telegram import handle as handle_today
+        if handle_today(token, msg, chat_id, api, transcribe):
+            return None
+    except Exception as e:
+        log(f"today queue error: {type(e).__name__}")
+        notify(t("today_queue.unavailable"))
+        return None
+
     # Thinking loop (thinking_loop.py): if a weekly question is pending and this
     # message is an answer to it or an apply/cancel/skip word, it is handled first
     # and does not enter the ordinary capture flow. On error the message continues
@@ -376,7 +386,8 @@ def main():
     updates = None
     for attempt in range(3):
         try:
-            updates = api(token, "getUpdates", {"offset": offset + 1, "timeout": 0})
+            updates = api(token, "getUpdates", {"offset": offset + 1, "timeout": 0,
+                          "allowed_updates": json.dumps(["message", "callback_query"])})
             break
         except Exception as e:
             if attempt == 2:
@@ -398,6 +409,11 @@ def main():
     for upd in updates.get("result", []):
         offset = max(offset, upd["update_id"])
         msg = upd.get("message") or {}
+        callback = upd.get("callback_query") or {}
+        if str(callback.get("data", "")).startswith("today:"):
+            msg = dict(callback.get("message") or {})
+            msg.pop("text", None)
+            msg["_today_callback"] = callback
         chat_id = str(msg.get("chat", {}).get("id", ""))
         if not chat_id:
             # edited_message, channel_post etc: no "message". The offset advanced

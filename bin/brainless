@@ -25,6 +25,7 @@ case "$cmd" in
   digest)     exec "$PY" tools/nightly_processor.py "$@" ;;
   closeout)   exec "$PY" tools/evening_closeout.py "$@" ;;
   dashboard)  exec "$PY" tools/build_dashboard.py "$@" ;;
+  today)      exec "$PY" tools/today_queue.py "$@" ;;
   file)       exec "$PY" tools/file_query.py "$@" ;;
   export)     exec "$PY" tools/export_public.py "$@" ;;
   update)     git pull --rebase --autostash && "$PY" -m pip install --quiet -r requirements-core.txt && echo "updated" ;;
@@ -44,6 +45,7 @@ brainless <command> [args]
   digest                                               nightly digest of Thinking/Daily (archives captures)
   closeout [--dry-run]                                 evening close-out appended to today's briefing
   dashboard                                            rebuild the projects dashboard
+  today [--build|--send]                               preview, save, or send the three-item Today queue
   file <command> "<title>" < note.md                   file a result into .wiki/digests/queries/
   export --out <dir> [--update]                        produce the public engine tree from this vault
   update                                               git pull and refresh dependencies

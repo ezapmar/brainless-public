@@ -5,6 +5,7 @@ import time
 import shutil
 import sys
 import json
+import tempfile
 
 # Configuration
 BRAINLESS_ROOT = os.environ.get("BRAINLESS_VAULT") or os.path.expanduser("~/projects/brainless")
@@ -73,7 +74,7 @@ def is_backed_off(filepath, quarantine, now):
     elapsed = now - rec.get("last_attempt", 0)
     return elapsed < backoff_for(rec.get("attempts", 0))
 
-# High-value knowledge resources get full AI treatment (Summary + Fiche + original cleanup).
+# High-value knowledge resources get Summary + Fiche; originals stay recoverable.
 # General documents anywhere in the human homes will at least get converted to .md automatically.
 HIGH_VALUE_DIRS = [
     os.path.join(BRAINLESS_ROOT, "Library/Books"),
@@ -155,6 +156,16 @@ def run_claude(prompt):
         print(f"Claude error: {e}")
         return False
 
+def current_markdown(path, source):
+    try:
+        if os.path.getmtime(path) < os.path.getmtime(source):
+            return False
+        with open(path, encoding="utf-8") as fh:
+            return bool(fh.read().strip())
+    except (OSError, UnicodeError):
+        return False
+
+
 def process_file(filepath):
     """Process one file. Returns one of: 'skipped', 'converted', 'failed'."""
     ext = os.path.splitext(filepath)[1].lower()
@@ -172,29 +183,23 @@ def process_file(filepath):
 
     is_high_value = any(filepath.startswith(d) for d in HIGH_VALUE_DIRS)
 
-    # Idempotency: skip files already converted and up to date.
-    # High-value originals are deleted after success, so reaching this point with
-    # the original still present means work remains. General docs keep their
-    # original, so compare mtimes to detect an already-current conversion.
-    if not is_high_value and os.path.exists(raw_md):
-        try:
-            if os.path.getmtime(raw_md) >= os.path.getmtime(filepath):
-                return "skipped"
-        except OSError:
-            pass
+    raw_current = current_markdown(raw_md, filepath)
+    if raw_current and (not is_high_value or all(
+        current_markdown(p, raw_md) for p in (summary_md, fiche_md)
+    )):
+        return "skipped"
 
     # 1. Markitdown (updated library). Only (re)convert if the raw md is missing
     # or stale, and create the work_dir only once we are about to write output,
     # so failed conversions don't litter the vault with empty folders.
-    need_convert = (not os.path.exists(raw_md)) or (
-        os.path.exists(filepath)
-        and os.path.getmtime(raw_md) < os.path.getmtime(filepath)
-    )
+    need_convert = not raw_current
     if need_convert:
         print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] Converting {filename}...")
         try:
             os.makedirs(work_dir, exist_ok=True)
             convert_to_file(filepath, raw_md)
+            if not current_markdown(raw_md, filepath):
+                raise ValueError("conversion produced empty or stale Markdown")
         except Exception as e:
             print(f"Failed to convert {filename}: {e}")
             # Remove an empty work_dir we may have just created.
@@ -205,28 +210,23 @@ def process_file(filepath):
             return "failed"
 
     if is_high_value:
-        # 2. Summary (only for high-value knowledge resources)
-        if not os.path.exists(summary_md):
-            print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] Generating Summary for {filename}...")
-            run_claude(SUMMARY_PROMPT.format(filepath=raw_md, out_path=summary_md,
-                                             lang_directive=output_lang_directive()))
-
-        # 3. Fiche de Lecture
-        if not os.path.exists(fiche_md):
-            print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] Generating Fiche de Lecture for {filename}...")
-            run_claude(FICHE_PROMPT.format(filepath=raw_md, out_path=fiche_md,
-                                           lang_directive=output_lang_directive()))
-
-        # 4. Cleanup originals (only for high-value to keep the vault lean)
-        print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] Cleaning up originals for {filename}...")
-        if os.path.exists(raw_md):
-            os.remove(raw_md)
-
-        try:
-            subprocess.run(["git", "rm", filepath], cwd=BRAINLESS_ROOT, check=True, stderr=subprocess.DEVNULL)
-        except:
-            if os.path.exists(filepath):
-                os.remove(filepath)
+        for output, template in ((summary_md, SUMMARY_PROMPT), (fiche_md, FICHE_PROMPT)):
+            if current_markdown(output, raw_md):
+                continue
+            # Publish only validated output; a failed call cannot leave a partial
+            # file that the next attempt mistakes for a completed summary.
+            try:
+                with tempfile.TemporaryDirectory(prefix=".brainless-", dir=work_dir) as tmp:
+                    staged = os.path.join(tmp, os.path.basename(output))
+                    ok = run_claude(template.format(filepath=raw_md, out_path=staged,
+                                                   lang_directive=output_lang_directive()))
+                    if not ok or not current_markdown(staged, raw_md):
+                        print(f"Failed to generate {os.path.basename(output)} for {filename}")
+                        return "failed"
+                    os.replace(staged, output)
+            except OSError as e:
+                print(f"Failed to save summary for {filename}: {e}")
+                return "failed"
     else:
         # For general documents: keep the original + raw conversion result.
         # The .md is now available next to the file in a subfolder.
@@ -520,7 +520,7 @@ def main():
     if converted:
         # Git Commit, only when real work happened.
         subprocess.run(["git", "add", "."], cwd=BRAINLESS_ROOT)
-        subprocess.run(["git", "commit", "-m", "Auto-process: Summaries and Fiches generated, originals removed"], cwd=BRAINLESS_ROOT)
+        subprocess.run(["git", "commit", "-m", "Auto-process: Convert documents and generate summaries"], cwd=BRAINLESS_ROOT)
         print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] Batch complete: {converted} converted, "
               f"{len(failures)} failed, {backed_off} backed off. Committed.")
     else:

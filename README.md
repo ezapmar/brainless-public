@@ -151,6 +151,12 @@ work with any agent that can read files.
 
 A project is any folder under `Work/` or `Personal/` with a `notes.md`.
 
+Document processing preserves originals and raw Markdown conversions. High-value
+resources also receive a Summary and Fiche de Lecture; missing or empty outputs
+are retried. Project mirrors track changes across all permitted source files and
+exclude private descendants. Use `## Next Action` in a project note for its next
+concrete step; `## Kill Criteria` stays separate on the dashboard.
+
 **The loop.** Capture lands in `Thinking/Daily/`. At 12:30 and 21:20 the dialectic
 takes what is new, clusters it into topics and runs the rounds. At 21:00 an evening
 close-out proposes one seed idea, one decision worth writing down and one contradiction
@@ -205,6 +211,20 @@ None of these are needed for the loop above.
 Each needs its own credentials in `~/.config/brainless/`.
 
 ---
+
+## Development
+
+The [Today queue](docs/today-queue.md) offers up to three actions through
+`brainless today` and Telegram: a decision, a commitment, and an evidence review.
+Each item has a source link. Answers are previews until you apply them; you can
+defer an item to a date or dismiss it with a reason. The existing morning worker
+sends the queue, so there is no new timer to install.
+
+Run the offline regression tests without credentials or model calls:
+
+```bash
+python3 -B -m unittest discover -s tools/tests -v
+```
 
 ## Privacy
 
