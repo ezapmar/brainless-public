@@ -1,0 +1,11 @@
+description = "Turn the wiki's unresolved-link demand into a ranked \"notes to write\" queue"
+
+prompt = """
+Follow the guardrails in this file first:
+@{.wiki/_commands/_shared-rules.md}
+
+Then execute this command definition exactly:
+@{.wiki/_commands/backlog.md}
+
+Arguments: {{args}}
+"""

@@ -1,0 +1,11 @@
+description = "Grade matured decisions in one line so judgment compounds"
+
+prompt = """
+Follow the guardrails in this file first:
+@{.wiki/_commands/_shared-rules.md}
+
+Then execute this command definition exactly:
+@{.wiki/_commands/calibrate.md}
+
+Arguments: {{args}}
+"""
