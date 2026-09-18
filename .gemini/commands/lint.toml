@@ -1,0 +1,11 @@
+description = "Run wiki integrity checks (orphans, broken links, stale summaries, frontmatter)."
+
+prompt = """
+Follow the guardrails in this file first:
+@{.wiki/_commands/_shared-rules.md}
+
+Then execute this command definition exactly:
+@{.wiki/_commands/lint.md}
+
+Arguments: {{args}}
+"""

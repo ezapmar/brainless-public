@@ -267,12 +267,31 @@ bash ~/brainless/install.sh --vault ~/brainless --schedule
 ## The first ten minutes
 
 ```bash
-brainless help                                   # every command
 brainless compile --dry-run                      # what would be compiled
 brainless compile                                # build .wiki/
 brainless search "the thing you keep thinking about"
 brainless dialectic "We should hire before we have the revenue"
 brainless calibrate                              # decisions due for grading
+```
+
+That is the start. The whole shell command, from `brainless help`:
+
+```text
+compile    build .wiki/ from your notes (--dry-run, --full-rebuild, --only <phase>)
+search     search the compiled wiki
+dialectic  five personas argue a thesis; --scorecard prints the rolling 30 day scorecard
+lint       wiki integrity checks and repairs (--fix, --fix-links)
+calibrate  decisions due for grading, decisions missing a prediction
+today      preview, save (--build) or send (--send) the three-item Today queue
+closeout   evening close-out: one seed, one decision, one contradiction
+digest     nightly digest of Thinking/Daily, archives the raw captures
+dashboard  rebuild the projects view from every notes.md
+health     refresh and print _Agent-Context/HEALTH.md
+file       file a result into .wiki/digests/queries/ so the wiki compounds
+export     produce the public engine tree from a private vault
+update     git pull and refresh dependencies
+vault      print the vault path
+version    print the engine version
 ```
 
 The personas are only as good as what they have to argue with, so give them something.
@@ -281,10 +300,16 @@ believe about your work. Copy `Decision.md` into `Thinking/Decisions/` for the l
 decision you made, with a prediction and a date. One belief and one decision are enough
 to start a fight.
 
-Inside Claude Code or Gemini CLI, from the vault root, the same commands exist as slash
-commands: `/decide`, `/contradict`, `/dialectic`, `/ideas`, `/weekly`, `/trace`,
-`/connect`, `/graduate`, `/context`. Their definitions live in `.wiki/_commands/` and
-work with any agent that can read files. What each one asks, and the thinking error it is
+Inside Claude Code or Gemini CLI, from the vault root, the thinking tools are slash
+commands. Fifteen of them, in three groups:
+
+- **Deciding:** `/decide`, `/dialectic`, `/contradict`, `/calibrate`
+- **Thinking:** `/ideas`, `/pollinate`, `/trace`, `/connect`, `/weekly`, `/context`
+- **Tending the vault:** `/graduate`, `/backlog`, `/sync`, `/lint`, `/recompile`
+
+Their definitions live in `.wiki/_commands/`, one Markdown prompt each, and the
+`.claude/commands/` and `.gemini/commands/` wrappers only point back there, so they work
+with any agent that can read files. What each one asks, and the thinking error it is
 built against: [docs/commands.md](docs/commands.md).
 
 ---

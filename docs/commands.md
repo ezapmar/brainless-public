@@ -1,8 +1,12 @@
 # The commands
 
-Every slash command is a Markdown prompt in `.wiki/_commands/`. Claude Code and Gemini
-CLI wrappers point back there, so editing one file changes both agents. From the vault
-root, `/decide` in an agent and `brainless decide` in a shell run the same prompt.
+brainless has two kinds of command. The **slash commands** are the thinking tools: fifteen
+Markdown prompts in `.wiki/_commands/`, run by an agent (Claude Code or Gemini CLI) from
+the vault root. The wrappers in `.claude/commands/` and `.gemini/commands/` only point back
+to those files, so editing one prompt changes both agents. The **shell commands** are the
+plumbing: `brainless <command>` dispatches to a Python tool, no model in the loop unless
+the tool itself calls one. Two of them, `dialectic` and `calibrate`, exist in both forms
+and run the same logic.
 
 Three rules apply to all of them, from `.wiki/_commands/_shared-rules.md`:
 
@@ -43,6 +47,28 @@ Three rules apply to all of them, from `.wiki/_commands/_shared-rules.md`:
 | `/sync` | Reads the last seven digests and proposes log entries for the project notes they mention |
 | `/lint` | Broken links, orphans, stale summaries, missing frontmatter; the top three actions |
 | `/recompile <path>` | Forces one source through the compiler again |
+
+## Shell commands
+
+`brainless help` prints this list. Each line is one Python tool in `tools/`.
+
+| Command | What it does |
+|---|---|
+| `compile [--dry-run\|--full-rebuild\|--only <phase>]` | Build `.wiki/` from your notes: summaries, articles, project mirrors, index |
+| `search "<query>" [--k N] [--json]` | Search the compiled wiki |
+| `dialectic "<thesis>" [--run noon\|evening] [--buzz]` | Five personas argue it, locally by default; `--scorecard` prints the rolling 30 day scorecard |
+| `lint [--fix] [--fix-links] [--dry-run]` | Wiki integrity checks and repairs |
+| `calibrate` | Decisions due for grading, decisions missing a prediction or a review date |
+| `today [--build\|--send]` | Preview, save or send the three-item Today queue; `--action <id> ...` answers an item |
+| `closeout [--dry-run]` | Evening close-out: proposes one seed, one decision, one contradiction |
+| `digest` | Nightly digest of `Thinking/Daily/`, archives the raw captures, compiles, lints |
+| `dashboard` | Rebuild the projects view from every `notes.md` |
+| `health` | Refresh and print `_Agent-Context/HEALTH.md` |
+| `file <command> "<title>" < note.md` | File a result into `.wiki/digests/queries/` so the wiki compounds |
+| `export --out <dir> [--update]` | Produce the public engine tree from a private vault, then leak-scan it |
+| `update` | `git pull` and refresh dependencies |
+| `vault` | Print the vault path |
+| `version` | Print the engine version |
 
 ## The forms behind them
 
