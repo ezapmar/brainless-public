@@ -145,6 +145,17 @@ step, you are ahead of most people I know. Including me, for most of this year.
 Every analysis, graded or not, is filed back into `.wiki/digests/queries/`. That is
 where the loop closes, because tomorrow's question gets to build on today's answer.
 
+### Where the clarity comes from
+
+Nothing above makes you smarter. It changes what you have to write down before you may
+move on, and the order you see things in. Criteria before options, so a favourite
+cannot write its own test. A base rate before a confidence, so the number is a number.
+Five readings taken blind, so the first voice does not set the room. One dated action
+at the end, so a decision cannot pass as an opinion. A red line when all five agree.
+Each mechanism, with the file it lives in, is in
+[docs/thinking-clearer.md](docs/thinking-clearer.md); every command, with what it asks
+and what it guards against, is in [docs/commands.md](docs/commands.md).
+
 ---
 
 ## Keep it yours
@@ -273,7 +284,8 @@ to start a fight.
 Inside Claude Code or Gemini CLI, from the vault root, the same commands exist as slash
 commands: `/decide`, `/contradict`, `/dialectic`, `/ideas`, `/weekly`, `/trace`,
 `/connect`, `/graduate`, `/context`. Their definitions live in `.wiki/_commands/` and
-work with any agent that can read files.
+work with any agent that can read files. What each one asks, and the thinking error it is
+built against: [docs/commands.md](docs/commands.md).
 
 ---
 
