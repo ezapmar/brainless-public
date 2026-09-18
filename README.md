@@ -4,45 +4,82 @@
 
 # brainless
 
-**Watson for curious minds. A helper for decision makers.**
+**Notes arrive from everywhere, collect in one place, link themselves to each other, and
+come back to you when they are relevant. Then they argue with you.**
 
-Sherlock had the method. Watson wrote it down, asked the obvious question, and kept the
-files. This is the Watson. You keep the method.
+It runs on your own machine. A folder of Markdown files, a handful of Python scripts and
+whichever model you point them at. No server, no account, nothing to sign up for. Your
+notes stay in your folder, on your disk, in a format you could still read with `cat` in
+twenty years. Nothing leaves the machine except the model calls you choose to make, and
+if you point it at a local model, not even those.
 
 ---
 
-## Where this came from
+## The problem
 
-On the evening of 8 September 2026 I sent myself two voice notes from the car. The first
-said the notes I take all day should argue with each other at night. The second said
-this thing should be installable by someone who is not me.
+My notes were scattered across six places. Voice notes to myself in the car. Screenshots
+on the phone. Meeting transcripts in e-mail. Articles I meant to return to. Half a
+thought typed into a chat window at midnight. Each one was written down somewhere and
+then effectively gone, because "I wrote that down" and "I can find it again" are not the
+same sentence. I lost weeks to hunting for things I already knew.
 
-I run a company. Kolay İK is an HR platform out of Istanbul, with 2,600 companies and
-300,000 employees on it. My days are decisions, most of them made on a phone between two
-meetings, and most of them never revisited. I had a vault of notes. I had beliefs
-written down. I had decision notes with a "review date" field that nobody ever reviewed,
-least of all me.
+The second problem was worse. I run a company, so my days are decisions, most of them
+made on a phone between two meetings and never looked at again. That is how you get to be
+wrong the same way twice without noticing. A pile of notes does not fix it.
 
-The notes were a warehouse. What I wanted was a colleague.
+## What it does
 
-So I put five books on a shelf (Browne and Keeley, Annie Duke, Camuffo and Gambardella,
-Amy Edmondson, Lafley and Martin) and turned each one into a voice that reads my day and
-pushes back. The first round ran on 9 September at 12:30. Five voices, ten replies, one
-synthesis, one bet. It found that my argument against a partner's equity ask was aimed
-at the wrong object. I would have walked into that meeting confidently wrong, which is
-the expensive way to be wrong.
+1. **Everything comes in through one door.** A voice note, a photo of a handwritten page,
+   a link, a PDF, a meeting transcript, a line typed on the phone. It all becomes a
+   Markdown note in the same folder. Nothing is tagged, filed or judged on the way in.
+2. **A compiler reads it so I do not have to.** Every note is summarised, clustered with
+   its relatives and linked. That layer is regenerated from scratch whenever it likes, so
+   nobody has to spend a Sunday curating a knowledge graph.
+3. **The connections get made for me.** A note from last year turns up beside the thing I
+   am looking at today because they share a subject, not because I remembered to link
+   them.
+4. **It comes back when it is relevant.** A morning queue of at most three items. A search
+   that answers "what do I already know about this". A brief before a meeting. A digest
+   overnight.
+5. **Then it argues.** Five personas, each built out of a book on thinking, test what I
+   have just decided and post the disagreement to a channel I read on my phone. Decisions
+   carry a prediction and a review date, and the system nags me until I write down what
+   actually happened.
 
-That is the whole product. Everything else is plumbing, and the rest of this page is
-mostly about the plumbing.
+## How I use it on an ordinary day
+
+- **All day, with no effort.** I send things to a Telegram bot: a voice note in the car, a
+  photo of a whiteboard, a link. Transcription runs locally. That is the whole capture
+  ritual. No folders, no tags, no inbox to process later.
+- **Before anything hard.** `brainless search`, or a slash command inside Claude Code, to
+  ask what I have already written about a subject, including the parts I had forgotten
+  writing. Before a real decision, `brainless dialectic "<the thesis>"`, then read what
+  comes back.
+- **Morning.** The night is already compiled. At most three things are waiting: a decision
+  due for grading, a commitment, one piece of evidence to review.
+- **Overnight, without me.** An always-on machine digests the day, rebuilds the compiled
+  layer, and runs the five voices at 12:30 and 21:20.
+
+## What it changed
+
+I stopped carrying it all in my head, which is the point of the name.
+
+The part I did not expect is the connecting. I do not make the links any more, and the
+links are better for it, because the system has no favourites and never conveniently
+forgets the note that undermines the plan I am attached to.
+
+The part that pays for the whole thing: the first run, on 9 September 2026, found that my
+argument against a partner's equity ask was aimed at the wrong object. I would have walked
+into that meeting confidently wrong, which is the expensive way to be wrong.
 
 ---
 
 ## The loop
 
-brainless is one loop, and each part is there because the one before it is useless
-alone. Notes that nobody reads are a warehouse. Summaries that nobody argues with are a
-tidier warehouse. And an argument that nobody grades is entertainment, which Galatasaray
-already provides.
+The same five things again, now with the mechanics and the file names. brainless is one
+loop, and each part is there because the one before it is useless alone. Notes that
+nobody reads are a warehouse. Summaries that nobody argues with are a tidier warehouse.
+And an argument that nobody grades is entertainment, which Galatasaray already provides.
 
 ```mermaid
 flowchart LR
@@ -160,6 +197,10 @@ and what it guards against, is in [docs/commands.md](docs/commands.md).
 
 ## Keep it yours
 
+All of it runs on your own hardware: the scripts, the schedulers, the vault, the search
+index. The only thing that ever leaves the machine is a prompt to whichever model you
+configured, and pointing it at Ollama or LM Studio keeps even that at home.
+
 A loop that runs unattended against a folder holding your life needs one rule above all
 the others, which is that nothing writes into your notes without you. Every command
 proposes and you paste. Private folders never reach the compiled layer. The engine and
@@ -211,6 +252,25 @@ Privacy follows from the same separation.
   or a name. If you fork this for your own vault, use the same script.
 
 ---
+
+## Where this came from
+
+Sherlock had the method. Watson wrote it down, asked the obvious question, and kept the
+files. This is the Watson. You keep the method.
+
+On the evening of 8 September 2026 I sent myself two voice notes from the car. The first
+said the notes I take all day should argue with each other at night. The second said this
+thing should be installable by someone who is not me.
+
+I had the vault already. Kolay İK, the HR platform I run out of Istanbul, has 2,600
+companies and 300,000 employees on it, and every one of those days left notes behind. I
+had beliefs written down. I had decision notes with a "review date" field that nobody ever
+reviewed, least of all me. So I put five books on a shelf (Browne and Keeley, Annie Duke,
+Camuffo and Gambardella, Amy Edmondson, Lafley and Martin) and turned each one into a voice
+that reads my day and pushes back. The first round ran the next day at 12:30. Five voices,
+ten replies, one synthesis, one bet.
+
+The notes were a warehouse. What I wanted was a colleague.
 
 ## Who this is for
 
@@ -533,7 +593,9 @@ starts to cost you.
 ## Honest limits
 
 - The default path assumes a Claude subscription. The OpenAI-compatible path works but
-  I have tested it less.
+  I have tested it less, and one piece does not cross over: reading handwriting and
+  whiteboard photos uses the Claude CLI's own file-reading tool, so on another backend
+  image capture is the part that will not work yet. Text, voice and documents are fine.
 - `output_lang` in `PROFILE.md` sets the language of every LLM output. Fixed labels and
   bot replies ship in English and Turkish (`tools/locale/`); another language is a new
   locale directory.

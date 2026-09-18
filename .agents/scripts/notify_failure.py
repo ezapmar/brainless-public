@@ -85,7 +85,13 @@ def main():
     if log:
         msg += f"\n{t('notify_failure.log_label')}\n{log}"
     ok = send_telegram(msg)
-    return 0 if ok else 1
+    if not ok:
+        # A transient send failure (network down, Telegram unreachable) must not
+        # leave this oneshot unit in `failed` state: the watchdog would then
+        # report the notifier itself as a broken unit forever, an alert loop that
+        # only a manual `systemctl --user reset-failed` clears. Log and exit 0.
+        print(f"notify_failure: could not send alert for {unit}", file=sys.stderr)
+    return 0
 
 
 if __name__ == "__main__":
@@ -93,4 +99,4 @@ if __name__ == "__main__":
         raise SystemExit(main())
     except Exception as exc:  # never cascade a failure out of the notifier
         print(f"notify_failure error: {exc}", file=sys.stderr)
-        raise SystemExit(1)
+        raise SystemExit(0)
