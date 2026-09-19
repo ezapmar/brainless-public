@@ -56,7 +56,7 @@ Three rules apply to all of them, from `.wiki/_commands/_shared-rules.md`:
 |---|---|
 | `compile [--dry-run\|--full-rebuild\|--only <phase>]` | Build `.wiki/` from your notes: summaries, articles, project mirrors, index |
 | `search "<query>" [--k N] [--json]` | Search the compiled wiki |
-| `dialectic "<thesis>" [--run noon\|evening] [--buzz]` | Six personas argue it, locally by default; `--scorecard` prints the rolling 30 day scorecard |
+| `dialectic "<thesis>" [--run noon\|evening\|night] [--buzz] [--parallel]` | Six personas argue it. Local by default, `--buzz` sends it through the live agents on the relay; one persona at a time by default, `--parallel` mentions all six at once; `--scorecard` prints the rolling 30 day scorecard |
 | `lint [--fix] [--fix-links] [--dry-run]` | Wiki integrity checks and repairs |
 | `calibrate` | Decisions due for grading, decisions missing a prediction or a review date |
 | `today [--build\|--send]` | Preview, save or send the three-item Today queue; `--action <id> ...` answers an item |
