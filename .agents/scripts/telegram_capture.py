@@ -34,7 +34,7 @@ from datetime import datetime
 VAULT = os.environ.get("BRAINLESS_VAULT") or os.path.expanduser("~/projects/brainless")
 sys.path.insert(0, os.path.join(VAULT, "tools"))
 from llm import run_prompt
-from owner_profile import OWNER, OWNER_FULL, WORKER, LANG, possessive, output_lang_directive  # noqa: E402
+from owner_profile import OWNER, LANG, possessive, output_lang_directive  # noqa: E402
 from transcript_filter import is_empty_transcript  # noqa: E402
 from i18n import t  # noqa: E402
 
@@ -168,7 +168,7 @@ RULES:
 
 # PAGE ({url}):
 {page_text[:12000]}"""
-    return run_prompt(prompt, timeout=180)
+    return run_prompt(prompt, timeout=180, lane="capture-link")
 
 
 def handle_link(raw_text, url_match):
@@ -234,7 +234,7 @@ RULES:
 {context}
 
 # IMAGE: {image_path} ({date_str})"""
-    return run_prompt(prompt, timeout=240, allowed_tools=["Read"])
+    return run_prompt(prompt, timeout=240, allowed_tools=["Read"], lane="capture-photo")
 
 
 def make_note(raw_text, source):
@@ -258,7 +258,7 @@ RULES:
 
 # RAW TEXT ({source}, {date_str}):
 {raw_text}"""
-    return run_prompt(prompt, timeout=180)
+    return run_prompt(prompt, timeout=180, lane="capture-note")
 
 
 # Telegram types that can carry audio. 2026-09-03: only "voice" was handled.

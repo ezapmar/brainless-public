@@ -1,5 +1,5 @@
 ---
-description: Argue a topic with the five critical-thinking personas, then synthesize
+description: Argue a topic with the six critical-thinking personas, then synthesize
 argument-hint: [topic | note name | empty = today's captures]
 ---
 

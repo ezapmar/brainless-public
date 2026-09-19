@@ -1,4 +1,6 @@
 {
   "tasks_section": "## Promises",
-  "ledger_template": "# Task Ledger\n\n## Promises\n\n## Waiting\n"
+  "ledger_template": "# Task Ledger\n\n## Promises\n\n## Waiting\n",
+  "weight_heading": "Weight (epic / story / task)",
+  "weight_epic_note": "> An epic was captured today. weekly_research.py will pick it up on Sunday."
 }

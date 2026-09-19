@@ -1,0 +1,8 @@
+[Unit]
+Description=brainless Buzz inbox capture worker
+OnFailure=brainless-notify-failure@%n.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=%h/projects/brainless
+ExecStart=/usr/bin/flock -w 300 %h/.brainless-git.lock %h/projects/brainless/.agents/scripts/buzz_capture_worker.sh

@@ -21,6 +21,7 @@ from pathlib import Path
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from owner_profile import LANG  # noqa: E402
+from lang_detect import detect  # noqa: E402
 
 # Portable: env override, else the repo that contains this script.
 VAULT = Path(os.environ.get("BRAINLESS_VAULT") or Path(__file__).resolve().parents[1])
@@ -38,8 +39,9 @@ def main():
     ap.add_argument("title", help="short title for this run")
     ap.add_argument("--date", help="YYYY-MM-DD (default: today)")
     ap.add_argument("--summary", default="", help="one-line English summary")
-    ap.add_argument("--lang", default=LANG, choices=["tr", "en"],
-                    help="body language (default: the owner's output language)")
+    ap.add_argument("--lang", default=LANG, choices=["tr", "en", "auto"],
+                    help="body language; 'auto' detects it from the content "
+                         "(default: the owner's output language)")
     args = ap.parse_args()
 
     content = sys.stdin.read().strip()
@@ -47,12 +49,19 @@ def main():
         print("file_query: no content on stdin", file=sys.stderr)
         sys.exit(1)
 
+    lang = args.lang
+    if lang == "auto":
+        # The filed note should declare the language it is actually written in,
+        # not the vault default: a command that answered in English must not be
+        # indexed as Turkish.
+        lang, _ = detect(content)
+
     date = args.date or datetime.now().strftime("%Y-%m-%d")
     dst = QDIR / f"{date}-{args.command}-{slugify(args.title)}.md"
     QDIR.mkdir(parents=True, exist_ok=True)
     fm = (
         "---\n"
-        f"lang: {args.lang}\n"
+        f"lang: {lang}\n"
         f"summary_en: {args.summary or args.title}\n"
         f"command: {args.command}\n"
         f"title: {args.title}\n"

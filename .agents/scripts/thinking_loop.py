@@ -34,7 +34,7 @@ VAULT = os.environ.get("BRAINLESS_VAULT") or os.path.expanduser("~/projects/brai
 sys.path.insert(0, os.path.join(VAULT, "tools"))
 sys.path.insert(0, os.path.join(VAULT, ".agents", "scripts"))
 from llm import run_prompt  # noqa: E402
-from owner_profile import OWNER, OWNER_FULL, WORKER, LANG, output_lang_directive  # noqa: E402
+from owner_profile import OWNER, LANG, output_lang_directive  # noqa: E402
 from i18n import t, t_list  # noqa: E402
 
 STATE_FILE = os.path.join(VAULT, ".agents", "state", "thinking_loop.json")
@@ -50,7 +50,6 @@ QUERIES_DIR = os.path.join(VAULT, ".wiki", "digests", "queries")
 
 SEED_GAP_DAYS = 14        # ask the seed question when no new seed for this many days
 PENDING_TTL_DAYS = 13     # an unanswered question expires after two weeks
-KINDS_ORDER = ("grade", "predict", "cadence", "belief", "seed")
 # Reply keywords: current language plus English, so both kinds of vault work.
 APPLY_WORDS = tuple(t_list("thinking_loop.apply_words"))
 CANCEL_WORDS = tuple(t_list("thinking_loop.cancel_words"))
@@ -298,7 +297,7 @@ RULES:
 # CONTEXT (for name corrections and connections):
 {context}
 # EXISTING NOTE NAMES (pick "connects" only from these): {known}"""
-    out = run_prompt(prompt, timeout=240)
+    out = run_prompt(prompt, timeout=240, lane="thinking-loop")
     if not out:
         return None
     m = re.search(r"\{.*\}", out, re.S)

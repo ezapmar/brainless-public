@@ -1,0 +1,7 @@
+[Unit]
+Description=brainless spiky email ingest
+OnFailure=brainless-notify-failure@%n.service
+
+[Service]
+Type=oneshot
+ExecStart=%h/projects/brainless/.agents/scripts/omarchy_job.sh .agents/scripts/spiky_capture.py

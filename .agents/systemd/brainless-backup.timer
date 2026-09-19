@@ -1,0 +1,9 @@
+[Unit]
+Description=brainless omarchy backup every 30 min
+
+[Timer]
+OnBootSec=5min
+OnUnitActiveSec=30min
+
+[Install]
+WantedBy=timers.target

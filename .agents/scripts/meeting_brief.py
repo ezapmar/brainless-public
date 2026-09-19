@@ -22,9 +22,10 @@ VAULT = os.environ.get("BRAINLESS_VAULT") or os.path.expanduser("~/projects/brai
 sys.path.insert(0, os.path.join(VAULT, "tools"))
 sys.path.insert(0, os.path.join(VAULT, ".agents", "scripts"))
 from llm import run_prompt
-from owner_profile import OWNER, OWNER_FULL, WORKER, output_lang_directive  # noqa: E402
+from owner_profile import OWNER, output_lang_directive  # noqa: E402
 from i18n import t  # noqa: E402
 from watchdog import send_telegram
+from net_wait import wait_for_network  # noqa: E402
 
 TOKEN = os.path.join(VAULT, "tools", "tasks-sync", "token_gcal.json")
 SPIKY_DIR = os.path.join(VAULT, "Inbox", "Spiky")
@@ -150,10 +151,16 @@ def make_brief(event, spiky, tasks):
 
 # GENERAL CONTEXT:
 {context}"""
-    return run_prompt(prompt, timeout=180)
+    return run_prompt(prompt, timeout=180, lane="meeting-brief")
 
 
 def main():
+    # A timer can fire in the seconds after wake-from-sleep, before the network
+    # is back. Skip this tick cleanly rather than crashing on the first Google or
+    # Telegram call; the next run (15 min) picks the brief up once the box is up.
+    if not wait_for_network():
+        log("network not up yet (likely just woke); skipping this tick")
+        return
     subprocess.run(["git", "pull", "--rebase", "--autostash", "--quiet"],
                    cwd=VAULT, capture_output=True)
     done = set((read_file(STATE_FILE) or "").splitlines())

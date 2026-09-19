@@ -1,0 +1,4 @@
+{
+  "summary": "{new} yeni not etiketlendi. epic: {epic}, story: {story}, task: {task}",
+  "dry_run": "Kuru çalışma: note_tags.jsonl'e hiçbir şey yazılmadı."
+}

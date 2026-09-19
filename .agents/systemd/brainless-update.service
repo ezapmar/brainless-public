@@ -1,0 +1,8 @@
+[Unit]
+Description=brainless arch guncelleme bildirimi
+OnFailure=brainless-notify-failure@%n.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=%h/projects/brainless
+ExecStart=/usr/bin/python3 %h/projects/brainless/.agents/scripts/update_check.py

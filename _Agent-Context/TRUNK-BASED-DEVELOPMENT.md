@@ -15,7 +15,29 @@ created: 2026-09-06
 
 - One long-lived branch: `master` (the trunk). No feature branches, no pull requests.
 - History is linear. Integration is `git pull --rebase --autostash`. Merge commits are not allowed.
-- Pushes are fast-forward only. Force push is forbidden. The only precedent is the 2026-08-28 history rewrite to purge leaked secrets; any future exception is logged under `_Agent-Context/`.
+- Pushes are fast-forward only. Force push is forbidden. Two precedents, both history rewrites to purge private data, both logged here: 2026-08-28 (leaked secrets) and 2026-09-19 (see below). Any future exception is logged the same way.
+
+### Exception log: 2026-09-19 history purge
+
+**Why.** An audit of `.gitignore` found that rules naming a single path die silently when the path is renamed, and that history still carried 131 paths the current rules forbid: compiled summaries of passports and identity documents, `* - Health` folders, `Work/Kolay IK/Finance/Resources` and its wiki summaries, and Dünya Üçer material. `.gitignore` does not untrack, and it does not reach backwards, so the working tree being clean said nothing about the history.
+
+**What was done.** `git filter-repo --invert-paths` over 15 path globs, run on a throwaway clone rather than the live repo, then force-pushed and both machines hard-reset to the new master. 770 commits before and after; only blobs and paths were removed.
+
+**Checks that made it safe.** A full `git bundle --all` backup was taken first and kept at `~/Library/Caches/brainless-backup/` on the Mac. The rewritten HEAD tree hash was compared against the original and is identical, so nothing currently tracked was lost; the file count is 2426 on both sides. omarchy was verified clean and fully pushed beforehand, so no worker commit was orphaned.
+
+**What this does not fix.** GitHub keeps unreferenced objects reachable by SHA for a while, and any existing clone or fork still holds the old history. Treat anything that was in there as disclosed to whoever had a copy, and rotate rather than assume.
+
+### Exception log: 2026-09-19 second purge (binaries and bank details)
+
+**Why.** Two things the first pass did not cover. The vault had been pushing original documents to git for months, 194 MB of PDFs and scans that never diff and can never be deleted; and the company account number, sort code and IBAN sat in plain text in eight tracked files, masked in the working tree earlier that evening but still in every old commit.
+
+**What was done.** `git filter-repo` on a throwaway clone with two inputs: 764 binary paths to drop, and a `--replace-text` list redacting the account number, both IBAN spellings and the driving licence number wherever they appear. Force-pushed, both machines resynced. 777 commits before, 776 after (one became empty and was pruned). Local `.git` went from 984 MB to 45 MB in the rewritten clone.
+
+**Three mistakes worth remembering, all caught before the push.** Collecting paths with `--diff-filter=A` misses renamed files, because git reports them as `R`; that lost 179 paths. `git rev-list --objects` prints each blob once under a single path, so a renamed file's old path survives; that lost another 310. And deleting a branch is not optional: two stale session branches still pointed at the old history, which would have kept every purged blob alive on GitHub. Their work was already in master and the rest was regenerable `.wiki/`, so they were deleted after checking.
+
+**The check that mattered.** After each attempt, the rewritten HEAD tree hash was compared against the original. It matched every time, which is what proves the rewrite removed history and not content.
+
+**Still true from the first purge.** Old clones and GitHub's unreferenced objects keep what was removed. The account details should be treated as disclosed and rotated if that ever matters.
 
 Recommended repo config on both machines:
 

@@ -101,7 +101,7 @@ REPORT FORMAT (markdown, use exactly these headings):
 {context_md}
 {evidence}"""
 
-    result = run_prompt(prompt, timeout=300)
+    result = run_prompt(prompt, timeout=300, lane="reconcile")
     if not result:
         log("LLM call failed; report not written.")
         return

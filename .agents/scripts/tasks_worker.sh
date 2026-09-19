@@ -9,6 +9,13 @@ VAULT="${BRAINLESS_VAULT:-$HOME/projects/brainless}"
 GPY="$HOME/.local/venvs/gtasks/bin/python"
 cd "$VAULT" || exit 1
 
+# Skip the tick if the box woke before the network came back, so the Google
+# Tasks sync does not crash the unit and trip a false alarm; next run catches up.
+if ! python3 tools/net_wait.py --wait; then
+  echo "network not up yet (likely just woke); skipping this tick"
+  exit 0
+fi
+
 git pull --rebase --autostash --quiet || true
 python3 .agents/scripts/spiky_actions.py "$@"
 [ -x "$GPY" ] && "$GPY" .agents/scripts/gtasks_sync.py

@@ -49,5 +49,8 @@
   "kill_criteria": "Kill criteria",
   "kill_breached": "{n} breached, first: {first}",
   "kill_ok": "no breach, {due} due within {days} days, {missing} projects without criteria",
-  "kill_unreadable": "scan failed: {error}"
+  "kill_unreadable": "scan failed: {error}",
+  "privacy_guards": "Privacy guards",
+  "privacy_ok": "{count} protected homes, all ignored",
+  "privacy_exposed": "NOT ignored: {paths}. A rename broke a .gitignore rule; fix before the next commit"
 }

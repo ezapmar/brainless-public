@@ -2,6 +2,7 @@
 import os
 import re
 import glob
+import json
 import subprocess
 from datetime import datetime
 import shutil
@@ -91,7 +92,7 @@ Output ONLY the markdown content. No preamble.
     # Phase 0 T3: through tools/llm.py (tool-deny list, llm_status breadcrumb,
     # provider switch). The digest prompt is text only, so no tools are needed.
     try:
-        result = run_prompt(prompt, timeout=600)
+        result = run_prompt(prompt, timeout=600, lane="nightly")
     except Exception as e:
         print(f"Exception: {e}")
         return None
@@ -160,6 +161,43 @@ def sync_tasks(summary, date_str):
         f.write("".join(lines))
     print(f"Synced {len(rows)} tasks to _Agent-Context/TASKS.md")
 
+NOTE_TAGS = os.path.join(VAULT_ROOT, '.agents/state/note_tags.jsonl')
+
+
+def weight_block(date_str):
+    """A deterministic '#type/...' line per note classified for this date.
+
+    The digest itself is one LLM blob, so asking the model to tag each entry
+    would be unreliable and unverifiable. These tags come straight from
+    note_classify.py's state file instead, which is also what weekly_research.py
+    reads, so what the digest shows and what triggers research cannot drift.
+    Returns "" when nothing was classified, so the digest is unchanged.
+    """
+    latest = {}
+    try:
+        with open(NOTE_TAGS, errors="replace") as fh:
+            lines = fh.readlines()
+    except OSError:
+        return ""
+    for line in lines:
+        try:
+            rec = json.loads(line)
+        except ValueError:
+            continue
+        if rec.get("date") == date_str:
+            latest[rec.get("path")] = rec  # append-only file: the last line wins
+    if not latest:
+        return ""
+    out = ["", "## " + t("nightly_processor.weight_heading"), ""]
+    for path, rec in sorted(latest.items()):
+        out.append(f"- `{path}` #type/{rec.get('label', 'task')} "
+                   f"(score {rec.get('score')}, {rec.get('method')})")
+    if any(r.get("label") == "epic" for r in latest.values()):
+        out.append("")
+        out.append(t("nightly_processor.weight_epic_note"))
+    return "\n".join(out) + "\n"
+
+
 def main():
     if not os.path.exists(CAPTURE_DIR):
         os.makedirs(CAPTURE_DIR)
@@ -176,6 +214,7 @@ def main():
     
     if summary:
         date_str = datetime.now().strftime("%Y-%m-%d")
+        summary = summary.rstrip() + "\n" + weight_block(date_str)
         date_filename = date_str + ".md"
         os.makedirs(DIGESTS_DIR, exist_ok=True)
         output_path = os.path.join(DIGESTS_DIR, date_filename)

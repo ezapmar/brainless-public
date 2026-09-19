@@ -1,0 +1,11 @@
+[Unit]
+Description=brainless: daily note classification timer
+
+[Timer]
+# After the 23:00 nightly (captures are archived by then) and before the 07:00
+# think-surface, so the day starts with the labels already in place.
+OnCalendar=*-*-* 06:40:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target

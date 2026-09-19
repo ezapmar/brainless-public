@@ -203,3 +203,91 @@ class RollingScorecardTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TwoPageRenderTest(unittest.TestCase):
+    """The filed note is two pages and a folded appendix: verdict and fields
+    first, method trace second, the raw rounds under a collapsed callout."""
+
+    def persona_reply(self, vote, number, finding, objection):
+        return (f"**3. Ambiguous:** a word.\n\n**Finding:** {finding}\n\n"
+                f"**Strongest objection:** {objection}\n\n**Question for the owner:** why?\n\n"
+                f"**Vote:** {vote}\n**Number:** {number}%")
+
+    def round_two(self, vote, number, chosen, evidence="none"):
+        return (f"**Chosen objection:** {chosen}\n\n**My answer:** fine.\n\n**Vote:** {vote}\n\n"
+                f"**Number:** {number}%\n\n**New evidence:** {evidence}")
+
+    SYNTH = ("### Synthesis\n**Conclusion:** Settled little.\n**Strongest counterargument:** Skeptic's.\n"
+             "**Bet:** 40%\n### Method trace\n**Starting question:** Is X true?\n**Hypotheses tested:** H1.\n"
+             "### Proposal\nNone")
+
+    def test_verdict_follows_the_final_majority(self):
+        r1, r2 = rounds([("YES", 70)] * 5, [("YES", 70), ("YES", 60), ("NO", 20), ("YES", 80), ("CONDITIONAL", 50)])
+        self.assertEqual(dialectic.verdict(dialectic.score_topic(r1, r2))[0], "Go")
+        r1, r2 = rounds([("YES", 70)] * 5, [("NO", 20), ("NO", 25), ("NO", 30), ("YES", 80), ("CONDITIONAL", 50)])
+        self.assertEqual(dialectic.verdict(dialectic.score_topic(r1, r2))[0], "Stop")
+        r1, r2 = rounds([("YES", 70)] * 5, [("YES", 20), ("YES", 25), ("NO", 30), ("NO", 80), ("CONDITIONAL", 50)])
+        call, median, _ = dialectic.verdict(dialectic.score_topic(r1, r2))
+        self.assertEqual((call, median), ("Test first", 30))
+        r1, r2 = rounds([("YES", 70)] * 5)      # nobody answered round 2: round 1 decides
+        self.assertEqual(dialectic.verdict(dialectic.score_topic(r1, r2))[0], "Go")
+        self.assertEqual(dialectic.verdict(dialectic.score_topic({}, {}))[0], "Test first")
+
+    def test_field_reads_same_line_or_next_line_and_drops_pipes(self):
+        txt = self.persona_reply("NO", 30, "The claim rests on one | source.", "Nobody measured it.")
+        self.assertEqual(dialectic._field(txt, "finding"), "The claim rests on one / source.")
+        self.assertEqual(dialectic._field(txt, "strongest objection"), "Nobody measured it.")
+        self.assertEqual(dialectic._field("**Finding**\n\nOn the next line.\n", "finding"), "On the next line.")
+        self.assertEqual(dialectic._field("no such label", "finding"), "")
+        self.assertEqual(dialectic._field(dialectic.NO_REPLY, "finding"), "")
+
+    def test_split_synthesis_keeps_every_block(self):
+        parts = dialectic.split_synthesis(self.SYNTH)
+        self.assertIn("**Conclusion:** Settled little.", parts["synthesis"])
+        self.assertIn("Is X true?", parts["method trace"])
+        self.assertEqual(parts["proposal"], "None")
+        self.assertEqual(dialectic.split_synthesis("free text")["synthesis"], "free text")
+
+    def test_render_topic_is_two_pages_and_a_folded_transcript(self):
+        r1 = {n: self.persona_reply("CONDITIONAL", 50, f"{n} finding.", f"{n} objection.") for n in NAMES}
+        r2 = {n: self.round_two("CONDITIONAL", 55, "Skeptic's.") for n in NAMES}
+        r2["Gambler"] = dialectic.NO_REPLY
+        score = dialectic.score_topic(r1, r2)
+        md = dialectic.render_topic({"title": "T", "claim": "C", "sources": []}, r1, r2, self.SYNTH, score=score)
+        order = [md.index(h) for h in ("### Decision summary", "**Verdict:** Test first", "**Conclusion:**",
+                                       "| Persona | Round 1 | Round 2 | Moved |", "### Proposal", "### Method trace",
+                                       "**Starting question:**", "| Persona | Finding | Strongest objection | Vote |",
+                                       "> [!note]- Full transcript", "> **Round 1**", "> **Round 2**")]
+        self.assertEqual(order, sorted(order), "sections out of order")
+        self.assertIn("| Skeptic | Skeptic finding. | Skeptic objection. | CONDITIONAL 50% |", md)
+        self.assertIn(f"| Gambler | {dialectic.NO_REPLY} | | |", md)
+        self.assertIn("> [!warning] Unanimity warning", md)
+        self.assertNotIn("<span", md)
+        self.assertNotRegex(md, "[\\u2013\\u2014]")
+        # every transcript line is inside the callout
+        after = md.split("> [!note]- Full transcript", 1)[1]
+        self.assertTrue(all(l.startswith(">") for l in after.strip().splitlines()), "transcript leaked out of the fold")
+
+
+class NightStatusTest(unittest.TestCase):
+    def test_night_lines_live_in_their_own_section(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "DIALECTIC-STATUS.md")
+            with patch.object(dialectic, "STATUS_MD", path):
+                dialectic.write_status("2026-09-19", "evening", "ok", "1 topics")
+                dialectic.write_status("2026-09-20", "night", "ok", "usable, 9/12 replies passed")
+                dialectic.write_status("2026-09-20", "noon", "idle", "no new captures")
+                dialectic.write_status("2026-09-20", "night", "ok", "usable, 10/12 replies passed")
+                text = open(path).read()
+        day_lines = [l for l in text.splitlines() if l.startswith("- 20")]
+        night_lines = [l for l in text.splitlines() if l.startswith("- night ")]
+        self.assertEqual(len(day_lines), 2)
+        self.assertEqual(night_lines, ["- night 2026-09-20: ok, usable, 10/12 replies passed"], "night line replaced, not duplicated")
+        self.assertLess(text.index(day_lines[-1]), text.index("## Night experiment"), "day lines stay first for the checks that read the last one")
+
+    def test_verdict_line_for_night_judgement(self):
+        md = dialectic.render_judgement({"Skeptic": {"r1": True, "r2": False}, "Gambler": {"r1": True}}, 2, 3)
+        self.assertIn("**Local replies usable:** 2/3", md)
+        self.assertIn("| Skeptic | usable | unusable |", md)
+        self.assertIn(f"| Gambler | usable | {dialectic.NO_REPLY} |", md)

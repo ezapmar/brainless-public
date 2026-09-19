@@ -33,13 +33,11 @@ from pathlib import Path
 VAULT = Path(os.environ.get("BRAINLESS_VAULT") or os.path.expanduser("~/projects/brainless"))
 WIKI = VAULT / ".wiki"
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from resolve_bin import resolve_claude
 from llm import run_prompt
-from owner_profile import OWNER, LANG, lang_name, output_lang_directive, CROSS_LINK_RULE  # noqa: E402
+from owner_profile import LANG, lang_name, output_lang_directive, CROSS_LINK_RULE  # noqa: E402
 from owner_profile import COMPANY_AREA, GENERIC_PRIVATE_SEGMENTS, PRIVATE_SEGMENTS as PROFILE_PRIVATE_SEGMENTS  # noqa: E402
 from i18n import t, t_list  # noqa: E402
 
-CLAUDE = resolve_claude()
 # Per-source prompt cap; smaller-context providers can shrink it (Phase 0 T5).
 MAX_CHARS = int(os.environ.get("BRAINLESS_LLM_MAX_CHARS", "30000"))
 
@@ -95,16 +93,6 @@ def slugify(s: str) -> str:
     return s[:100]
 
 
-def _claude_env() -> dict:
-    """claude is a node script; under cron, node may not be on PATH. Ensure the
-    resolved claude's own bin dir (which contains node for nvm installs) is."""
-    env = os.environ.copy()
-    node_bin = os.path.dirname(CLAUDE)
-    if node_bin and node_bin not in env.get("PATH", ""):
-        env["PATH"] = node_bin + os.pathsep + env.get("PATH", "")
-    return env
-
-
 _CLAUDE_CALLS = 0
 _CLAUDE_FAILURES = 0
 
@@ -124,7 +112,7 @@ def call_claude(prompt: str, timeout: int = 300) -> str | None:
     global _CLAUDE_CALLS, _CLAUDE_FAILURES
     _CLAUDE_CALLS += 1
     try:
-        result = run_prompt(prompt.replace("\x00", ""), timeout=timeout)
+        result = run_prompt(prompt.replace("\x00", ""), timeout=timeout, lane="compile")
     except Exception as exc:  # never let one source kill the batch
         print(f"[llm err] {exc}", file=sys.stderr)
         result = None
@@ -603,6 +591,9 @@ ENTITY_MAX_SOURCES = 18   # newest N matches (cost cap)
 TASKS_FILE = VAULT / "_Agent-Context" / "TASKS.md"
 
 
+ENTITY_TYPES = {"person", "company", "project"}
+
+
 def parse_entity_registry():
     """entities.md -> [(name, type, [aliases])]. Comment/blank lines are skipped."""
     out = []
@@ -614,29 +605,46 @@ def parse_entity_registry():
             continue
         parts = [p.strip() for p in s.split("|")]
         name = parts[0]
-        etype = parts[1] if len(parts) > 1 and parts[1] else "entity"
+        etype = parts[1] if len(parts) > 1 else ""
+        # The file's own prose explains the format with a "|" in it; only a row
+        # whose second column is a known type is an entity, the rest is comment.
+        if not name or etype not in ENTITY_TYPES:
+            continue
         aliases = [a.strip() for a in (parts[2].split(",") if len(parts) > 2 else []) if a.strip()]
-        if name:
-            out.append((name, etype, aliases))
+        out.append((name, etype, aliases))
     return out
+
+
+_ENTITY_CORPUS = None
+
+
+def _entity_corpus():
+    """Every candidate source read once per run as (path, casefolded text).
+
+    The registry holds dozens of entities and the roots hold ~90 MB of notes;
+    walking and reading them per entity multiplied the I/O by the entity count."""
+    global _ENTITY_CORPUS
+    if _ENTITY_CORPUS is None:
+        corpus = []
+        for root in ENTITY_SOURCE_ROOTS:
+            if not root.exists():
+                continue
+            for p in root.rglob("*.md"):
+                if _is_private(p) or p.name.startswith("."):
+                    continue
+                try:
+                    text = _nfc(p.read_text(errors="replace")).casefold()
+                except Exception:
+                    continue
+                corpus.append((p, text))
+        _ENTITY_CORPUS = corpus
+    return _ENTITY_CORPUS
 
 
 def _entity_matches(terms):
     """Source files containing any of the terms (private excluded), newest first."""
     low_terms = [_nfc(t).casefold() for t in terms if t]
-    hits = []
-    for root in ENTITY_SOURCE_ROOTS:
-        if not root.exists():
-            continue
-        for p in root.rglob("*.md"):
-            if _is_private(p) or p.name.startswith("."):
-                continue
-            try:
-                text = _nfc(p.read_text(errors="replace")).casefold()
-            except Exception:
-                continue
-            if any(t in text for t in low_terms):
-                hits.append(p)
+    hits = [p for p, text in _entity_corpus() if any(t in text for t in low_terms)]
     hits.sort(key=lambda p: p.stat().st_mtime, reverse=True)
     return hits[:ENTITY_MAX_SOURCES]
 

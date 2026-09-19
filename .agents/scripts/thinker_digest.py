@@ -16,7 +16,6 @@ Design notes:
 - NO urgent push (owner decision): everything is collected in the weekly digest.
 """
 import os
-import re
 import sys
 import urllib.request
 import xml.etree.ElementTree as ET
@@ -26,7 +25,7 @@ VAULT = os.environ.get("BRAINLESS_VAULT") or os.path.expanduser("~/projects/brai
 sys.path.insert(0, os.path.join(VAULT, "tools"))
 sys.path.insert(0, os.path.join(VAULT, ".agents", "scripts"))
 from llm import run_prompt
-from owner_profile import OWNER, OWNER_FULL, WORKER, LANG, output_lang_directive  # noqa: E402
+from owner_profile import OWNER, WORKER, LANG, output_lang_directive  # noqa: E402
 from i18n import t  # noqa: E402
 from watchdog import send_telegram
 from telegram_capture import fetch_page_text        # SSRF-protected fetcher
@@ -197,7 +196,7 @@ RULES:
 # LINKS SENT TO THE BOT (manual arm, X included):
 {manual[:12000]}
 """
-    out = run_prompt(prompt, timeout=300)
+    out = run_prompt(prompt, timeout=300, lane="thinker-digest")
     if not out:
         log("synthesis not produced; state not updated (retried next week)")
         return

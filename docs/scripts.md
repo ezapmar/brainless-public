@@ -10,7 +10,7 @@ The scripts live in two places. `tools/` holds the core: the loop runs on one la
 with nothing else. `.agents/scripts/` holds the workers and the addons: capture
 channels, integrations and the watchers that keep an unattended machine honest.
 
-## Seven habits the scripts share
+## Eight habits the scripts share
 
 Read these once and most of the individual philosophies become predictable.
 
@@ -34,6 +34,10 @@ Read these once and most of the individual philosophies become predictable.
 7. **The first run sets a baseline.** A new ingest starts from now. It does not
    back-fill your history unless you ask, because nobody wants 219 Paul Graham essays
    summarised on a Tuesday morning.
+8. **Wait for the network, or skip the tick.** A scheduled job that needs the network
+   asks `net_wait.py` first. A laptop that just woke from sleep has its timers firing
+   before the connection is back; rather than crash on the first call and cry wolf, the
+   job skips this run and the next one picks the work up.
 
 ## The map
 
@@ -46,6 +50,7 @@ flowchart TD
     bin["resolve_bin.py"]
     mid["markitdown_native.py"]
     tf["transcript_filter.py"]
+    nw["net_wait.py"]
   end
 
   subgraph capture["1. Capture"]
@@ -103,10 +108,20 @@ returns a string or `None`.
 default) shells out to `claude -p` with a pinned model, overridable through
 `BRAINLESS_CLAUDE_MODEL`. `openai-compatible` talks to any `/chat/completions` endpoint
 through `BRAINLESS_LLM_BASE_URL`, `_API_KEY` and `_MODEL`, using the standard library
-only. Claude calls always pass a deny list for the dangerous tools (Bash, Write, Edit,
-WebFetch and friends), and deny beats allow. The default is no tools at all; a caller
-can open one explicitly, such as Read for photo OCR. Every real call writes a one-line
-breadcrumb to `.agents/state/llm_status`.
+only. `goose` runs `goose run` on the machine itself, which is how a lane stays off the
+network entirely; see the [local inference guide](local-inference.md). Claude calls
+always pass a deny list for the dangerous tools (Bash, Write, Edit, WebFetch and
+friends), and deny beats allow. The default is no tools at all; a caller can open one
+explicitly, such as Read for photo OCR. Goose calls pass `--no-profile`, which loads no
+extensions, because an extension is how a Goose agent gets a shell. Every real call
+writes a one-line breadcrumb to `.agents/state/llm_status` and a line to
+`.agents/state/llm_log`, which keeps the last 300 calls with lane, provider and timing.
+
+**Lanes.** Every call site passes `lane="<name>"` from the `LANES` table, and each lane
+can be routed on its own with `BRAINLESS_LLM_PROVIDER_<LANE>` (dashes become
+underscores), falling back to the global variable. `BRAINLESS_LLM_FALLBACK[_<LANE>]`
+names a second provider to try when the first fails. `python3 tools/llm.py --lanes`
+prints the current routing, `--probe <lane>` times one throwaway call.
 
 **Philosophy.** Untrusted text flows into these prompts all day: Telegram messages,
 transcripts, fetched pages, calendar invites. A model with tools would turn a poisoned
@@ -114,7 +129,29 @@ note into code execution, so the model gets none. The breadcrumb exists because 
 quieter failure. When authentication expires, every call returns an error and the
 pipeline still looks green, so the health check reads the breadcrumb and goes red.
 Callers never name a provider, which is why moving the whole batch brain off Claude
-costs one file and not six.
+costs one file and not six. Lanes exist because that move should not be all or nothing:
+a note classifier answering with one word out of three belongs on hardware you own, and
+a Turkish weekly synthesis does not belong on a four bit four billion parameter model.
+The fallback is deliberately one-directional. Cloud may degrade to local, which is
+resilience; local may not escalate to cloud, because a lane pinned local was pinned for
+privacy and a timeout is not consent.
+
+### `tools/zk_id.py`
+
+**Definition.** The slip-box addresses. Reports which notes are missing a permanent
+`zk:` id and, with `--apply`, assigns them.
+
+**Description.** An address is `YYYYMMDDHHmm`, derived from the note's own `date:`
+frontmatter rather than the clock, so the same note gets the same address on every run.
+An existing id is never touched and a collision walks forward a minute at a time.
+`--check` exits non-zero when something is missing, for a scheduled job. Default output
+is a report and nothing is written.
+
+**Philosophy.** A permanent address is the one Zettelkasten mechanic that cannot be
+bolted on later: an id that moves is worse than no id, because citations then point at
+an address that has quietly become another note. The write is opt-in because `Thinking/`
+belongs to the owner, and an agent assigning identities to someone's ideas without being
+asked is exactly the line the ownership rule draws.
 
 ### `tools/owner_profile.py`
 
@@ -182,6 +219,27 @@ The artefact patterns are per language, in `tools/locale/<lang>/transcript_filte
 subtitle credits, "[Music]" and invitations to subscribe, all of which pass a naive
 `if not text` check and land in the vault as notes. The filter is conservative on
 purpose and never rejects on length, because a genuine one-word memo is still a memo.
+
+### `tools/net_wait.py`
+
+**Definition.** Whether the machine can reach the network yet, in one place.
+
+**Description.** `wait_for_network()` opens a throwaway TCP connection to a couple of
+stable public addresses (1.1.1.1 and 8.8.8.8 on 443, then a DNS name so a resolver-only
+outage counts too), retrying a few times with a short backoff, and returns True the
+moment one answers. `network_up()` is the single-shot probe. Run as
+`python3 tools/net_wait.py --wait` it exits 0 when the network is up and non-zero when it
+is not, so a shell job can gate on it; with no argument it prints the current state. The
+Python jobs call `wait_for_network()` directly, the shell workers gate on `--wait`.
+
+**Philosophy.** A timer fires on a fixed cadence, including in the seconds after a laptop
+wakes from sleep, before routing and the VPN are back. The first Google, Telegram or Buzz
+call then dies with "network is unreachable", the unit fails, and the failure notifier
+raises an alarm for a machine that is only still waking up. Every job that needs the
+network asks this file first and, when the answer is no, skips the tick and leaves the
+work for the next run. The probe dials IP literals so it needs no DNS of its own, and it
+fails fast, because a job that blocks for a minute deciding whether the network is down is
+its own kind of outage.
 
 ---
 
@@ -395,7 +453,7 @@ condition under which you would stop is not a thing to do.
 
 ### `tools/dialectic.py`
 
-**Definition.** The moderator of the five-persona debate.
+**Definition.** The moderator of the six-persona debate.
 
 **Description.** At 12:30 and 21:20 it clusters the day's captures into topics and runs
 two rounds per topic. Round one is one root message per persona, so nobody can read
@@ -404,8 +462,14 @@ anybody else. Round two is one root quoting every round one reply. Replies end w
 lines into a scorecard, the moderator writes the synthesis, the note is filed, and the
 round is appended to `.agents/state/dialectic_scores.jsonl`. A rolling 30 day view goes
 to `_Agent-Context/DIALECTIC-SCORECARD.md`. On a silent day the evening run argues one
-thing the vault is waiting on, rotated with a 14 day cooldown. Flags: `--run noon|evening`,
-`--topic "<thesis>"`, `--local` (no Buzz), `--sequential`, `--dry-run`, `--scorecard`.
+thing the vault is waiting on, rotated with a 14 day cooldown. Each topic is filed as two
+pages and a folded transcript: a verdict computed from the final votes, the moderator's
+conclusion and fields, the vote table and the proposal first; the method trace (research
+question, hypotheses, tests, one row per persona) second; the raw rounds under a collapsed
+callout. Flags: `--run noon|evening|night`, `--topic "<thesis>"`, `--local` (no Buzz),
+`--parallel` (all personas at once; one at a time is the default), `--dry-run`,
+`--scorecard`. `--run night` is the local-model experiment: see
+[local inference](local-inference.md#the-night-window-experiment).
 
 **Philosophy.** Isolated first rounds maximise the diversity of arguments; people and
 models both anchor on whoever spoke first. The scoring is deterministic so that the

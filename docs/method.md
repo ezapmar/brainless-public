@@ -1,0 +1,209 @@
+# The method
+
+Three things in brainless are method rather than software: how a captured note is
+worked over, why every input becomes Markdown, and how a research pass is run. The code
+enforces them, but none of them came from the code, and any of them would survive being
+reimplemented in a different language next year. This page is the part worth keeping.
+
+---
+
+## 1. How a note is worked over
+
+The method is **Zettelkasten**, Luhmann's slip-box, with one adaptation: the reading and
+the filing are done by a machine, and the judging is not. What survives from the
+original is the part that actually did the work, which was never the index cards.
+
+Four things make it a slip-box rather than a folder of files:
+
+- **Atomicity.** One concept, one note, one home. A copy is a bug, a cross-link is a
+  feature. `_Templates/Idea.md` says it out loud in the template: "one paragraph, if you
+  need more it might be multiple ideas".
+- **Permanent addresses.** Every idea carries `zk: YYYYMMDDHHmm` in its frontmatter,
+  assigned once and never changed, so a note keeps its identity through every rename and
+  every recompile. `tools/compile_resources.py` preserves the id across rebuilds;
+  `tools/zk_id.py` reports notes that are missing one and assigns them on `--apply`.
+- **Links are the structure, not the folders.** The graph is built from explicit
+  `[[wikilinks]]`. `/connect` walks the link path between two notes and proposes the
+  edges that should exist but do not.
+- **The archive asks for the next note.** Luhmann's slip-box told him where it was thin.
+  Here that is mechanical: `/backlog` counts unresolved links, ranks them by how often
+  something points at a note that was never written, and hands back a queue of notes the
+  archive is demanding.
+
+Honest state, 2026-09-19: the slip-ids were live only on the machine side. All ten notes
+in `Thinking/Ideas/` were missing an address, while all six compiled ideas in
+`.wiki/ideas/` had one, which is backwards, since the compiled layer is the regenerable
+one. `tools/zk_id.py` exists to fix that, and it does not write to your notes unless you
+ask it to.
+
+The rest of the loop is how a captured thought becomes a slip worth addressing.
+
+The front door is deliberately wide and deliberately dumb. A thought arrives as a voice
+memo, a photograph of a handwritten page, a link, a Telegram line, a dropped PDF, and
+the only job at that moment is to keep it. Nothing is tagged, filed or judged on the way
+in (see [the capture flow](capture-flow.md)). Judging at capture time is how people stop
+capturing.
+
+Everything after that is a sequence of narrowing passes, each of which asks one question
+and refuses to ask the others:
+
+**Pass one, the same day: what is this about?** The capture is written into
+`Thinking/Daily/` as a note with the transcript or text intact. Proper nouns get
+corrected against the vault's own context, because a transcript that spells a colleague's
+name three ways cannot be linked to anything.
+
+**Pass two, the evening close-out: what mattered?** The 21:00 job reads the day and
+proposes, in the owner's own vault but never into it: what happened, what carries over,
+what is still open, and one question worth keeping. Proposals are pasted by a human or
+not at all. This is the rule the whole system is built around, and it is why the engine
+can run unattended against a folder holding someone's life.
+
+**Pass three: how big is the work in here?** `tools/note_classify.py` labels every
+capture as **task**, **story** or **epic** in the Atlassian sense. The label is not
+bureaucracy: it is what decides whether the machine is allowed to spend a week of
+research on a topic. The gate is deterministic first (a score over hand-written signals:
+distinct links, active projects touched, people named, multi-cycle time expressions,
+recurrence across three weeks, open questions) and only asks a model about the genuinely
+ambiguous middle. A model may demote a candidate but can never promote a note the
+deterministic gate refused, so a persuasively written note cannot talk its way into
+importance.
+
+**Pass four, over weeks: does this become something?** A question that keeps returning
+graduates from a daily note to a seed in `Thinking/Ideas/`, a seed that survives becomes
+a belief in `Thinking/Beliefs/`, and a belief that has to be acted on becomes a decision
+in `Thinking/Decisions/` with a falsifiable prediction, a confidence percentage and a
+review date. `/graduate` promotes what has matured and flags what has sat alone too long.
+`/calibrate` grades a decision when its review date arrives, in one line, so judgment
+compounds instead of evaporating.
+
+Two rules hold the whole thing together:
+
+- **One concept, one home.** A copy is a bug; a cross-link is a feature. Personal and
+  work effects must be surfaced in both directions, which is why the compiler treats a
+  missing cross-link as a defect rather than a style preference.
+- **The human writes the human areas, the machine writes the compiled layer.** Both read
+  both. `.wiki/` is regenerable and never hand-edited; `Work/`, `Personal/`, `Library/`
+  and `Thinking/` are never written by an agent without an explicit yes.
+
+---
+
+## 2. Everything becomes Markdown
+
+Every input is converted to Markdown before anything else touches it. A PDF, a DOCX, a
+spreadsheet, a slide deck, a voice memo, a photograph: each one lands as a text file in
+the vault, next to the original.
+
+- Documents go through `tools/markitdown_native.py`, which calls markitdown as a
+  **library** with one reused instance rather than shelling out per file.
+- Audio is transcribed locally by whisper.cpp, on the machine, before any model sees it.
+- Photographs are read into text and filed as notes.
+- A converted source keeps two files: `<name>_raw.md`, the mechanical conversion, and an
+  authored note beside it. The raw file is evidence; the authored note is thinking. They
+  are never the same file, so a later reader can always tell which is which.
+
+This is not a formatting preference. It buys five things that a proprietary store does
+not:
+
+1. **Grep and BM25 work.** `tools/wiki_search.py` is ripgrep plus a ranking function. No
+   index server, no embedding refresh, no vendor.
+2. **Git works.** Every change to every note is a diff with a date and an author. Two
+   machines can write to the same vault under a documented sync protocol
+   ([TRUNK-BASED-DEVELOPMENT.md](../_Agent-Context/TRUNK-BASED-DEVELOPMENT.md)).
+3. **Models read it natively.** Markdown is the format language models were trained on.
+   A prompt built from Markdown needs no adapter, and a model's answer drops straight
+   back into the vault.
+4. **It outlives the tooling.** Obsidian is the surface, not the substrate. If every
+   tool in this repository disappeared tomorrow, the vault would still be a folder of
+   readable files.
+5. **Privacy is enforceable.** Plain files can be pattern-matched before they are
+   compiled or exported, which is how private folders stay out of the shared layer.
+
+The cost is honest: conversion loses layout, tables come across imperfectly, and a
+scanned document is only as good as the OCR. Keeping the original next to the conversion
+is the answer to that, not a claim that the conversion is lossless.
+
+### Where the original lives, and why not in git
+
+The markdown is the record. The original is a file, and git is a bad place for files:
+a 40 MB scan never diffs, adds permanent weight, and deleting it later does not delete
+it, as two history rewrites in this vault have now demonstrated. So binaries are not
+tracked. Three cases:
+
+1. **The original is in Google Drive.** It does not go to git at all. The markdown
+   carries a source block naming the file, its size, its sha and its Drive path, so the
+   note knows where its original is without holding it.
+2. **Only part of the document matters.** Write that part into an authored note. A
+   human decides which part; a script cannot.
+3. **The whole document matters.** Convert it with markitdown and let the markdown be
+   the artefact of record.
+
+`tools/lighten_vault.py` does the mechanical half. It finds each tracked binary's
+conversion, looks the original up in the local Drive mount by exact byte size (names do
+not match, because the vault renames documents to its dated convention while Drive keeps
+the name they arrived with), stamps the source block, and untracks the binary. It never
+deletes anything from disk.
+
+One rule it will not break: `--only-drive` is the default posture, because untracking a
+file that exists nowhere else removes its only backup. A binary with no Drive copy stays
+tracked, ignored-but-tracked, until a copy exists. `.gitignore` does not untrack what
+git already follows, and here that quirk is load-bearing rather than annoying.
+
+---
+
+## 3. Research follows a social science method, not a search engine
+
+Asking a model to "research X" produces a plausible essay. The method here is taken from
+Quivy and Van Campenhoudt, *Manuel de recherche en sciences sociales*, adapted for a
+vault and a set of agents. The full adaptation lives in the vault as a playbook; the
+binding parts are these.
+
+The book's three acts are **rupture** (break from what you already assume),
+**construction** (build an explanatory model), **verification** (confront it with
+reality). Seven steps, of which five are enforced mechanically:
+
+**The opening question comes before any data.** One sentence, with three tests: every
+term defined, answerable with the time and access actually available, and a real
+question, one whose answer is not already implied by the way it is asked. The most
+common failure in AI-assisted research is the reverse: fan out to agents first, then go
+looking for the question the results happen to answer.
+
+**The lens is named before the hypotheses.** One sentence saying which angle the
+research looks through and what it is trying to explain. This is the book's
+problematique step, and skipping it is how a set of hypotheses ends up scattered across
+three unrelated questions: each one defensible, none of them adding up. Fixing the angle
+first is also what makes a later pass comparable to this one.
+
+**Hypotheses are written down and must be falsifiable.** A hypothesis states a relation
+between two terms and can come back refuted. This is the same shape as the decision
+template's prediction and confidence fields, which is what connects research to
+calibration: a research pass that cannot be wrong teaches nothing when it is.
+
+**Reading happens in salvos, with thinking in between.** At most five sources per salvo,
+each on a deliberately different angle, then a pause to interpret before the next.
+Unlimited parallel fan-out is the modern version of the trap the book calls insatiable
+reading: consuming everything with no criterion for what to consume.
+
+**Findings carry an epistemic label, or they are deleted.** Every line must be
+`Kaynak: <URL>` plus one of `verified`, `claim` or `unknown`. Unlabelled lines are
+stripped mechanically before the synthesis pass, and `unknown` lines are quarantined and
+may not be used as support. When there is no evidence the report says so, because
+absence of evidence is not evidence.
+
+**The analysis compares what was observed against what the hypothesis expected, and
+interprets the deviations.** The deviations are the finding. A report that only confirms
+is a report that was not testing anything.
+
+Two guards around the outside of the method, both about restraint:
+
+- A research pass runs **only if the week produced an epic**. A week of stories and
+  tasks gets no research, and the job exits in seconds having spent nothing. Researching
+  every week is how a second brain turns into trivia.
+- A topic already researched **within eight weeks is not researched again**. The
+  recurrence is reported instead, with the earlier report linked, because a topic that
+  keeps returning without closing is waiting for a decision, not for more evidence.
+
+The same discipline applies to the adversarial pass: six critical-thinking personas
+(Skeptic, Gambler, Scientist, Postmortem, Strategist, Methodologist) argue a topic in two rounds before
+a synthesis is written, so the objection arrives before the commitment rather than after
+it. See [how it makes you think clearer](thinking-clearer.md) for the rest of those
+mechanisms.

@@ -1,0 +1,7 @@
+[Unit]
+Description=brainless dusunur haftalik digest
+OnFailure=brainless-notify-failure@%n.service
+
+[Service]
+Type=oneshot
+ExecStart=%h/projects/brainless/.agents/scripts/omarchy_job.sh .agents/scripts/thinker_digest.py

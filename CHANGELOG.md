@@ -3,6 +3,97 @@
 All notable changes to the public brainless engine. Dates are the day of the public
 push. The private vault this is exported from has its own history.
 
+## Unreleased
+
+- A sixth persona, Methodologist, built on Quivy and Van Campenhoudt's research
+  method: it rewrites the thesis as a research question, names the hidden angle,
+  builds concept, dimension and indicator, and writes the falsifiable hypothesis
+  and the cheapest observation plan. Every persona now receives what the moderator
+  received (the topic's wiki hits, the owner's core beliefs, the decision calendar)
+  and round two must cite a vault file. Six sessions at once strain a single
+  subscription, so personas are mentioned one at a time by default; `--parallel`
+  restores the old behaviour.
+- Each dialectic topic is filed as two pages and a folded transcript. Page one is
+  what a decision needs: a verdict computed from the final votes (Go, Stop or Test
+  first, with the median number), the moderator's conclusion and fields, a compact
+  vote table and the proposal. Page two is the method trace: the research question,
+  the hypotheses and tests, one row per persona with its finding and objection.
+  The raw rounds sit under a collapsed callout in the same note. The unanimity
+  warning is a callout, not an HTML span. `/dialectic` produces the same layout.
+- `--run night` and `brainless-dialectic-night.timer`: a 02:00 experiment that runs
+  the persona lane on the worker's local model while the moderator and a new
+  `dialectic-judge` lane stay on the cloud and grade each local reply. Replays the
+  day's first topic for a like-for-like comparison, scores nothing, and keeps its
+  own section in the status file with a five-night kill rule.
+- Add epic-triggered weekly research. `tools/note_classify.py` tags every capture
+  in the daily and meeting folders as epic, story or task in the Atlassian sense,
+  and `tools/weekly_research.py` runs a research cycle only when the week produced
+  an epic. A week of stories and tasks costs nothing: the job exits in seconds
+  without calling a model. The epic gate is deliberately conservative (a score,
+  several independent signals, and either recurrence or breadth), targeting zero
+  or one epic per week, and an epic already researched within eight weeks is not
+  researched again: the recurrence is reported instead, because a topic that keeps
+  returning without closing is waiting for a decision, not for more evidence.
+- Research follows the vault's Quivy method: one opening question, the lens named
+  in one sentence before any hypothesis is written, falsifiable hypotheses, a
+  single salvo of at most five sources each on a different angle, then an
+  interpretation of the deviations. Naming the lens is the book's problematique
+  step, and it is what keeps three hypotheses serving one question instead of
+  scattering across three. Every finding must carry
+  `Kaynak: <URL>` and one of `verified`, `claim` or `unknown`; unlabelled lines
+  are deleted mechanically before synthesis and `unknown` lines may not be used
+  as support. When there is no evidence the report says so, because absence of
+  evidence is not evidence.
+- Open the research lane in `tools/llm.py`: `run_prompt(web=True)` grants
+  WebSearch and WebFetch for that one call. The execution tools stay denied even
+  then, and the fetched text reaches the synthesis pass fenced as untrusted data,
+  so the furthest a poisoned page can reach is a wrong sentence in a report.
+- Add a `goose` provider to `tools/llm.py` for local inference on the worker,
+  invoked with `--no-profile` so it loads no extensions and has no shell. This is
+  the goose-side equivalent of the deny list.
+- Route the model per lane, not per installation. Every call site now names a
+  lane (`python3 tools/llm.py --lanes`), and `BRAINLESS_LLM_PROVIDER_<LANE>`
+  points that lane at its own provider, so a note classifier answering with one
+  word out of three can run on hardware you own while a weekly synthesis still
+  goes to a large model. Two reasons, pulling in opposite directions: privacy
+  wants the local model as a lane's primary, resilience wants it as a fallback
+  for the cloud lanes (`BRAINLESS_LLM_FALLBACK=goose`), and both are the same
+  setting seen from different sides.
+- The fallback only goes one way. Cloud may degrade to local; local never
+  escalates to cloud, because a lane pinned local was pinned for privacy and a
+  timeout is not consent to send the same text somewhere else.
+  `BRAINLESS_LLM_ALLOW_CLOUD_FALLBACK=1` says otherwise, explicitly, per machine.
+- Log the routing: `.agents/state/llm_log` keeps the last 300 calls with lane,
+  provider, outcome and wall time, next to the single latest outcome in
+  `llm_status` that the health check reads. `tools/llm_bench.py` times the real
+  prompt shapes against a provider, because whether a local model is viable is a
+  measurement, not an opinion.
+- Guard the task ledger deterministically in `spiky_actions.py`. The prompt asked
+  the model not to repeat a task already in the ledger, which is a string
+  comparison wearing a prompt; a duplicate is now dropped after the model, with
+  Turkish suffixes folded, so a weaker local model cannot send the same promise
+  to a person twice.
+- State the base rate in the epic rubric: an epic is about one note in twenty.
+  Found by measurement, not by taste. Without it a local 4B model promoted four
+  notes out of eight to epic that Opus called stories, always in that direction,
+  which is the expensive one because an epic triggers a research pass. With it
+  the two models agreed on all eight, and both still called an unmistakable
+  multi-month programme an epic, so the sentence tightened calibration without
+  turning the classifier into a constant.
+- New guide: `docs/local-inference.md`, including what the worker hardware can
+  actually do, how to seed a model over a slow link, and the order in which
+  lanes should move.
+- Add `_Agent-Context/SOURCES.json`, a machine-readable source registry. Scripts
+  may only append to `candidates`; promoting a candidate is the owner's call, at
+  most one new stream per month, and a source that has fed nothing for eight weeks
+  is flagged rather than removed.
+- Add `tools/lang_detect.py` and answer in the language that was used. Research
+  reports follow the triggering note, and the dialectic engine now argues each
+  topic in the language of the notes behind it instead of forcing English.
+- Reframe both READMEs around connectivity and the three layers (collect, think
+  clearly, decide), including the failure mode the layering guards against, and
+  correct the origin of the name.
+
 ## 0.1.6 (2026-09-18)
 
 - Add `docs/scripts.md`: a reference for every Python script in `tools/` and

@@ -191,7 +191,7 @@ BELIEFS OF {OWNER} (reference for the seed and the contradiction):
 Write only the markdown content, nothing else. Do not invent: write nothing that is not in the context. Do NOT mention decision review dates (the system appends that list).
 {context}"""
 
-    result = run_prompt(prompt, timeout=300)
+    result = run_prompt(prompt, timeout=300, lane="closeout")
     if not result:
         return None
 

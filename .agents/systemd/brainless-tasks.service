@@ -1,0 +1,7 @@
+[Unit]
+Description=brainless gorev hatti
+OnFailure=brainless-notify-failure@%n.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/flock -w 300 %h/.brainless-git.lock %h/projects/brainless/.agents/scripts/tasks_worker.sh
