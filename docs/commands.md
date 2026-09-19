@@ -23,7 +23,7 @@ Three rules apply to all of them, from `.wiki/_commands/_shared-rules.md`:
 | Command | What it asks | What it guards against |
 |---|---|---|
 | `/decide "<question>"` | Reversibility first (two-way door: decide today, three lines; one-way door: full note). Then criteria, beliefs quoted for and against each option, a forced third option, second-order effects, what would change your mind, a reference class and base rate before any confidence, and one dated action | Deliberating the reversible; criteria fitted to a favourite; confidence without a base rate; a decision with no action attached |
-| `/dialectic [topic]` | Five personas, two rounds. Round one blind, round two answering the strongest objection. Scorecard computed by script, then a synthesis with a counterargument, what must be true, a cheap dated test and a probability. Empty topic argues today's captures | The first voice framing the rest; a synthesis written from mood; five agreeing voices mistaken for confirmation |
+| `/dialectic [topic]` | Six personas, two rounds. Round one blind, round two answering the strongest objection. Scorecard computed by script, then a synthesis with a counterargument, what must be true, a cheap dated test and a probability. Empty topic argues today's captures | The first voice framing the rest; a synthesis written from mood; six agreeing voices mistaken for confirmation |
 | `/contradict [scope]` | Belief against belief, belief against decision, belief against what you actually did in the last 14 days, with quotes from both sides. Lists beliefs unused for 90 days and proposes implicit beliefs you keep acting on | Drift between what you say you believe and what you do; a belief file that is a museum |
 | `/calibrate [decision]` | Runs `tools/calibrate.py`, then one question per decision that is due: did the prediction happen? Records outcome and lesson beside the confidence. Asks for a base rate, a prediction and a review date on any decision that lacks them | Ungraded decisions; grading the result instead of the process; a confidence that was never a number |
 
@@ -56,7 +56,7 @@ Three rules apply to all of them, from `.wiki/_commands/_shared-rules.md`:
 |---|---|
 | `compile [--dry-run\|--full-rebuild\|--only <phase>]` | Build `.wiki/` from your notes: summaries, articles, project mirrors, index |
 | `search "<query>" [--k N] [--json]` | Search the compiled wiki |
-| `dialectic "<thesis>" [--run noon\|evening] [--buzz]` | Five personas argue it, locally by default; `--scorecard` prints the rolling 30 day scorecard |
+| `dialectic "<thesis>" [--run noon\|evening] [--buzz]` | Six personas argue it, locally by default; `--scorecard` prints the rolling 30 day scorecard |
 | `lint [--fix] [--fix-links] [--dry-run]` | Wiki integrity checks and repairs |
 | `calibrate` | Decisions due for grading, decisions missing a prediction or a review date |
 | `today [--build\|--send]` | Preview, save or send the three-item Today queue; `--action <id> ...` answers an item |

@@ -52,7 +52,7 @@ rate, who moved, who moved without new evidence) before the moderator writes a w
 The synthesis starts from numbers, not from the mood of the last message.
 
 **The unanimity warning.** If every persona casts the same round one vote, the
-scorecard prints a red line. Five voices on one base model agreeing is a reason to check
+scorecard prints a red line. Six voices on one base model agreeing is a reason to check
 the framing, not a confirmation. A rolling 30 day scorecard also flags affirmation above
 60 per cent and any persona that never votes NO, because a critic who always agrees is
 decoration.

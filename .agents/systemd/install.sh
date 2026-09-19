@@ -1,10 +1,11 @@
 #!/bin/bash
 # Run on the always-on worker: installs the units here into the user systemd.
 #   bash .agents/systemd/install.sh
-# Nightly family (nightly, closeout, lint, reconcile, resurface, dashboard),
-# thinking and dialectic units live here (Phase 0 T4). telegram, buzz-capture,
-# tasks, backup, watchdog, spiky, brief, reminder, thinkers, radar, content and
-# update timers are still hand-installed on the current worker.
+# Every worker unit lives here: the nightly family (nightly, closeout, lint,
+# reconcile, resurface, dashboard), thinking, dialectic, classify, research, and
+# the capture line (telegram, buzz-capture, tasks, backup, watchdog, spiky, brief,
+# reminder, thinkers, radar, content, update), copied from the worker on 2026-09-19.
+# The loop below globs *.service and *.timer, so a new unit needs no edit here.
 # Template units (buzz-persona@.service) are copied here, but their instances
 # are started by .agents/buzz/install_personas.sh.
 set -eu

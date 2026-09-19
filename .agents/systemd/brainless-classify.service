@@ -1,0 +1,14 @@
+[Unit]
+Description=brainless: tag captures as epic, story or task
+After=network-online.target
+OnFailure=brainless-notify-failure@%n.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=%h/projects/brainless
+# Stage A is deterministic and free; only epic candidates reach a model. To run
+# that stage fully locally, add the goose provider here:
+#   Environment=BRAINLESS_LLM_PROVIDER=goose
+#   Environment=BRAINLESS_GOOSE_MODEL=<gguf downloaded via goose local-models>
+# goose runs with --no-profile, so it loads no extensions and has no shell.
+ExecStart=/bin/bash %h/projects/brainless/.agents/scripts/worker_job.sh tools/note_classify.py

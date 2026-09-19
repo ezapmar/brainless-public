@@ -4,7 +4,7 @@
 Twice a day (12:30 and 21:20 on the always-on worker) the moderator takes the day's raw
 captures (Telegram and Buzz voice notes, text, photos already transcribed into
 Thinking/Daily/*-telegram.md and *-buzz.md), clusters them into topics and has
-five live persona agents argue each topic in the Buzz channel #dialectic.
+six live persona agents argue each topic in the Buzz channel #dialectic.
 On a day with no captures the evening run argues one vault topic instead (a
 decision past its review date, a decided note without a prediction, a pending
 decision near review, a belief not challenged in 90 days, or a live question
@@ -22,7 +22,12 @@ _Agent-Context/DIALECTIC-SCORECARD.md with two flags: sycophancy (affirmation
 above AFFIRM_WARN) and a persona that never votes NO. Personas:
 
   Skeptic (Browne & Keeley), Gambler (Annie Duke), Scientist (Camuffo 2024),
-  Postmortem (Edmondson), Strategist (Lafley & Martin).
+  Postmortem (Edmondson), Strategist (Lafley & Martin),
+  Methodologist (Quivy & Van Campenhoudt).
+
+Every persona gets the same grounding the moderator gets: the wiki search hits
+for the topic, the owner's core beliefs and the decision calendar, so the
+argument is tied to what the vault already holds and not to the thesis alone.
 
 Each persona is a buzz-acp harness with its own prompt (see
 .agents/buzz/personas/). The moderator is a plain signing identity: it posts
@@ -42,10 +47,22 @@ Safety by design:
 Modes:
   --run noon|evening   default by clock (before 17:00 = noon). Evening adds the
                        whole-day connection scan, coverage table and #daily post.
+  --run night          the local-model experiment (02:00 timer, idle window):
+                       personas run through tools/llm.py with the persona lane
+                       routed to the worker's own model, the moderator stays on
+                       the cloud and grades each local reply usable or not.
+                       Argues a replay of the day's first topic when there was
+                       one (so cloud and local can be compared on the same
+                       thesis), else a vault topic. Writes no score, marks no
+                       capture seen, and files under its own note; one line per
+                       night in the status file's night section. Kill rule:
+                       after five nights, fewer than three usable nights closes
+                       the timer and the result is logged, no bigger model.
   --topic "text"       argue one ad-hoc topic instead of today's captures.
   --local              run the personas through tools/llm.py instead of Buzz
                        (fallback when the relay is unreachable; also the Mac test).
-  --sequential         mention personas one at a time (rate-limit fallback).
+  --parallel           mention all personas at once (default is one at a time,
+                       which keeps six Claude sessions under the rate limit).
   --dry-run            steps 1 to 3 only; print what would be posted.
 """
 import argparse
@@ -61,7 +78,8 @@ VAULT = os.environ.get("BRAINLESS_VAULT") or os.path.expanduser("~/projects/brai
 sys.path.insert(0, os.path.join(VAULT, "tools"))
 from llm import run_prompt  # noqa: E402
 from calibrate import scan as calibration_scan  # noqa: E402
-from owner_profile import OWNER, lang_name  # noqa: E402
+from owner_profile import OWNER, lang_name, output_lang_directive  # noqa: E402
+from lang_detect import detect  # noqa: E402
 
 CAPTURE_DIR = os.path.join(VAULT, "Thinking", "Daily")
 STATE_DIR = os.path.join(VAULT, ".agents", "state")
@@ -76,7 +94,7 @@ BUZZ_BIN = os.path.expanduser("~/.cargo/bin/buzz")
 CHANNEL_NAME = "dialectic"
 MODERATOR = "moderator"
 PERSONAS = [("skeptic", "Skeptic"), ("gambler", "Gambler"), ("scientist", "Scientist"),
-            ("postmortem", "Postmortem"), ("strategist", "Strategist")]
+            ("postmortem", "Postmortem"), ("strategist", "Strategist"), ("methodologist", "Methodologist")]
 NO_REPLY = "no reply"
 ROUND1_WAIT = 480   # seconds to wait for round 1 replies
 ROUND2_WAIT = 360
@@ -340,7 +358,11 @@ def calibration_lines():
     return "\n".join(lines[:8])
 
 
-def wiki_search(query, k=5):
+SNIPPET_CHARS = 400
+WIKI_K = 8
+
+
+def wiki_search(query, k=WIKI_K):
     try:
         r = subprocess.run(
             [sys.executable, os.path.join(VAULT, "tools", "wiki_search.py"), query, "--json", "--k", str(k + 4)],
@@ -358,10 +380,13 @@ def wiki_search(query, k=5):
         snippet = re.sub(r"^.*?summary_en:\s*", "", snippet)
         snippet = re.sub(r"^.*?---\s*", "", snippet, count=1) if snippet.count("---") else snippet
         snippet = re.sub(r"\s*(tags|command|title|compiled_at|status):.*$", "", snippet)
-        out.append(f"- `{path}`: {snippet.strip()[:220]}")
+        out.append(f"- `{path}`: {snippet.strip()[:SNIPPET_CHARS]}")
         if len(out) >= k:
             break
-    return out
+    # The owner's own decisions and beliefs outrank a summary of someone else's
+    # book: they are what the personas are asked to argue against.
+    own = [l for l in out if re.search(r"decision|belief", l.split("`")[1], re.I)]
+    return own + [l for l in out if l not in own]
 
 
 # ------------------------------------------------------------- LLM steps
@@ -387,13 +412,13 @@ def cluster_topics(captures):
     blob = "\n\n".join(f"--- {name} ---\n{text}" for name, text in captures)[:MAX_CONTEXT]
     prompt = f"""Below are the raw notes {OWNER} captured today (voice note transcripts, texts). The notes may be in {lang_name()}.
 Group them into at most {MAX_TOPICS} discussion topics. For each topic give:
-- "title": short English title (at most 8 words)
-- "claim": the thesis {OWNER} defends or assumes on this topic, one paragraph in English, third person ("{OWNER} thinks ...")
+- "title": short title, at most 8 words, IN THE SAME LANGUAGE as the notes that feed this topic
+- "claim": the thesis {OWNER} defends or assumes on this topic, one paragraph, third person ("{OWNER} thinks ..."), IN THE SAME LANGUAGE as those notes
 - "sources": list of file names that feed this topic (the names on the --- lines above, verbatim)
 Every file must belong to at least one topic. Write only a JSON array, nothing else. No em or en dashes.
 
 {blob}"""
-    topics = parse_json(run_prompt(prompt, timeout=240))
+    topics = parse_json(run_prompt(prompt, timeout=240, lane="dialectic-topics"))
     names = [n for n, _ in captures]
     clean = []
     if isinstance(topics, list):
@@ -408,14 +433,21 @@ Every file must belong to at least one topic. Write only a JSON array, nothing e
         if name not in covered:
             first = next((l.lstrip("# ").strip() for l in text.splitlines() if l.strip()), name)
             clean.append({"title": first[:80], "claim": text[:800], "sources": [name]})
+    # Each topic argues in the language of the notes behind it. A Turkish voice
+    # note should not come back as an English debate just because the vault's
+    # engine is written in English; the owner thinks in the language he spoke.
+    by_name = dict(captures)
+    for topic in clean:
+        blob = " ".join(by_name.get(s, "") for s in topic["sources"]) or topic.get("claim", "")
+        topic["lang"] = detect(blob)[0]
     return clean
 
 
 def synthesize(topic, r1, r2, context, beliefs, calib, score=None):
     transcript = "\n\n".join(f"### {name} (round 1)\n{txt}" for name, txt in r1.items())
     transcript += "\n\n" + "\n\n".join(f"### {name} (round 2)\n{txt}" for name, txt in r2.items())
-    prompt = f"""You are the moderator of the brainless critical dialectic engine. Five personas argued the thesis below.
-Write a neutral, short synthesis in English. No em or en dashes. Do not invent; add nothing that is not in the debate.
+    prompt = f"""You are the moderator of the brainless critical dialectic engine. {len(r1)} personas argued the thesis below.
+Write a neutral, short synthesis. {output_lang_directive(topic.get("lang"))} Do not invent; add nothing that is not in the debate.
 
 # THESIS: {topic['title']}
 {topic['claim']}
@@ -438,16 +470,22 @@ Source files: {', '.join(topic['sources']) or 'ad-hoc topic'}
 
 Write exactly this format, nothing else:
 ### Synthesis
+**Conclusion:** (two or three sentences: what the debate settled, what it left open, what {OWNER} should do next)
 **Strongest counterargument:** (name who raised it)
 **What would have to be true:** (at most 3 items)
 **Proposed test:** (one, cheap, dated)
 **Bet:** (probability the thesis proves right within 12 months, a percentage and a one-sentence reason)
 **Contradiction:** (if it clashes with one of the beliefs or a decision in the calendar, one sentence with [[Note name]]; else "None")
 **Changed minds:** (the personas the scorecard marks as moved, and the evidence they cited; else "Nobody")
-**Unanimity warning:** (if the scorecard says round 1 was unanimous: one sentence on what shared framing all five may have accepted; else "None")
+**Unanimity warning:** (if the scorecard says round 1 was unanimous: one sentence on what shared framing all of them may have accepted; else "None")
+### Method trace
+**Starting question:** (the thesis as a research question, taking the Methodologist's rewrite if there is one)
+**Hypotheses tested:** (at most 3, each one line, naming the persona who put it up)
+**Tests on the table:** (the concrete checks the personas proposed, each with the persona)
+**Deviations:** (where the personas' findings contradict each other, or "None")
 ### Proposal
 (one paste-ready draft for Thinking/Ideas, Beliefs or Decisions; else "None")"""
-    return run_prompt(prompt, timeout=300) or "### Synthesis\n(the LLM did not answer)"
+    return run_prompt(prompt, timeout=300, lane="dialectic-synthesis") or "### Synthesis\n(the LLM did not answer)"
 
 
 def connection_scan(day):
@@ -462,9 +500,9 @@ def connection_scan(day):
 Produce one table row per topic:
 | Topic | Prior references (as [[wikilink]] if any) | Missing link to add | Source status (in Library / not in Library) |
 Then under "**Source gaps:**" list the topics with no external source in the vault and which kind of source (book, paper, data) would help.
-English, no em or en dashes, no invention; where there is no wiki match say "none".
+{output_lang_directive()} No invention; where there is no wiki match say "none".
 {blob[:MAX_CONTEXT]}"""
-    return run_prompt(prompt, timeout=240) or ""
+    return run_prompt(prompt, timeout=240, lane="dialectic-connect") or ""
 
 
 # ------------------------------------------------------------- Buzz side
@@ -614,24 +652,42 @@ def topic_label(topic):
     return "ad-hoc topic"
 
 
+def grounding_text(topic):
+    """The vault side of the argument, the same block the moderator sees: the
+    owner's core beliefs and the decision calendar. main() attaches both to the
+    topic once; without them a persona argues the thesis in a vacuum."""
+    parts = []
+    if topic.get("beliefs"):
+        parts.append(f"**{OWNER}'s core beliefs:**\n{topic['beliefs']}")
+    if topic.get("calib"):
+        parts.append(f"**Decision calendar:**\n{topic['calib']}")
+    return "\n\n".join(parts)
+
+
 def round_text(n, topic, context, persona=None, r1=None):
     """Moderator text. Round 1 goes to ONE persona per root (isolated: nobody can
     read anyone else before answering). Round 2 is one root that quotes every
     round 1 reply, so personas read each other only through the moderator."""
+    ground = grounding_text(topic)
+    ground = ("\n\n" + ground) if ground else ""
     if n == 1:
         who = f"{persona}, this round is yours alone. " if persona else ""
         return (f"## {topic['title']}\n\n**Thesis:** {topic['claim']}\n\n"
                 f"**Source:** {', '.join(topic['sources']) or topic_label(topic)}\n\n"
-                f"**Prior context:**\n" + ("\n".join(context) if context else "- (no wiki match)") +
+                f"**Prior context:**\n" + ("\n".join(context) if context else "- (no wiki match)") + ground +
                 f"\n\n**Round 1:** {who}Test the thesis with your own method, from this message only "
-                "(do not read the thread or other personas). At most 250 words, ending with "
+                "(do not read the thread or other personas). Relate it to the prior context and the beliefs "
+                "above where they bear on it, naming the file. At most 250 words, ending with "
                 f"Finding / Strongest objection / Question for {OWNER} / Vote (YES, NO or CONDITIONAL: "
                 "does the thesis hold as stated) / Number (NN%: probability the thesis proves right within 12 months).")
     quoted = "\n\n".join(f"### {name}\n{(txt or NO_REPLY)[:R1_QUOTE_CHARS]}" for name, txt in (r1 or {}).items())
     return (f"## {topic['title']} (round 2)\n\n**Thesis:** {topic['claim']}\n\n"
-            f"**Round 1 replies:**\n\n{quoted or '(none)'}\n\n"
+            f"**Prior context:**\n" + ("\n".join(context) if context else "- (no wiki match)") + ground +
+            f"\n\n**Round 1 replies:**\n\n{quoted or '(none)'}\n\n"
             "**Round 2:** read the round 1 replies above. Pick the strongest objection other than your own, "
-            "agree with it or refute it (at most 3 sentences). End with Chosen objection / My answer / "
+            "agree with it or refute it (at most 3 sentences), citing at least one vault file by name from the "
+            "prior context, the beliefs or your own search, or saying that nothing in the vault bears on it. "
+            "End with Chosen objection / My answer / "
             "Vote (YES, NO or CONDITIONAL) / Number (NN%) / New evidence (one fact or argument that was not "
             "in your round 1 reply, or \"none\").")
 
@@ -689,12 +745,12 @@ def run_rounds_local(topic, context):
     r1 = {}
     for slug, name in PERSONAS:
         head = round_text(1, topic, context, persona=name)
-        out = run_prompt(f"{persona_prompt(slug)}\n\n{rules}\n\n# MODERATOR MESSAGE\n{head}", timeout=240)
+        out = run_prompt(f"{persona_prompt(slug)}\n\n{rules}\n\n# MODERATOR MESSAGE\n{head}", timeout=240, lane="dialectic-persona")
         r1[name] = out or NO_REPLY
     r2 = {}
     head2 = round_text(2, topic, context, r1=r1)
     for slug, name in PERSONAS:
-        out = run_prompt(f"{persona_prompt(slug)}\n\n{rules}\n\n# MODERATOR MESSAGE\n{head2}", timeout=240)
+        out = run_prompt(f"{persona_prompt(slug)}\n\n{rules}\n\n# MODERATOR MESSAGE\n{head2}", timeout=240, lane="dialectic-persona")
         r2[name] = out or NO_REPLY
     return None, None, r1, r2
 
@@ -769,23 +825,116 @@ def _fmt_vote(vote, number):
     return vote if number is None else f"{vote} {number}%"
 
 
+def verdict(score):
+    """Deterministic call from the final (round 2) votes, round 1 where a
+    persona did not answer twice: a majority of YES is Go, a majority of NO is
+    Stop, anything else (CONDITIONAL, a tie, too few votes) is Test first.
+    The moderator never writes this line; the table does."""
+    votes, numbers = [], []
+    for r in score["rows"]:
+        v = r["r2_vote"] if r["replied_r2"] else r["r1_vote"]
+        n = r["r2_number"] if r["replied_r2"] else r["r1_number"]
+        if v in VOTES:
+            votes.append(v)
+        if n is not None:
+            numbers.append(n)
+    if not votes:
+        return "Test first", None, votes
+    top = max(VOTES, key=votes.count)
+    if votes.count(top) * 2 > len(votes) and top == "YES":
+        call = "Go"
+    elif votes.count(top) * 2 > len(votes) and top == "NO":
+        call = "Stop"
+    else:
+        call = "Test first"
+    median = None
+    if numbers:
+        ns = sorted(numbers)
+        median = ns[len(ns) // 2] if len(ns) % 2 else round((ns[len(ns) // 2 - 1] + ns[len(ns) // 2]) / 2)
+    return call, median, votes
+
+
+def render_verdict(score):
+    call, median, votes = verdict(score)
+    tally = ", ".join(f"{votes.count(v)} {v}" for v in VOTES if votes.count(v))
+    num = f", median {median}%" if median is not None else ""
+    return f"**Verdict:** {call} ({tally or 'no votes'}{num}; computed from the final votes)"
+
+
 def render_scorecard(score):
-    md = ["### Scorecard", "", "| Persona | Round 1 | Round 2 | Moved | New evidence |", "|---|---|---|---|---|"]
+    md = ["| Persona | Round 1 | Round 2 | Moved |", "|---|---|---|---|"]
     for r in score["rows"]:
         r1c = _fmt_vote(r["r1_vote"], r["r1_number"]) if r["replied_r1"] else NO_REPLY
         r2c = _fmt_vote(r["r2_vote"], r["r2_number"]) if r["replied_r2"] else NO_REPLY
         moved = "yes" if r["moved"] else ("no" if r["moved"] is False else "n/a")
-        md.append(f"| {r['persona']} | {r1c} | {r2c} | {moved} | {r['evidence'] or 'none'} |")
+        md.append(f"| {r['persona']} | {r1c} | {r2c} | {moved} |")
     md.append("")
     md.append(f"Affirmation (round 1 YES): {score['yes']}/{score['voted']} ({_pct(score['affirm'])}). "
               f"Moved: {score['moved']}/{score['both']}, of which without new evidence: {score['moved_without_evidence']}.")
     if score["unanimous"]:
-        md.append(f"<span style=\"color:red\">Unanimity warning: all {score['voted']} votes were "
-                  f"{score['unanimous_vote']} in round 1. Five voices on one base model agreeing is a signal to "
-                  f"check the framing, not a confirmation.</span>")
+        md += ["", f"> [!warning] Unanimity warning: all {score['voted']} votes were "
+               f"{score['unanimous_vote']} in round 1. {score['voted']} voices on one base model agreeing is a signal to "
+               f"check the framing, not a confirmation."]
     if score["unparsed"]:
         md.append(f"Unparsed replies (no Vote line): {score['unparsed']}.")
     return "\n".join(md)
+
+
+def _field(text, label, limit=220):
+    """The text after a bold label such as **Finding:** in a persona reply, on
+    the same line or the next non-empty one, cut to one sentence-ish length."""
+    if not text or text == NO_REPLY:
+        return ""
+    m = re.search(r"\*{0,2}" + label + r"\*{0,2}\s*[:：]?\*{0,2}[ \t]*(.*)", text, re.I)
+    if not m:
+        return ""
+    rest = m.group(1).strip()
+    if not rest:
+        tail = text[m.end():].strip().splitlines()
+        rest = tail[0].strip() if tail else ""
+    rest = re.sub(r"^\W+", "", rest.replace("|", "/"))
+    return (rest[:limit].rsplit(" ", 1)[0] + "...") if len(rest) > limit else rest
+
+
+def render_method_tables(r1, r2, score):
+    by = {r["persona"]: r for r in score["rows"]}
+    md = ["| Persona | Finding | Strongest objection | Vote |", "|---|---|---|---|"]
+    for name, txt in r1.items():
+        row = by.get(name, {})
+        if txt == NO_REPLY:
+            md.append(f"| {name} | {NO_REPLY} | | |")
+            continue
+        if PASS_RE.match(txt):
+            md.append(f"| {name} | Pass | | Abstain |")
+            continue
+        md.append(f"| {name} | {_field(txt, 'finding') or '?'} | {_field(txt, 'strongest objection') or '?'} | "
+                  f"{_fmt_vote(row.get('r1_vote'), row.get('r1_number'))} |")
+    md += ["", "| Persona | Chosen objection | New evidence | Vote |", "|---|---|---|---|"]
+    for name, txt in r2.items():
+        row = by.get(name, {})
+        if txt == NO_REPLY:
+            md.append(f"| {name} | {NO_REPLY} | | |")
+            continue
+        ev = row.get("evidence") or "none"
+        if len(ev) >= 200:      # parse_reply keeps 200 characters; do not end a cell mid-word
+            ev = ev[:180].rsplit(" ", 1)[0] + "..."
+        md.append(f"| {name} | {_field(txt, 'chosen objection') or '?'} | {ev} | "
+                  f"{_fmt_vote(row.get('r2_vote'), row.get('r2_number'))} |")
+    return "\n".join(md)
+
+
+def split_synthesis(text):
+    """{'synthesis': ..., 'method trace': ..., 'proposal': ...} from the
+    moderator's fixed format; whatever is not under a known heading lands in
+    'synthesis' so nothing the LLM wrote is lost."""
+    out, key = {}, "synthesis"
+    for line in (text or "").splitlines():
+        m = re.match(r"^#{2,4}\s+(.+?)\s*$", line)
+        if m:
+            key = m.group(1).strip().lower()
+            continue
+        out.setdefault(key, []).append(line)
+    return {k: "\n".join(v).strip() for k, v in out.items()}
 
 
 def append_score(date_str, mode, topic, score):
@@ -868,20 +1017,40 @@ def write_scorecard():
 
 # ------------------------------------------------------------- output
 
+def _quote(text):
+    return "\n".join("> " + l if l.strip() else ">" for l in text.strip().splitlines())
+
+
 def render_topic(topic, r1, r2, synthesis, link=None, score=None):
+    """One topic, two pages and an appendix. Page one is what a decision needs:
+    the thesis, the computed verdict, the moderator's conclusion and fields, the
+    vote table, the proposal. Page two is the method trace: the question, the
+    hypotheses and tests, and one row per persona. The full transcript stays in
+    the same note, folded, so nothing is lost and nothing has to be read."""
+    parts = split_synthesis(synthesis)
     md = [f"## {topic['title']}", "", f"**Thesis:** {topic['claim']}", "",
           f"**Source:** {', '.join(topic['sources']) or topic_label(topic)}"]
     if link:
         md.append(f"**Buzz:** {link}")
-    md += ["", "### Round 1"]
-    for name, txt in r1.items():
-        md += [f"#### {name}", txt.strip(), ""]
-    md += ["### Round 2"]
-    for name, txt in r2.items():
-        md += [f"#### {name}", txt.strip(), ""]
+    md += ["", "### Decision summary", ""]
+    if score:
+        md += [render_verdict(score), ""]
+    md += [parts.get("synthesis") or "(the moderator did not answer)", ""]
     if score:
         md += [render_scorecard(score), ""]
-    md += [synthesis.strip(), ""]
+    md += ["### Proposal", "", parts.get("proposal") or "None", ""]
+    md += ["### Method trace", ""]
+    if parts.get("method trace"):
+        md += [parts["method trace"], ""]
+    if score:
+        md += [render_method_tables(r1, r2, score), ""]
+    body = ["**Round 1**", ""]
+    for name, txt in r1.items():
+        body += [f"**{name}**", "", txt.strip(), ""]
+    body += ["**Round 2**", ""]
+    for name, txt in r2.items():
+        body += [f"**{name}**", "", txt.strip(), ""]
+    md += ["> [!note]- Full transcript", _quote("\n".join(body)), ""]
     return "\n".join(md)
 
 
@@ -897,9 +1066,11 @@ def coverage_table(day, date_str):
     return "\n".join(rows)
 
 
-def file_note(md, title, summary):
+def file_note(md, title, summary, lang="auto"):
+    """lang defaults to auto: file_query detects the body language, so a Turkish
+    debate is indexed as Turkish instead of being mislabelled English."""
     r = subprocess.run([sys.executable, os.path.join(VAULT, "tools", "file_query.py"), "dialectic", title,
-                        "--summary", summary, "--lang", "en"], cwd=VAULT, input=md, capture_output=True,
+                        "--summary", summary, "--lang", lang], cwd=VAULT, input=md, capture_output=True,
                        text=True, timeout=60)
     if r.returncode != 0:
         raise RuntimeError(f"file_query failed: {r.stderr[:200]}")
@@ -917,25 +1088,106 @@ def buzz_post_sh(identity, channel, text):
         log(f"buzz post skipped: {exc}")
 
 
+NIGHT_KEEP = 10
+NIGHT_USABLE_SHARE = 2 / 3     # a night counts as usable when this share of local replies passed the judge
+
+
 def write_status(date_str, mode, result, detail):
-    """Worker-owned status file read by health_check (Mac), watchdog and the briefing."""
-    line = f"- {date_str} {mode}: {result}, {detail}"
-    old = [l for l in read_file(STATUS_MD).splitlines() if l.startswith("- ")]
-    old = [l for l in old if not l.startswith(f"- {date_str} {mode}:")]
-    lines = (old + [line])[-14:]
-    write_file(STATUS_MD, "# Dialectic status\n\n"
-               "Automatic: tools/dialectic.py (worker, 12:30 and 21:20). Last 14 runs; "
-               "health_check and watchdog read this file.\n\n" + "\n".join(lines) + "\n")
+    """Worker-owned status file read by health_check (Mac), watchdog and the
+    briefing. Day rounds are `- <date> <mode>:` lines (last 14). The night
+    experiment keeps its own `- night <date>:` lines in a second section so the
+    checks that read the last day line never see a night line."""
+    all_lines = read_file(STATUS_MD).splitlines()
+    nights = [l for l in all_lines if l.startswith("- night ")]
+    days = [l for l in all_lines if l.startswith("- ") and not l.startswith("- night ")]
+    if mode == "night":
+        nights = [l for l in nights if not l.startswith(f"- night {date_str}:")] + [f"- night {date_str}: {result}, {detail}"]
+        nights = nights[-NIGHT_KEEP:]
+    else:
+        days = [l for l in days if not l.startswith(f"- {date_str} {mode}:")] + [f"- {date_str} {mode}: {result}, {detail}"]
+        days = days[-14:]
+    text = ("# Dialectic status\n\n"
+            "Automatic: tools/dialectic.py (worker, 12:30 and 21:20). Last 14 runs; "
+            "health_check and watchdog read this file.\n\n" + "\n".join(days) + "\n")
+    if nights:
+        text += ("\n## Night experiment (local personas)\n\n"
+                 f"02:00 on the worker, persona lane on the local model, moderator on the cloud. A night is usable "
+                 f"when at least {round(100 * NIGHT_USABLE_SHARE)}% of the local replies passed the judge. Kill rule: "
+                 "after five nights, fewer than three usable nights closes the timer.\n\n" + "\n".join(nights) + "\n")
+    write_file(STATUS_MD, text)
+
+
+def night_topic(date_str):
+    """Replay the day's first cloud topic when there was one, so the same thesis
+    is argued by both models; otherwise a vault topic. None on a truly empty day."""
+    try:
+        raw = json.loads(read_file(DAY_FILE) or "{}")
+    except ValueError:
+        raw = {}
+    yesterday = (datetime.strptime(date_str, "%Y-%m-%d") - timedelta(days=1)).strftime("%Y-%m-%d")
+    if raw.get("topics") and raw.get("date") in (date_str, yesterday):
+        t = dict(raw["topics"][0])
+        t.setdefault("sources", [])
+        t["replay"] = raw["date"]
+        return t
+    return pick_vault_topic()
+
+
+def judge_local_replies(topic, r1, r2):
+    """The cloud moderator grades every local reply usable or not. Deterministic
+    first: no Vote line is unusable whatever the prose says. Returns
+    ({persona: {"r1": bool, "r2": bool}}, usable, total)."""
+    replies = {}
+    for rnd, rd in (("r1", r1), ("r2", r2)):
+        for name, txt in rd.items():
+            if txt != NO_REPLY:
+                replies[f"{name} {rnd}"] = txt
+    parsed = {k: bool(VOTE_RE.search(v)) for k, v in replies.items()}
+    blob = "\n\n".join(f"### {k}\n{v[:1800]}" for k, v in replies.items())[:MAX_CONTEXT]
+    prompt = f"""Below are persona replies from a critical dialectic round, produced by a small local model. Grade each reply "usable" or "unusable". Usable means all of: it argues the thesis (not a generic essay), it stays in the named persona's method, it is coherent and in the language of the thesis, it does not invent vault files or facts that are not in the thesis, and it ends with the Vote and Number lines.
+
+# THESIS: {topic['title']}
+{topic['claim'][:1500]}
+
+# REPLIES
+{blob}
+
+Write only a JSON object mapping each reply heading (exactly as written after ###) to "usable" or "unusable". Nothing else."""
+    verdicts = {}
+    out = run_prompt(prompt, timeout=300, lane="dialectic-judge") or ""
+    m = re.search(r"\{.*\}", out, re.S)
+    if m:
+        try:
+            verdicts = {str(k): str(v).strip().lower() for k, v in json.loads(m.group(0)).items()}
+        except ValueError:
+            verdicts = {}
+    grades = {}
+    for k in replies:
+        name, rnd = k.rsplit(" ", 1)
+        ok = parsed[k] and verdicts.get(k, "unusable") == "usable"
+        grades.setdefault(name, {})[rnd] = ok
+    usable = sum(1 for g in grades.values() for ok in g.values() if ok)
+    return grades, usable, len(replies)
+
+
+def render_judgement(grades, usable, total):
+    md = [f"**Local replies usable:** {usable}/{total} (graded by the cloud moderator; a reply without a Vote line is unusable)", "",
+          "| Persona | Round 1 | Round 2 |", "|---|---|---|"]
+    for name, g in grades.items():
+        cell = lambda k: ("usable" if g.get(k) else ("unusable" if k in g else NO_REPLY))
+        md.append(f"| {name} | {cell('r1')} | {cell('r2')} |")
+    return "\n".join(md)
 
 
 # ------------------------------------------------------------- main
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--run", choices=["noon", "evening"])
+    ap.add_argument("--run", choices=["noon", "evening", "night"])
     ap.add_argument("--topic")
     ap.add_argument("--local", action="store_true")
-    ap.add_argument("--sequential", action="store_true")
+    ap.add_argument("--sequential", action="store_true", help="(default) mention personas one at a time")
+    ap.add_argument("--parallel", action="store_true", help="mention every persona at once")
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--scorecard", action="store_true",
                     help="print the rolling scorecard computed from this machine's score log, then exit")
@@ -952,7 +1204,19 @@ def main():
     seen = load_seen()
     day = load_day(date_str)
 
-    if args.topic:
+    if mode == "night":
+        # Local-model experiment: one topic, personas on the worker's model,
+        # nothing scored, nothing marked seen. See the module docstring.
+        topic = night_topic(date_str)
+        if not topic:
+            log("Night: nothing to argue (no day topic, no vault topic).")
+            if not args.dry_run:
+                write_status(date_str, mode, "idle", "no topic")
+            return
+        captures = [("night-topic", topic["claim"])]
+        topics = [topic]
+        args.local = True
+    elif args.topic:
         captures = [("ad-hoc-topic", args.topic)]
         topics = [{"title": args.topic[:80], "claim": args.topic, "sources": []}]
     else:
@@ -976,7 +1240,9 @@ def main():
     beliefs = beliefs_summary()
     calib = calibration_lines()
     for t in topics:
-        t["context"] = wiki_search(f"{t['title']} {t['claim'][:120]}")
+        if not t.get("context"):     # a replayed topic carries the day's context already
+            t["context"] = wiki_search(f"{t['title']} {t['claim'][:120]}")
+        t["beliefs"], t["calib"] = beliefs, calib
 
     if args.dry_run:
         for t in topics:
@@ -994,12 +1260,14 @@ def main():
         return
 
     sections, replies, expected, links, participants, scores = [], 0, 0, [], [], []
+    started = time.time()
+    judged = None
     for t in topics:
         try:
             if args.local:
                 channel, root, r1, r2 = run_rounds_local(t, t["context"])
             else:
-                channel, root, r1, r2 = run_rounds_buzz(t, t["context"], args.sequential)
+                channel, root, r1, r2 = run_rounds_buzz(t, t["context"], not args.parallel)
         except Exception as exc:
             log(f"round failed ({t['title']}): {exc}")
             write_status(date_str, mode, "error", str(exc)[:120])
@@ -1013,9 +1281,15 @@ def main():
         link = None
         if root and channel:
             link = f"buzz://message?channel={channel}&id={root}"
-            post(channel, render_scorecard(score) + "\n\n" + synthesis, reply_to=root)
+            post(channel, render_verdict(score) + "\n\n" + render_scorecard(score) + "\n\n" + synthesis, reply_to=root)
             links.append(link)
-        sections.append(render_topic(t, r1, r2, synthesis, link, score))
+        section = render_topic(t, r1, r2, synthesis, link, score)
+        if mode == "night":
+            judged = judge_local_replies(t, r1, r2)
+            section = section.replace("### Decision summary", render_judgement(*judged) + "\n\n### Decision summary", 1)
+            sections.append(section)
+            continue
+        sections.append(section)
         append_score(date_str, mode, t, score)
         for s in t["sources"]:
             day["captures"][s] = {"topic": t["title"], "run": mode}
@@ -1023,21 +1297,38 @@ def main():
 
     # Ad-hoc topics get their own file so they never overwrite the scheduled round's note.
     title = f"Topic {args.topic[:50]}" if args.topic else f"{mode.capitalize()} round"
-    md = [f"# {title}", "",
-          f"Personas: {', '.join(participants) or 'none'}. Replies: {replies}/{expected}. "
-          f"Channel: #{CHANNEL_NAME}." + (" Local mode (no Buzz)." if args.local else ""), "",
-          "## Topics", ""]
+    minutes = round((time.time() - started) / 60)
+    if mode == "night":
+        title = "Night round (local personas)"
+        origin = (f"replay of the {topics[0]['replay']} round" if topics[0].get("replay")
+                  else f"vault topic ({topics[0].get('fallback_key', '?')})")
+        head = (f"Experiment: personas on the worker's local model, moderator on the cloud. Topic: {origin}. "
+                f"Replies: {replies}/{expected}. Usable: {judged[1]}/{judged[2]}. Wall time: {minutes} min.")
+    else:
+        head = (f"Personas: {', '.join(participants) or 'none'}. Replies: {replies}/{expected}. "
+                f"Channel: #{CHANNEL_NAME}." + (" Local mode (no Buzz)." if args.local else ""))
+    md = [f"# {title}", "", head, ""]
     md += sections
     if mode == "evening":
         scan = connection_scan(day)
         md += ["## Connection scan", "", scan or "(not produced)", "",
                "## Coverage", "", coverage_table(day, date_str), ""]
     text = no_dashes("\n".join(md))
-    summary = (f"Dialectic {mode} round {date_str}: {len(topics)} topics argued by five critical-thinking "
+    summary = (f"Dialectic {mode} round {date_str}: {len(topics)} topics argued by {len(participants)} critical-thinking "
                f"personas on Buzz, {replies}/{expected} replies, with synthesis" +
                (", whole-day connection scan and coverage table." if mode == "evening" else "."))
+    if mode == "night":
+        summary = (f"Night dialectic {date_str}: one topic argued by {len(participants)} personas on the worker's local "
+                   f"model, {replies}/{expected} replies, {judged[1]}/{judged[2]} judged usable, cloud synthesis.")
     path = file_note(text, title, summary)
     log(f"filed: {path}")
+
+    if mode == "night":
+        usable_night = judged[2] > 0 and judged[1] / judged[2] >= NIGHT_USABLE_SHARE
+        write_status(date_str, mode, "ok", f"{'usable' if usable_night else 'not usable'}, {judged[1]}/{judged[2]} replies passed, "
+                     f"{replies}/{expected} replies, {minutes} min, {path}")
+        log(f"night: {judged[1]}/{judged[2]} usable, {minutes} min")
+        return
 
     if not args.topic:
         seen.update(name for name, _ in captures)

@@ -1,0 +1,17 @@
+{
+  "no_epic": "Pencerede epic yok. Araştırma atlandı, token harcanmadı.",
+  "chosen": "Seçilen epic: {title} (dil: {language})",
+  "repeat_skip": "Daha önce araştırıldı: '{title}', {date}. Yeniden araştırılmadı; tekrar raporlanıyor.",
+  "pass_failed": "'{pass_name}' geçişi boş döndü; eldekiyle devam ediliyor.",
+  "web_skipped": "--no-web: salvo geçişi atlandı, hiçbir kaynak okunmadı.",
+  "dropped": "{n} bulgu satırı kaynak etiketi taşımadığı için sentez öncesi atıldı.",
+  "filed": "Rapor dosyalandı: {path}",
+  "trigger_heading": "## Tetikleyen epic",
+  "trigger_body": "Not: `{path}` | skor {score}\nSinyaller: {signals}",
+  "no_findings": "## Bulgular\n\nBu çalışmada hiçbir kaynak okunmadı (web erişimi yok), dolayısıyla kanıt yok. Yokluk kanıt değildir.",
+  "unverified_heading": "## Doğrulanmamış (sentezde kullanılmadı)",
+  "deferred_heading": "## Ertelenen epic'ler",
+  "candidates_heading": "## Aday kaynaklar ({added} yeni, onay gerekiyor)",
+  "stale_heading": "## Verim vermeyen kaynaklar (düşürme adayı)",
+  "recurrence_body": "## Tekrar eden epic\n\n**{title}**\n\nBu konu {times}. kez yüzeye çıktı. {first_date} tarihinde araştırılmıştı: `{report}`.\n\nYeni araştırma yapılmadı, bu bilinçli (tekrar engeli). Tekrarın kendisi bulgudur: kapanmadan geri gelen bir konu daha fazla kanıt beklemiyor, karar bekliyor.\n\nTetikleyen not: `{path}`\n\n## Öneri\n\nÖnceki raporu yeniden oku ve ya kararı ver ya da kararı neyin engellediğini yaz."
+}

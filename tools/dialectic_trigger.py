@@ -34,6 +34,7 @@ import sys
 VAULT = os.environ.get("BRAINLESS_VAULT") or os.path.expanduser("~/projects/brainless")
 sys.path.insert(0, os.path.join(VAULT, "tools"))
 import dialectic as D  # noqa: E402  reuse buzz(), channel_id, post, pubkey, read/write, log
+from net_wait import wait_for_network  # noqa: E402
 
 TRIGGER_RE = re.compile(r"^\s*!dialectic\s+(.+)", re.IGNORECASE | re.DOTALL)
 BARE_RE = re.compile(r"^\s*!dialectic\s*$", re.IGNORECASE)
@@ -104,6 +105,14 @@ def main():
     args = ap.parse_args()
     if args.self_test:
         return self_test()
+
+    # The trigger polls every 60s, including right after wake-from-sleep before
+    # Tailscale is back. Skip this tick cleanly instead of letting the first buzz
+    # call raise (RuntimeError -> failed unit -> false alarm); the next tick runs
+    # once the network is up.
+    if not wait_for_network(attempts=5, delay=3.0):
+        D.log("network not up yet (likely just woke); skipping this tick")
+        return 0
 
     channel = D.channel_id(D.CHANNEL_NAME)
     if not channel:

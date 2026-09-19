@@ -16,6 +16,14 @@ VAULT="${BRAINLESS_VAULT:-$HOME/projects/brainless}"
 LOCK="${BRAINLESS_GIT_LOCK:-$HOME/.brainless-git.lock}"
 cd "$VAULT" || exit 1
 
+# A timer can fire in the seconds after wake-from-sleep, before the network is
+# back. Skip this tick cleanly rather than letting the tool crash on its first
+# network call (LLM, Buzz, Google); the next timer run picks the work up.
+if ! python3 tools/net_wait.py --wait; then
+  echo "network not up yet (likely just woke); skipping this tick"
+  exit 0
+fi
+
 flock -w 300 "$LOCK" git pull --rebase --autostash --quiet || true
 python3 "$@"
 status=$?

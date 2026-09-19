@@ -1,0 +1,13 @@
+[Unit]
+Description=brainless: weekly deep research, triggered by an epic
+After=network-online.target
+OnFailure=brainless-notify-failure@%n.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=%h/projects/brainless
+# Research passes use a stronger model than the rest of the pipeline.
+Environment=BRAINLESS_RESEARCH_MODEL=claude-opus-5
+# This is the only job that reads the open web (llm.py, web=True). It still
+# cannot write, execute or spawn: see _NEVER_TOOLS.
+ExecStart=/bin/bash %h/projects/brainless/.agents/scripts/worker_job.sh tools/weekly_research.py

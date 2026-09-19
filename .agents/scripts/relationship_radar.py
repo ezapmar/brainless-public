@@ -31,7 +31,6 @@ STALE_YELLOW_WEEKS = 20
 STALE_RED_WEEKS = 32
 MOMENTUM_DROP = 15
 DATE_RE = re.compile(r"(\d{4}-\d{2}-\d{2})")
-SCORE_LABELS = ("Spiky Score", "Attention Score", "Interaction Score", "Emotion Score")
 
 
 def read(path):

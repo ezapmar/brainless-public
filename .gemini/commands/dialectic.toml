@@ -1,4 +1,4 @@
-description = "Argue a topic with the five critical-thinking personas, then synthesize"
+description = "Argue a topic with the six critical-thinking personas, then synthesize"
 
 prompt = """
 Follow the guardrails in this file first:

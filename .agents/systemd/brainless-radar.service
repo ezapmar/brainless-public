@@ -1,0 +1,8 @@
+[Unit]
+Description=brainless iliski radari
+OnFailure=brainless-notify-failure@%n.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=%h/projects/brainless
+ExecStart=/usr/bin/python3 %h/projects/brainless/.agents/scripts/relationship_radar.py

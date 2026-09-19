@@ -49,5 +49,8 @@
   "kill_criteria": "Kill criteria",
   "kill_breached": "{n} ihlal, ilki: {first}",
   "kill_ok": "ihlal yok, {due} kriter {days} gün içinde, {missing} projede kriter yok",
-  "kill_unreadable": "taranamadı: {error}"
+  "kill_unreadable": "taranamadı: {error}",
+  "privacy_guards": "Gizlilik korumaları",
+  "privacy_ok": "{count} korumalı alan, hepsi ignore listesinde",
+  "privacy_exposed": "IGNORE EDİLMİYOR: {paths}. Bir yeniden adlandırma .gitignore kuralını kırdı; commit'ten önce düzelt"
 }

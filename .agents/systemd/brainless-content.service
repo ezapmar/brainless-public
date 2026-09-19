@@ -1,0 +1,7 @@
+[Unit]
+Description=brainless icerik motoru
+OnFailure=brainless-notify-failure@%n.service
+
+[Service]
+Type=oneshot
+ExecStart=%h/projects/brainless/.agents/scripts/omarchy_job.sh .agents/scripts/content_engine.py

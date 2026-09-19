@@ -15,6 +15,7 @@ VAULT = os.environ.get("BRAINLESS_VAULT") or os.path.expanduser("~/projects/brai
 import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from owner_profile import WORKER  # noqa: E402
+from owner_profile import PROTECTED_HOMES as profile_protected_homes  # noqa: E402
 from i18n import t  # noqa: E402
 HEALTH_FILE = os.path.join(VAULT, "_Agent-Context", "HEALTH.md")
 RED_FLAG_SECONDS = 2 * 24 * 3600
@@ -37,6 +38,12 @@ def age_str(seconds):
 def ago(seconds):
     """'<age> ago' in the output language."""
     return t("health_check.ago", age=age_str(seconds))
+
+
+# Homes that must never reach the remote. The list lives in PROFILE.md, because
+# .gitignore, this check and tools/tests/test_gitignore_guards.py all need the same
+# one and a second copy drifts silently.
+PROTECTED_HOMES = list(profile_protected_homes)
 
 
 def check_git():
@@ -301,8 +308,32 @@ def check_dialectic():
         t("health_check.dialectic_last_run", date=last[2:12], slot=slot, result=result, ago=ago(max(age, 0))))
 
 
+def check_privacy_guards():
+    """Are the protected homes still ignored?
+
+    A .gitignore rule that names one path stops matching the day the path is
+    renamed, and nothing complains: the next compile simply tracks the file.
+    That is how IBANs or a child's health records would reach the remote, so
+    the check is cheap and runs every time rather than being remembered.
+    """
+    label = t("health_check.privacy_guards")
+    exposed = []
+    for rel in PROTECTED_HOMES:
+        if not os.path.exists(os.path.join(VAULT, rel)):
+            continue  # moved or renamed; the tracked-file scan below still covers it
+        r = subprocess.run(["git", "check-ignore", "-q", rel], cwd=VAULT,
+                           capture_output=True, timeout=30)
+        if r.returncode != 0:
+            exposed.append(rel)
+    if exposed:
+        add(label, "RED", t("health_check.privacy_exposed", paths=", ".join(exposed[:3])))
+        return
+    add(label, "OK", t("health_check.privacy_ok", count=len(PROTECTED_HOMES)))
+
+
 def main():
     check_git()
+    check_privacy_guards()
     # smart_processor runs hourly; 3h of silence means the cron line is dead.
     check_log(t("health_check.hourly_processor"), "logs/smart_processor.log", 3 * 3600, t("health_check.hourly_cron"))
     # Night jobs and telegram moved to the worker on 2026-08-26; they leave no

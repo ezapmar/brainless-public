@@ -26,7 +26,7 @@ from datetime import datetime
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 import telegram_capture as tc  # noqa: E402  (reuses whisper, prompts, paths)
-from owner_profile import OWNER, OWNER_FULL, WORKER, LANG  # noqa: E402
+from owner_profile import LANG  # noqa: E402
 from i18n import t  # noqa: E402
 
 VAULT = tc.VAULT

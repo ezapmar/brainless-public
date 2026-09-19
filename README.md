@@ -41,7 +41,7 @@ wrong the same way twice without noticing. A pile of notes does not fix it.
 4. **It comes back when it is relevant.** A morning queue of at most three items. A search
    that answers "what do I already know about this". A brief before a meeting. A digest
    overnight.
-5. **Then it argues.** Five personas, each built out of a book on thinking, test what I
+5. **Then it argues.** Six personas, each built out of a book on thinking, test what I
    have just decided and post the disagreement to a channel I read on my phone. Decisions
    carry a prediction and a review date, and the system nags me until I write down what
    actually happened.
@@ -58,11 +58,11 @@ wrong the same way twice without noticing. A pile of notes does not fix it.
 - **Morning.** The night is already compiled. At most three things are waiting: a decision
   due for grading, a commitment, one piece of evidence to review.
 - **Overnight, without me.** An always-on machine digests the day, rebuilds the compiled
-  layer, and runs the five voices at 12:30 and 21:20.
+  layer, and runs the six voices at 12:30 and 21:20.
 
 ## What it changed
 
-I stopped carrying it all in my head, which is the point of the name.
+I stopped carrying it all in my head, which was the whole point.
 
 The part I did not expect is the connecting. I do not make the links any more, and the
 links are better for it, because the system has no favourites and never conveniently
@@ -85,10 +85,29 @@ And an argument that nobody grades is entertainment, which Galatasaray already p
 flowchart LR
   C["1. Capture<br/>everything, unjudged"] --> M["2. Compile<br/>the machine reads"]
   M --> B["3. Bet<br/>beliefs and decisions"]
-  B --> A["4. Argue<br/>five voices, two rounds"]
+  B --> A["4. Argue<br/>six voices, two rounds"]
   A --> G["5. Grade<br/>outcome against prediction"]
   G -->|"filed back, so tomorrow builds on today"| C
 ```
+
+### Three layers, and the failure they guard against
+
+The bet underneath all five steps is connectivity. A note on its own is storage. Notes
+wired to each other are a map, and the value shows up when you move across it: an
+argument from a meeting in May lands beside a belief written in March and the two change
+each other.
+
+Connectivity alone fails in a predictable way. A system that touches every subject and
+holds none of them is very good at sounding informed and no use at all when something
+has to be decided. So the loop is read as three layers, each one worth its cost only if
+it feeds the next.
+
+1. **Collect.** Everything comes in through one door and the machine reads it. Steps 1
+   and 2 below.
+2. **Think clearly.** The point is not a tidier disk, it is what you can hold in your own
+   head afterwards, which is why the vault argues instead of agreeing. Steps 3 and 4.
+3. **Decide.** A small number of dated calls, each carrying a prediction and a review
+   date. Steps 4 and 5.
 
 ### 1. Capture everything, filter later
 
@@ -107,10 +126,23 @@ their originals and their raw Markdown conversions. The high-value ones also get
 Summary and a Fiche de Lecture, and a missing or empty output is retried instead of
 quietly accepted.
 
-Obsidian is the surface. Every input becomes Markdown, Graph view follows the explicit
+Obsidian is the surface, not the substrate. **Every input becomes Markdown** before
+anything else touches it: documents through markitdown called as a library, audio
+through whisper on the machine, photographs read into text. A converted source keeps
+two files, the mechanical `_raw.md` conversion and an authored note beside it, so a
+later reader can always tell evidence from thinking. That choice is what makes grep and
+BM25 enough instead of an index server, makes every change a git diff, and means the
+vault outlives every tool in this repository. Graph view follows the explicit
 `[[wikilinks]]`, and Smart Connections shows related notes that do not have a written
 edge yet. You own the notes. The machine owns `.wiki/` and can rebuild it from scratch
 whenever it likes, which means nobody has to spend a Sunday curating a knowledge graph.
+
+The method underneath is **Zettelkasten**: one concept per note, a permanent `zk:`
+address that survives every rename, links rather than folders as the structure, and an
+archive that tells you which note it wants next. `/backlog` is that last part made
+mechanical, counting unresolved links and handing back a ranked queue of notes the vault
+is asking for. The passes a note goes through afterwards, and why judging is postponed
+at each one, are written up in [the method](docs/method.md).
 
 ### 3. Write what you believe and what you decided, as bets
 
@@ -124,7 +156,7 @@ be argued with.
 
 ### 4. Argue before you act
 
-Five personas test a thesis in two rounds. In round one each persona gets its own
+Six personas test a thesis in two rounds. In round one each persona gets its own
 thread, applies its own method without seeing the others, and votes YES, NO or
 CONDITIONAL with a probability. In round two each reads the rest, picks the strongest
 objection, answers it, votes again and names the new evidence that moved it, or says
@@ -133,7 +165,7 @@ objection, answers it, votes again and names the new evidence that moved it, or 
 ```mermaid
 flowchart TD
   T["Thesis<br/>yours, or clustered from today's notes"]
-  R1["Round one, isolated<br/>Skeptic, Gambler, Scientist, Postmortem, Strategist<br/>each in its own thread, blind to the others"]
+  R1["Round one, isolated<br/>Skeptic, Gambler, Scientist, Postmortem, Strategist, Methodologist<br/>each in its own thread, blind to the others"]
   R2["Round two, quoted<br/>answer the strongest objection, vote again,<br/>name the new evidence or say none"]
   SC["Scorecard, by script<br/>affirmation rate, who moved, evidence cited,<br/>unanimity warning"]
   MOD["Moderator synthesis<br/>best counterargument, what would have to be true,<br/>a cheap dated test, a probability,<br/>any clash with your own beliefs"]
@@ -148,7 +180,7 @@ flowchart TD
 
 A script scores the round before the moderator writes a word, so the synthesis starts
 from counted votes and not from a mood. A rolling 30 day scorecard raises a flag when
-affirmation climbs above 60 per cent, or when a persona never votes NO. Five voices that
+affirmation climbs above 60 per cent, or when a persona never votes NO. Six voices that
 always agree with you are a fan club, and I did not need software for that.
 
 The voices come from the shelf.
@@ -160,6 +192,7 @@ The voices come from the shelf.
 | Scientist | Camuffo, Gambardella et al., *A scientific approach to entrepreneurial decision-making* | What is the theory, what must be true, what is the cheapest test, what result means terminate and what means pivot |
 | Postmortem | Amy Edmondson, *Right Kind of Wrong* | If this fails, is it basic, complex or intelligent failure. Was the homework done. What is the smallest version |
 | Strategist | Lafley and Martin, *Playing to Win* | Where to play, how to win, which capabilities, which systems. Passes on topics that are not strategy |
+| Methodologist | Quivy and Van Campenhoudt, *Manuel de recherche en sciences sociales* | Rewrites the thesis as a research question, names the hidden angle, builds concept, dimension and indicator, writes the falsifiable hypothesis and the cheapest observation plan |
 
 They never mention each other and only answer the moderator and you, so agents cannot
 set each other off. It is the best-behaved meeting in my week. Each persona's prompt is
@@ -182,6 +215,44 @@ step, you are ahead of most people I know. Including me, for most of this year.
 Every analysis, graded or not, is filed back into `.wiki/digests/queries/`. That is
 where the loop closes, because tomorrow's question gets to build on today's answer.
 
+### Research, but only when the week earns it
+
+The loop above runs on what you already know. Sometimes a topic turns up that the vault
+cannot answer, and the tempting move is to point agents at the internet and read the
+essay they come back with. That produces something plausible every time, which is the
+problem with it.
+
+So research here follows a social science method, taken from Quivy and Van Campenhoudt,
+*Manuel de recherche en sciences sociales*, and adapted for a vault and a set of agents.
+The parts the code enforces:
+
+- **The opening question is written first**, in one sentence, before any source is
+  opened. Every term defined, answerable with the access you actually have, and a real
+  question rather than one whose answer is implied by how it is asked.
+- **The lens is named before the hypotheses**, in one sentence: which angle the research
+  looks through and what it is trying to explain. Without it a set of hypotheses
+  scatters across three unrelated questions, each defensible, none adding up.
+- **Hypotheses are falsifiable**, in the same shape as a decision's prediction and
+  confidence, which is what lets a research pass be graded later instead of admired.
+- **Reading happens in salvos**, at most five sources each, every one on a different
+  angle, with interpretation in between. Unlimited fan-out is the modern form of the
+  trap the book calls insatiable reading.
+- **Every finding carries `Kaynak: <URL>` and one of `verified`, `claim`, `unknown`.**
+  Unlabelled lines are deleted mechanically before synthesis, `unknown` lines may not be
+  used as support, and when there is no evidence the report says so, because absence of
+  evidence is not evidence.
+- **The analysis interprets the deviations** between what was expected and what was
+  found. A report that only confirms was not testing anything.
+
+Two guards keep it rare. A pass runs only if the week produced an **epic**, so a week of
+ordinary work costs nothing and the job exits in seconds. And a topic already researched
+within eight weeks is not researched again: the recurrence is reported instead, because
+a question that keeps coming back without closing is waiting for a decision, not for
+more evidence.
+
+The full adaptation, including the three acts and the seven steps, is in
+[the method](docs/method.md).
+
 ### Where the clarity comes from
 
 Nothing above makes you smarter. It changes what you have to write down before you may
@@ -200,6 +271,17 @@ and what it guards against, is in [docs/commands.md](docs/commands.md).
 All of it runs on your own hardware: the scripts, the schedulers, the vault, the search
 index. The only thing that ever leaves the machine is a prompt to whichever model you
 configured, and pointing it at Ollama or LM Studio keeps even that at home.
+
+You do not have to choose once, for everything. Each call site names a **lane**, and a
+lane can be routed to its own model: the short private ones, like deciding how large
+the work in a note is, on a model running on your own box through the `goose` provider,
+while the long prose stays with a large model. The reverse is also useful, a cloud lane
+falling back to the local model when a subscription expires or the network is down. The
+fallback only goes that way: a lane pinned local was pinned for privacy, and a timeout
+is not consent to send the same text somewhere else. `python3 tools/llm.py --lanes`
+shows where each one currently goes, and [docs/local-inference.md](docs/local-inference.md)
+covers what a small model can and cannot do, with measurements from a laptop-class
+worker rather than promises.
 
 A loop that runs unattended against a folder holding your life needs one rule above all
 the others, which is that nothing writes into your notes without you. Every command
@@ -272,6 +354,12 @@ ten replies, one synthesis, one bet.
 
 The notes were a warehouse. What I wanted was a colleague.
 
+The name came earlier, and it is a joke that stuck. I kept telling the company "let us
+use our own brain first, then we can talk about a second brain", so when the folder
+needed a name I typed brainless: not a second brain, zero brain. It turned out to carry
+the design rule. The system keeps the memory and the connections. The thinking stays
+yours.
+
 ## Who this is for
 
 People who make decisions for a living and suspect their own reasoning. Founders,
@@ -307,7 +395,10 @@ script is short enough to read first, and I would. What it does, in order:
 4. Checks the LLM backend. Default is the `claude` CLI signed in with a subscription.
    Any OpenAI-compatible endpoint works instead: OpenAI, Together, Grok, Ollama, LM
    Studio. Set `BRAINLESS_LLM_PROVIDER=openai-compatible`, `BRAINLESS_LLM_BASE_URL` and
-   `BRAINLESS_LLM_MODEL`.
+   `BRAINLESS_LLM_MODEL`. A third option, `goose`, runs a model on the machine itself
+   through the Goose CLI, and routing is per lane, so the private short prompts can stay
+   local while long prose goes to a large model. See
+   [docs/local-inference.md](docs/local-inference.md).
 5. Asks your first name and output language, `en` or `tr`, and writes
    `_Agent-Context/PROFILE.md`.
 6. Installs the `brainless` command into `~/.local/bin`.
@@ -339,7 +430,7 @@ That is the start. The whole shell command, from `brainless help`:
 ```text
 compile    build .wiki/ from your notes (--dry-run, --full-rebuild, --only <phase>)
 search     search the compiled wiki
-dialectic  five personas argue a thesis; --scorecard prints the rolling 30 day scorecard
+dialectic  six personas argue a thesis; --scorecard prints the rolling 30 day scorecard
 lint       wiki integrity checks and repairs (--fix, --fix-links)
 calibrate  decisions due for grading, decisions missing a prediction
 today      preview, save (--build) or send (--send) the three-item Today queue
@@ -381,7 +472,7 @@ friction, and each needs its own credentials in `~/.config/brainless/`.
 
 - **Telegram capture.** Voice notes, photos, links and text from your phone become
   `Thinking/Daily/` notes. Transcription runs locally with whisper.cpp.
-- **Buzz personas.** The five voices as live agents on a self-hosted
+- **Buzz personas.** The six voices as live agents on a self-hosted
   [Buzz](https://github.com/block/buzz) relay. They answer in a channel twice a day and
   whenever you mention them. This is how I run it; `.agents/buzz/` has the prompts and
   the installer.
@@ -395,7 +486,9 @@ friction, and each needs its own credentials in `~/.config/brainless/`.
   Setup, flags, example output and the provider seam:
   [docs/addons/crm-pipedrive.md](docs/addons/crm-pipedrive.md).
 - **An always-on worker.** A second machine that runs the timers, pulls, commits and
-  pushes, so your laptop can sleep. The units in `.agents/systemd/` are built for it.
+  pushes, so your laptop can sleep. The units in `.agents/systemd/` are built for it, and
+  every network job waits for the connection first, so a worker that sleeps and wakes
+  never spams failures for the seconds it takes the network to come back.
 
 ---
 
@@ -414,7 +507,7 @@ paths, the schedule) is what actually runs.
   nightly digest and the weekly lint. This machine pushes when I close it for the night.
 - **A laptop running [Omarchy](https://omarchy.org) (Arch Linux).** The always-on worker.
   It stays on behind Tailscale and does everything unattended: the systemd timers, the
-  Telegram capture with whisper.cpp, and the Buzz relay that hosts the five personas as
+  Telegram capture with whisper.cpp, and the Buzz relay that hosts the six personas as
   live agents. It pulls, runs, commits and pushes so the Mac can sleep.
 
 ```mermaid
@@ -427,7 +520,7 @@ flowchart LR
   subgraph omarchy["Laptop running Omarchy (Arch), always on, Tailscale"]
     cap["Telegram capture<br/>whisper.cpp + ffmpeg"]
     tmr["systemd user timers"]
-    relay["Buzz relay<br/>5 persona agents (read-only)"]
+    relay["Buzz relay<br/>6 persona agents (read-only)"]
   end
 
   iphone -->|voice, photo, link| cap
@@ -453,7 +546,7 @@ verbatim by `.agents/systemd/install.sh`:
 
 | When | Runs | What it does |
 |---|---|---|
-| 12:30 and 21:20 | `tools/dialectic.py` | five personas argue the day's new notes (isolated round one, quoted round two), moderator posts the scorecard and synthesis to `#dialectic` and files them; on a silent day the evening run argues one vault topic instead |
+| 12:30 and 21:20 | `tools/dialectic.py` | six personas argue the day's new notes (isolated round one, quoted round two), moderator posts the scorecard and synthesis to `#dialectic` and files them; on a silent day the evening run argues one vault topic instead |
 | 21:00 | `closeout` | propose one seed idea, one decision worth writing down, one contradiction with your beliefs |
 | 23:00 | `nightly` | write the digest, archive the raw capture, compile `.wiki/`, lint |
 | Mon 05:00, Fri 21:00 | `dashboard` | rebuild the active-projects view from every `notes.md` |
@@ -599,7 +692,7 @@ starts to cost you.
 - `output_lang` in `PROFILE.md` sets the language of every LLM output. Fixed labels and
   bot replies ship in English and Turkish (`tools/locale/`); another language is a new
   locale directory.
-- The five personas are my shelf. Yours may be different, and should be.
+- The six personas are my shelf. Yours may be different, and should be.
 - I am not a decision scientist. I am an operator who got tired of being wrong in the
   same way twice.
 

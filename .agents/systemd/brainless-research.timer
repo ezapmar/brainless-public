@@ -1,0 +1,12 @@
+[Unit]
+Description=brainless: weekly deep research timer
+
+[Timer]
+# Sunday 17:00: before thinking_loop (19:00) and reconcile (20:00), so the
+# Sunday evening question rests on a fresh report. Exits in seconds and spends
+# nothing when the week produced no epic.
+OnCalendar=Sun *-*-* 17:00:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target

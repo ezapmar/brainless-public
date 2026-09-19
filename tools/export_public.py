@@ -51,7 +51,6 @@ SHIP_FILES = [
     "_Agent-Context/TRUNK-BASED-DEVELOPMENT.md",
 ]
 EXCLUDE = [
-    "tools/_archive",
     "tools/__pycache__",
     "tools/tasks-sync",
     "tools/logs",
@@ -74,10 +73,19 @@ SKELETON = [
 STUBS = {
     "_Agent-Context/PROFILE.md": (
         "---\nowner_name: the owner\noutput_lang: en\ncompany_area: Work\nworker_name: worker\n"
-        "owner_full_name: the owner\nprivate_segments: \n---\n\n# Owner profile\n\nRead by tools/owner_profile.py. owner_name and "
+        "owner_full_name: the owner\nprivate_segments: \n"
+        "protected_homes: Personal/Official Docs, Thinking/_local\n"
+        "gitignore_nets: **/Official Docs/, **/* - Health/, **/_local/, **/Security Incidents/\n"
+        "---\n\n# Owner profile\n\nRead by tools/owner_profile.py. owner_name and "
         "output_lang (tr or en) shape every prompt; company_area is the folder under Work/ the compiler "
         "treats as your company; worker_name is the commit suffix of an always-on machine, if you run one; "
-        "private_segments lists extra folder names that must never be compiled.\n\n## Cross-link rule\n\n"
+        "private_segments lists extra folder names that must never be compiled.\n\n"
+        "protected_homes lists the folders that must never reach the remote, and gitignore_nets the "
+        ".gitignore pattern rules that back up each rule naming a single path. tools/health_check.py "
+        "reports on them and tools/tests/test_gitignore_guards.py asserts git really ignores them, so "
+        "add a home here and both follow. Put the folders holding health records, identity documents, "
+        "finance exports or anything about a child in this list before your first commit: .gitignore "
+        "does not untrack, so a file committed once needs history surgery to remove.\n\n## Cross-link rule\n\n"
         "CRITICAL CROSS-LINK RULE: personal and work effects must be surfaced. Whenever a personal topic "
         "affects work or the reverse, link both ways.\n"),
     "_Agent-Context/CONTEXT.md": "# Current context\n\nWho you are, active projects, priorities, open questions. Agents read this first.\n",
@@ -172,6 +180,18 @@ OWNER_ALLOW = (
     ".agents/buzz/personas/env.template",
     ".agents/systemd/buzz-persona@.service",
     ".agents/buzz/team_instructions.md",
+    # The worker's name is a functional value in these: it is half of the script
+    # filenames the units exec (omarchy_job.sh, omarchy_backup.sh) and, in the
+    # local inference doc, the name of the box the timings were measured on.
+    # Renaming it would break the running deployment and lose the provenance of
+    # a benchmark, so only the owner-word check is waived; LEAK_PATTERNS still
+    # scans them for real secrets.
+    ".agents/systemd/brainless-backup.service",
+    ".agents/systemd/brainless-backup.timer",
+    ".agents/systemd/brainless-content.service",
+    ".agents/systemd/brainless-spiky.service",
+    ".agents/systemd/brainless-thinkers.service",
+    "docs/local-inference.md",
 )
 
 

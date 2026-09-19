@@ -58,26 +58,43 @@ PROJECT_BASES = (
 )
 
 
-def git_ignored(p: Path) -> bool:
-    """Skip paths git ignores: they exist on one machine only, and this file is
-    regenerated on two machines, so including them would make the output flap."""
+def git_ignored_set(paths) -> set:
+    """Subset of paths git ignores: they exist on one machine only, and this file is
+    regenerated on two machines, so including them would make the output flap.
+    One `git check-ignore --stdin` call for the whole list; one process per path
+    cost ~40 spawns per walk and the walk runs three times per dashboard build."""
     import subprocess
+    paths = [str(p) for p in paths]
+    if not paths:
+        return set()
     try:
-        r = subprocess.run(["git", "check-ignore", "-q", str(p)], cwd=VAULT,
-                           capture_output=True, timeout=10)
-        return r.returncode == 0
+        # -z: NUL-separated in and out, so non-ASCII names come back unquoted.
+        r = subprocess.run(["git", "check-ignore", "--stdin", "-z"], cwd=VAULT,
+                           input="\0".join(paths), capture_output=True, text=True, timeout=30)
+        return {line for line in r.stdout.split("\0") if line}
     except (OSError, subprocess.SubprocessError):
-        return False
+        return set()
+
+
+_PROJECT_NOTES = None
 
 
 def project_notes():
-    for base, cat in PROJECT_BASES:
-        if not base.exists():
-            continue
-        for d in sorted(base.iterdir()):
-            n = d / "notes.md"
-            if d.is_dir() and n.exists() and not is_private(n) and not git_ignored(n):
-                yield cat, d.name, n
+    """(category, name, notes.md path) for every project; discovered once per run.
+    kill_criteria and two sections of this module all walk the same list."""
+    global _PROJECT_NOTES
+    if _PROJECT_NOTES is None:
+        found = []
+        for base, cat in PROJECT_BASES:
+            if not base.exists():
+                continue
+            for d in sorted(base.iterdir()):
+                n = d / "notes.md"
+                if d.is_dir() and n.exists() and not is_private(n):
+                    found.append((cat, d.name, n))
+        ignored = git_ignored_set(n for _, _, n in found)
+        _PROJECT_NOTES = [row for row in found if str(row[2]) not in ignored]
+    return iter(_PROJECT_NOTES)
 
 
 def days(d: date) -> int:

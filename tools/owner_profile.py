@@ -63,6 +63,46 @@ GENERIC_PRIVATE_SEGMENTS = ("Official Docs", "Security Incidents")
 PRIVATE_SUFFIXES = (" - Health",)
 
 
+def _csv(env_key, fm_key, default=()):
+    raw = os.environ.get(env_key) or _fm.get(fm_key) or ""
+    return tuple(x.strip() for x in raw.split(",") if x.strip()) or default
+
+
+# Vault-relative homes that must never reach the remote. health_check.py reports on
+# them and tools/tests/test_gitignore_guards.py asserts git really ignores them; both
+# read this list rather than keeping a copy, because two copies drift and the drift is
+# silent until something sensitive is already committed.
+PROTECTED_HOMES = tuple(x.strip("/") for x in _csv(
+    "BRAINLESS_PROTECTED_HOMES", "protected_homes",
+    ("Personal/Official Docs", "Thinking/_local")))
+# The .gitignore pattern nets that sit under the rules naming a single path, so one
+# rename cannot expose a home on its own.
+GITIGNORE_NETS = _csv("BRAINLESS_GITIGNORE_NETS", "gitignore_nets",
+                      ("**/Official Docs/", "**/* - Health/", "**/_local/",
+                       "**/Security Incidents/"))
+
+
+def private_segment_patterns():
+    """Regexes matching a private segment in a raw or in a compiled path.
+
+    The compiled layer flattens and slugifies names, so a folder rule does not
+    reach it: "Gülşen Çimen" arrives as "gulsen-cimen". Three shapes are generated
+    per segment, because a name gets typed all three ways: as written, slugified
+    with dashes, and with the Turkish letters folded to ASCII but the spaces
+    kept, which is what a hand-made folder tends to look like. The guard test
+    reads these so it never has to spell a private name out itself.
+    """
+    folds = str.maketrans("üûùúıîìíöôòóçÇğĞşŞÜÛÙÚİÎÌÍÖÔÒÓ",
+                          "uuuuiiiioooocCgGsSUUUUIIIIOOOO")
+    out = []
+    for seg in PRIVATE_SEGMENTS:
+        ascii_seg = re.sub(r"\s+", " ", seg.translate(folds).lower()).strip()
+        slug = re.sub(r"[^a-z0-9]+", "-", ascii_seg).strip("-")
+        shapes = {re.escape(seg), re.escape(slug), re.escape(ascii_seg)}
+        out.append("(?i)" + "|".join(sorted(shapes)))
+    return out
+
+
 def _section(path, heading):
     try:
         with open(path, errors="replace") as fh:
@@ -78,15 +118,27 @@ _DEFAULT_CROSS_LINK = ("CRITICAL CROSS-LINK RULE: personal and work effects must
 CROSS_LINK_RULE = _section(PROFILE_FILE, "Cross-link rule") or _DEFAULT_CROSS_LINK
 
 
-def lang_name(native=False):
-    """'Turkish' / 'English' (or the native form 'Türkçe' when native=True)."""
+def lang_name(native=False, lang=None):
+    """'Turkish' / 'English' (or the native form 'Türkçe' when native=True).
+
+    lang: name a specific code instead of the vault default. Callers that work
+    per item rather than per vault (a note in its own language, a dialectic
+    topic) pass the code they detected.
+    """
+    code = (lang or LANG).lower()
     table = _LANG_NATIVE if native else _LANG_NAMES
-    return table.get(LANG) or _LANG_NAMES.get(LANG) or LANG
+    return table.get(code) or _LANG_NAMES.get(code) or code
 
 
-def output_lang_directive():
-    """One sentence to append to any prompt that produces vault text."""
-    return f"Write in {lang_name()}. Never use em dashes or en dashes."
+def output_lang_directive(lang=None):
+    """One sentence to append to any prompt that produces vault text.
+
+    Called with no argument this is the vault-wide directive it always was.
+    Pass a code to answer in the language of the thing being discussed, which is
+    what weekly_research and dialectic do: a Turkish note gets a Turkish answer,
+    an English one an English answer, in the same vault.
+    """
+    return f"Write in {lang_name(lang=lang)}. Never use em dashes or en dashes."
 
 
 def possessive():

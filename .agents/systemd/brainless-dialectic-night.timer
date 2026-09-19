@@ -1,0 +1,11 @@
+[Unit]
+Description=brainless: night dialectic round timer (01:00 to 06:00 window, local model)
+
+[Timer]
+OnCalendar=*-*-* 02:00:00
+# Never catch up a missed night during the day: the point is the idle window.
+Persistent=false
+RandomizedDelaySec=60
+
+[Install]
+WantedBy=timers.target

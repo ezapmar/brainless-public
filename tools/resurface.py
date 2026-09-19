@@ -107,7 +107,7 @@ OUTPUT FORMAT (write only this):
 # CANDIDATE NOTES:
 {catalog}"""
 
-    result = run_prompt(prompt, timeout=300)
+    result = run_prompt(prompt, timeout=300, lane="resurface")
     if not result:
         log("LLM call failed; RESURFACE.md not written.")
         return

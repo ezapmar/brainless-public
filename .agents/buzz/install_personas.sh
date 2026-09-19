@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Install the dialectic persona agents on the always-on worker.
 #   bash .agents/buzz/install_personas.sh [slug ...]
-# Default slugs: skeptic gambler scientist postmortem strategist.
+# Default slugs: skeptic gambler scientist postmortem strategist methodologist.
 #
 # For each persona: generate a Buzz key (once), register it as a relay member,
 # add it to the #dialectic channel, assemble ~/buzz-<slug>/ (system prompt =
@@ -22,8 +22,8 @@ export PATH="$HOME/.cargo/bin:$PATH"
 if [ -s "$BUZZ_DIR/relay_url" ]; then export BUZZ_RELAY_URL="$(head -1 "$BUZZ_DIR/relay_url")"; fi
 export BUZZ_RELAY_URL="${BUZZ_RELAY_URL:-http://localhost:3000}"
 
-declare -A NAMES=( [skeptic]=Skeptic [gambler]=Gambler [scientist]=Scientist [postmortem]=Postmortem [strategist]=Strategist )
-SLUGS=("$@"); [ ${#SLUGS[@]} -gt 0 ] || SLUGS=(skeptic gambler scientist postmortem strategist)
+declare -A NAMES=( [skeptic]=Skeptic [gambler]=Gambler [scientist]=Scientist [postmortem]=Postmortem [strategist]=Strategist [methodologist]=Methodologist )
+SLUGS=("$@"); [ ${#SLUGS[@]} -gt 0 ] || SLUGS=(skeptic gambler scientist postmortem strategist methodologist)
 
 log() { echo "[install_personas] $*" >&2; }
 

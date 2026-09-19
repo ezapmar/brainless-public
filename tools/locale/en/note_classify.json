@@ -1,0 +1,4 @@
+{
+  "summary": "Classified {new} new notes. epic: {epic}, story: {story}, task: {task}",
+  "dry_run": "Dry run: nothing was written to note_tags.jsonl."
+}

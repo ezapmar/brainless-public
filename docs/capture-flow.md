@@ -79,7 +79,7 @@ the source.
 | Every 2 minutes on the worker | `telegram_worker.sh` | Polls Telegram, transcribes voice locally, reads photos, fetches links, and writes `Thinking/Daily/` or `Inbox/Links/`. |
 | Every 2 minutes on the worker | `buzz_capture_worker.sh` | Reads owner posts in Buzz `#inbox`, handles text, voice, images and links, and writes the same capture homes. |
 | Hourly | `cron_wrapper.sh` -> `smart_processor.py` | Converts documents, OCRs missed Inbox images, validates outputs, and records retry state. |
-| 12:30 and 21:20 | `tools/dialectic.py` | Clusters that day's Telegram and Buzz captures, asks five critical personas to argue them in `#dialectic`, and files the synthesis. |
+| 12:30 and 21:20 | `tools/dialectic.py` | Clusters that day's Telegram and Buzz captures, asks six critical personas to argue them in `#dialectic`, and files the synthesis. |
 | 21:00 | `tools/evening_closeout.py` | Reads the day's captures and proposes one seed, one decision and one contradiction. |
 | 23:00 | `tools/nightly_processor.py` | Turns daily captures into a digest, extracts owner tasks, archives raw files, compiles `.wiki/`, and refreshes lint. |
 | Weekly | `resurface`, `thinking`, `reconcile`, `lint` | Brings due decisions back, asks a reflective question, checks belief drift and repairs the compiled layer. |
