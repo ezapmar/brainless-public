@@ -43,7 +43,7 @@ and the note says what is missing. Deleting the sentence later is itself informa
 
 ## Testing it
 
-**Five readings, blind.** Round one of the dialectic runs each persona in its own
+**Six readings, blind.** Round one of the dialectic runs each persona in its own
 thread without seeing the others. The first voice in a room sets the frame for everyone
 after it; isolation removes the first voice.
 
