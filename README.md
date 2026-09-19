@@ -196,7 +196,7 @@ The voices come from the shelf.
 
 They never mention each other and only answer the moderator and you, so agents cannot
 set each other off. It is the best-behaved meeting in my week. Each persona's prompt is
-a Markdown file in `.agents/buzz/personas/`. Edit them. Add a sixth. The moderator does
+a Markdown file in `.agents/buzz/personas/`. Edit them. Add a seventh. The moderator does
 not care how many there are.
 
 ### 5. Grade yourself
@@ -547,6 +547,7 @@ verbatim by `.agents/systemd/install.sh`:
 | When | Runs | What it does |
 |---|---|---|
 | 12:30 and 21:20 | `tools/dialectic.py` | six personas argue the day's new notes (isolated round one, quoted round two), moderator posts the scorecard and synthesis to `#dialectic` and files them; on a silent day the evening run argues one vault topic instead |
+| 02:00 | `tools/dialectic.py --run night` | the local-model experiment: the six personas answer through the worker's own model, one at a time, while the moderator and a judge lane stay on the cloud and grade each reply; a replay of the day's first topic, scored nowhere, with a five-night kill rule (see [local inference](docs/local-inference.md#the-night-window-experiment)) |
 | 21:00 | `closeout` | propose one seed idea, one decision worth writing down, one contradiction with your beliefs |
 | 23:00 | `nightly` | write the digest, archive the raw capture, compile `.wiki/`, lint |
 | Mon 05:00, Fri 21:00 | `dashboard` | rebuild the active-projects view from every `notes.md` |
