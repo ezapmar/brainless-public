@@ -235,8 +235,89 @@ def ensure_frontmatter(path: Path, dry_run: bool = False) -> list[str]:
         return []
 
 
+ARCHIVE = WIKI / "_archive"
+
+
 def all_wiki_files():
-    return sorted(p for p in WIKI.rglob("*.md") if "_lint-report" not in p.name)
+    """Every wiki page except the lint report and the archive.
+
+    An archived page (tools/wiki_prune.py) is out of the graph on purpose: it
+    must not count as an orphan and must not grant an inbound edge to anything.
+    """
+    return sorted(p for p in WIKI.rglob("*.md")
+                  if "_lint-report" not in p.name and ARCHIVE not in p.parents)
+
+
+def _resolve(target, by_relpath, by_stem):
+    cands = [
+        target, target + ".md", target.lower(),
+        f".wiki/{target}.md", f".wiki/{target}",
+        f"wiki/{target}.md", f"wiki/{target}",
+        str(Path(target).with_suffix(".md")),
+    ]
+    for c in cands:
+        if c in by_relpath:
+            return by_relpath[c]
+    stem_hits = by_stem.get(Path(target).stem.lower(), [])
+    return stem_hits[0] if stem_hits else None
+
+
+def link_graph(files):
+    """Resolve every [[wikilink]] between the given wiki pages.
+
+    One definition of "linked" for the whole engine: the lint report, the
+    orphan list and tools/wiki_prune.py all read this, so a page cannot be an
+    orphan to one tool and connected to another. INDEX.md and _commands/ are
+    skipped as link sources: the index links everything and the command
+    prompts carry example links, and neither grants a page an inbound edge.
+
+    Returns a dict: inbound and outbound counts per page, the resolved edges
+    as (source, target) pairs, the unresolved links split into real breaks and
+    references outside the wiki, the placeholder count, and the two lookup
+    tables the link fixer needs.
+    """
+    by_stem, by_relpath = {}, {}
+    inbound = {p: 0 for p in files}
+    outbound = {p: 0 for p in files}
+    for p in files:
+        rel = str(p.relative_to(VAULT))
+        by_stem.setdefault(p.stem.lower(), []).append(p)
+        by_relpath[rel] = p
+        by_relpath[rel.replace(".md", "")] = p
+        by_relpath[rel.replace(".md", "").lower()] = p
+
+    edges, real_broken, external_refs = [], [], []
+    placeholder_count = 0
+    for p in files:
+        if "_commands" in str(p) or p.name == "INDEX.md":
+            continue
+        text = p.read_text(errors="ignore")
+        for m in LINK_RE.finditer(text):
+            target = m.group(1).strip()
+            outbound[p] += 1
+            if is_likely_placeholder(target):
+                placeholder_count += 1
+                continue
+            hit = _resolve(target, by_relpath, by_stem)
+            if hit:
+                inbound[hit] += 1
+                edges.append((p, hit))
+            elif is_external_reference(target) or resolve_against_raw(target):
+                external_refs.append((p, target))
+            else:
+                real_broken.append((p, target))
+    return {"inbound": inbound, "outbound": outbound, "edges": edges,
+            "broken": real_broken, "external": external_refs,
+            "placeholders": placeholder_count,
+            "by_stem": by_stem, "by_relpath": by_relpath}
+
+
+def orphan_pages(files, graph):
+    """Pages with no link in and none out. The index and the command prompts
+    are not pages in this sense."""
+    return [p for p in files
+            if graph["inbound"][p] == 0 and graph["outbound"][p] == 0
+            and "INDEX" not in p.name and "_commands" not in str(p)]
 
 
 # Captures target + optional #heading + optional |alias, so we can rewrite a link
@@ -293,83 +374,18 @@ def main():
     args = ap.parse_args()
 
     files = all_wiki_files()
-    by_stem = {}
-    by_relpath = {}
-    inbound = {p: 0 for p in files}
-    outbound = {p: 0 for p in files}
-
-    for p in files:
-        rel = str(p.relative_to(VAULT))
-        by_stem.setdefault(p.stem.lower(), []).append(p)
-        by_relpath[rel] = p
-        by_relpath[rel.replace(".md", "")] = p
-        by_relpath[rel.replace(".md", "").lower()] = p
-
-    # --- Link collection with noise suppression ---
-    real_broken: list[tuple[Path, str]] = []
-    external_refs: list[tuple[Path, str]] = []
-    placeholder_count = 0
-
-    for p in files:
-        if "_commands" in str(p):
-            continue  # prompt templates deliberately contain [[Example]] and [[A]] style links
-        if p.name == "INDEX.md":
-            continue  # auto-generated; links everything, would mask every orphan via fake inbound
-
-        text = p.read_text(errors="ignore")
-        for m in LINK_RE.finditer(text):
-            target = m.group(1).strip()
-            outbound[p] += 1
-
-            if is_likely_placeholder(target):
-                placeholder_count += 1
-                continue
-
-            # resolution attempts
-            cands = [
-                target,
-                target + ".md",
-                target.lower(),
-                f".wiki/{target}.md",
-                f".wiki/{target}",
-                f"wiki/{target}.md",
-                f"wiki/{target}",
-                str(Path(target).with_suffix(".md")),
-            ]
-            hit = None
-            for c in cands:
-                if c in by_relpath:
-                    hit = by_relpath[c]
-                    break
-            if not hit:
-                stem_hits = by_stem.get(Path(target).stem.lower(), [])
-                if stem_hits:
-                    hit = stem_hits[0]
-
-            if hit:
-                inbound[hit] += 1
-            else:
-                if is_external_reference(target) or resolve_against_raw(target):
-                    external_refs.append((p, target))
-                else:
-                    real_broken.append((p, target))
+    graph = link_graph(files)
+    inbound, outbound = graph["inbound"], graph["outbound"]
+    real_broken, external_refs = graph["broken"], graph["external"]
+    placeholder_count = graph["placeholders"]
+    by_stem, by_relpath = graph["by_stem"], graph["by_relpath"]
 
     # --- Optional: repair broken links (remap + de-link) ---
     links_remapped = 0
     links_delinked = 0
     if args.fix_links:
         def resolve(target):
-            cands = [
-                target, target + ".md", target.lower(),
-                f".wiki/{target}.md", f".wiki/{target}",
-                f"wiki/{target}.md", f"wiki/{target}",
-                str(Path(target).with_suffix(".md")),
-            ]
-            for c in cands:
-                if c in by_relpath:
-                    return by_relpath[c]
-            stem_hits = by_stem.get(Path(target).stem.lower(), [])
-            return stem_hits[0] if stem_hits else None
+            return _resolve(target, by_relpath, by_stem)
 
         def remap(target):
             variants = []
@@ -395,11 +411,7 @@ def main():
             links_remapped += c["remapped"]
             links_delinked += c["delinked"]
 
-    orphans = [
-        p for p in files
-        if inbound[p] == 0 and outbound[p] == 0
-        and "INDEX" not in p.name and "_commands" not in str(p)
-    ]
+    orphans = orphan_pages(files, graph)
 
     # stale summaries (based on frontmatter source pointer)
     stale = []

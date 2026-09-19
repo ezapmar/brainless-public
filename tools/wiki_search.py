@@ -28,11 +28,20 @@ def tokenize(s: str):
     return [t for t in re.findall(r"[A-Za-zÇĞİÖŞÜçğıöşü0-9]+", s.lower()) if t not in STOP and len(t) > 1]
 
 
+# Pages tools/wiki_prune.py has archived stay on disk for the record but leave
+# the search: a result nobody linked to in two months is the pile talking.
+ARCHIVE_DIR = "_archive"
+
+
+def walk(root: Path):
+    return [str(p) for p in root.rglob("*.md") if ARCHIVE_DIR not in p.parts]
+
+
 def rg_candidates(query: str, root: Path):
     try:
         out = subprocess.run(
             ["rg", "--no-heading", "--line-number", "--ignore-case",
-             "--max-count", "5", query, str(root)],
+             "--max-count", "5", "--glob", f"!{ARCHIVE_DIR}/**", query, str(root)],
             capture_output=True, text=True, timeout=15,
         )
         files = set()
@@ -43,7 +52,7 @@ def rg_candidates(query: str, root: Path):
         return list(files)
     except FileNotFoundError:
         # fallback: walk
-        return [str(p) for p in root.rglob("*.md")]
+        return walk(root)
 
 
 def bm25(query_tokens, docs, k1=1.5, b=0.75):
@@ -92,7 +101,7 @@ def main():
     qtoks = tokenize(args.query)
     cand = rg_candidates(args.query, root)
     if not cand:
-        cand = [str(p) for p in root.rglob("*.md")]
+        cand = walk(root)
 
     docs = []
     for p in cand:

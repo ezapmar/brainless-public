@@ -23,8 +23,23 @@ from resolve_bin import resolve_claude
 from llm import run_prompt  # noqa: E402
 from owner_profile import OWNER, lang_name, CROSS_LINK_RULE  # noqa: E402
 from i18n import t, t_list  # noqa: E402
+from task_dedup import is_duplicate  # noqa: E402
 
 CLAUDE_PATH = resolve_claude()
+
+# Digest budget. Every capture used to enter the prompt whole, so one heavy day
+# blew the context, and every note, however small, got the same narrative
+# treatment. note_classify.py's label now sets the size: a task is one sitting
+# of work and needs no story, only its action items; a story gets three lines;
+# an epic is read in full, because weekly_research.py builds on it on Sunday.
+PER_FILE_CAP = 4000
+EPIC_FILE_CAP = 8000
+TOTAL_CAP = 24000          # the same ceiling weekly_reconcile.py uses
+BUDGET = {
+    "task": "do NOT narrate it under Daily Notes; extract its action items only",
+    "story": "at most 3 lines under Daily Notes",
+    "epic": "full treatment: enrich, connect, cross-link",
+}
 
 
 def get_daily_notes():
@@ -45,20 +60,24 @@ def read_projects():
                     projects.append(f"[[{name}]] ({label})")
     return projects
 
-def process_notes(files):
+def process_notes(files, labels=None):
+    labels = labels or {}
     raw_content = ""
     for f in files:
+        label = labels.get(os.path.basename(f), "story")
+        cap = EPIC_FILE_CAP if label == "epic" else PER_FILE_CAP
         try:
             with open(f, 'r') as file:
-                raw_content += f"\n--- Source: {os.path.basename(f)} ---\n"
-                raw_content += file.read()
+                raw_content += f"\n--- Source: {os.path.basename(f)} [{label}] ---\n"
+                raw_content += file.read()[:cap]
                 raw_content += "\n"
         except Exception as e:
             print(f"Error reading {f}: {e}")
-    
+    raw_content = raw_content[:TOTAL_CAP]
+
     projects = read_projects()
     date_str = datetime.now().strftime("%Y-%m-%d")
-    
+
     prompt = f"""
 You are the processor for the 'brainless' Second Brain system.
 Today's Date: {date_str}
@@ -71,6 +90,13 @@ TASKS:
 2. Research connections: Link to existing projects if mentioned. Known projects: {', '.join(projects)}.
 3. Output a structured daily digest in English.
 4. Cross-link personal↔work effects explicitly. {CROSS_LINK_RULE}
+
+WEIGHT BUDGET. Each source header carries a tag set by a classifier, not by you.
+The budget is not optional; a digest that narrates every errand is the failure
+this system exists to avoid.
+- [task]: {BUDGET['task']}.
+- [story]: {BUDGET['story']}.
+- [epic]: {BUDGET['epic']}.
 
 OUTPUT STRUCTURE:
 ---
@@ -135,10 +161,22 @@ def sync_tasks(summary, date_str):
             content = f.read()
     except OSError:
         content = t("nightly_processor.ledger_template")
-    existing = {m.group(1).split(" | ")[0].strip().casefold()
-                for m in re.finditer(r"- \[[ x]\] (.+)", content)}
-    rows = [f"- [ ] {t} | [[{date_str}]] | {date_str}\n"
-            for t in titles if t.casefold() not in existing]
+    existing_titles = [m.group(1).split(" | ")[0].strip()
+                       for m in re.finditer(r"- \[[ x]\] (.+)", content)]
+    existing = {x.casefold() for x in existing_titles}
+    # Exact match first (cheap), then the same near-duplicate guard that
+    # spiky_actions.py runs, so a promise rephrased by tonight's model does
+    # not become a second row. This was how the ledger reached 130 open rows.
+    rows, accepted, dropped = [], [], []
+    for title in titles:
+        if title.casefold() in existing or is_duplicate(title, existing_titles + accepted):
+            dropped.append(title)
+            continue
+        accepted.append(title)
+        rows.append(f"- [ ] {title} | [[{date_str}]] | {date_str}\n")
+    if dropped:
+        print(f"Tasks: {len(dropped)} near-duplicate(s) dropped: "
+              + "; ".join(d[:50] for d in dropped[:5]))
     if not rows:
         print("Tasks: nothing new (all already in ledger)")
         return
@@ -198,10 +236,52 @@ def weight_block(date_str):
     return "\n".join(out) + "\n"
 
 
+def classify_today(notes):
+    """Label the day's captures before the digest reads them.
+
+    note_classify.py runs on its own timer at 06:40 and tags a note with the
+    note's own date, so at 23:00 tonight's captures are still unlabelled and
+    the weight block could only report them the next morning. Running it here
+    first means the labels exist when the prompt is built. Stage A is
+    deterministic and instant; stage B calls a model only for epic candidates,
+    and the morning run then finds these paths in state and skips them.
+    """
+    try:
+        subprocess.run(
+            [sys.executable, os.path.join(VAULT_ROOT, 'tools/note_classify.py'), '--days', '1'],
+            cwd=VAULT_ROOT, check=False, timeout=900,
+        )
+    except Exception as e:
+        print(f"note_classify skipped: {e}")
+    wanted = {os.path.relpath(f, VAULT_ROOT): os.path.basename(f) for f in notes}
+    labels = {}
+    try:
+        with open(NOTE_TAGS, errors="replace") as fh:
+            for line in fh:
+                try:
+                    rec = json.loads(line)
+                except ValueError:
+                    continue
+                name = wanted.get(rec.get("path"))
+                if name:
+                    labels[name] = rec.get("label", "task")  # append-only: last line wins
+    except OSError:
+        pass
+    return labels
+
+
+def budget_line(notes, labels):
+    counts = {"task": 0, "story": 0, "epic": 0}
+    for f in notes:
+        counts[labels.get(os.path.basename(f), "story")] += 1
+    return t("nightly_processor.budget_line", tasks=counts["task"], stories=counts["story"],
+             epics=counts["epic"], per_file=PER_FILE_CAP, total=TOTAL_CAP)
+
+
 def main():
     if not os.path.exists(CAPTURE_DIR):
         os.makedirs(CAPTURE_DIR)
-        
+
     notes = get_daily_notes()
     if not notes:
         # Heartbeat line: health_check.py watches this log's mtime to know
@@ -210,11 +290,12 @@ def main():
         return
 
     print(f"{datetime.now()}: Processing {len(notes)} files...")
-    summary = process_notes(notes)
-    
+    labels = classify_today(notes)
+    summary = process_notes(notes, labels)
+
     if summary:
         date_str = datetime.now().strftime("%Y-%m-%d")
-        summary = summary.rstrip() + "\n" + weight_block(date_str)
+        summary = summary.rstrip() + "\n" + weight_block(date_str) + "\n" + budget_line(notes, labels) + "\n"
         date_filename = date_str + ".md"
         os.makedirs(DIGESTS_DIR, exist_ok=True)
         output_path = os.path.join(DIGESTS_DIR, date_filename)

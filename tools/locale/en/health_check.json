@@ -52,5 +52,8 @@
   "kill_unreadable": "scan failed: {error}",
   "privacy_guards": "Privacy guards",
   "privacy_ok": "{count} protected homes, all ignored",
-  "privacy_exposed": "NOT ignored: {paths}. A rename broke a .gitignore rule; fix before the next commit"
+  "privacy_exposed": "NOT ignored: {paths}. A rename broke a .gitignore rule; fix before the next commit",
+  "pile_label": "Pile (Inbox older than 14 days)",
+  "pile_detail": "{inbox} files; the belief's criterion is near zero. Analyses per decision {qpd}, orphan pages {orphans}, counted {date}",
+  "pile_missing": "no scorecard yet; run tools/wiki_prune.py --count"
 }

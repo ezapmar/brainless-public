@@ -1,7 +1,8 @@
 # The method
 
-Three things in brainless are method rather than software: how a captured note is
-worked over, why every input becomes Markdown, and how a research pass is run. The code
+Four things in brainless are method rather than software: how a captured note is
+worked over, why every input becomes Markdown, how a research pass is run, and what
+keeps the compiled layer from growing into a pile. The code
 enforces them, but none of them came from the code, and any of them would survive being
 reimplemented in a different language next year. This page is the part worth keeping.
 
@@ -207,3 +208,54 @@ The same discipline applies to the adversarial pass: six critical-thinking perso
 a synthesis is written, so the objection arrives before the commitment rather than after
 it. See [how it makes you think clearer](thinking-clearer.md) for the rest of those
 mechanisms.
+
+## 4. What keeps the pile small
+
+A system that reads everything has a second failure mode, quieter than losing notes: it
+becomes very good at sounding informed. It touches every subject, holds none of them, and
+the counters that measure it (pages, links, summaries) all go up while nothing gets
+decided. The belief that underwrites capture here, "capture everything, filter later",
+names its own failure in its falsification line: the number of Inbox files older than 14
+days should stay near zero. On 19 September 2026 it was 125, up from 121 at an audit two
+weeks earlier. Filter later had become filter never, and the counters looked fine.
+
+Three mechanisms, each mapped to one of the three layers, and a rule about what is
+deliberately left alone.
+
+**Count, so the second layer can fail.** The layer called think clearly has no output of
+its own: nobody can count clarity. `tools/wiki_prune.py --count` writes a stand-in to
+`_Agent-Context/PILE-SCORECARD.md` every Sunday, with no model involved: captures per
+graded decision, filed analyses per decision, Inbox files past the belief's fourteen days,
+orphan wiki pages, the number of concept articles that draw on more than one home (a
+bridge in Burt's sense; an edge count is not one), decisions made and beliefs challenged
+in the window, and what was archived. For the first four weeks the numbers are the whole
+point. Ceilings come from the data afterwards, the way `editor_lint.py` calibrates against
+the owner's own prose rather than against a guess, and a breach shows up as a line in the
+morning briefing through `health_check.py`, never as an automatic freeze.
+
+**Prune, mechanically and with a reason.** `tools/wiki_prune.py --archive` applies rules
+in the style of the research pass's `filter_claims()`: no judgement, a stated reason, and
+a dry run that lists before an `--apply` that moves. A filed analysis that nothing has
+linked to in 30 days moves to `.wiki/_archive/`; research, decision and dialectic notes
+are exempt, because they carry hypotheses graded later. A summary whose source left the
+compiled roots and that nothing links to in 60 days follows, as does any page with no link
+in or out for 60 days that no job would rebuild. Nothing is deleted. Git keeps the
+history and `.wiki/_archive/LOG.md` keeps every move with its rule and reason, so a move
+can be undone with one `git mv`. The archive is outside the search, the index and the
+linter, which is the point of moving it.
+
+**Simplify at the digest, where the labels already exist.** `note_classify.py` tags every
+capture epic, story or task, and until now only epic did anything. The nightly digest now
+reads the label before it reads the note: a task, one sitting of work, contributes its
+action items and no narrative; a story gets three lines; an epic is read in full, because
+Sunday's research builds on it. The prompt has a ceiling on how much raw text enters it,
+the same one the weekly reconcile uses, and the task ledger applies the near-duplicate
+guard the meeting extractor already had, so a promise rephrased by tonight's model does
+not become a second row.
+
+**What is left alone, on purpose.** Nothing is judged at capture; the belief stands, and
+the filter sits downstream where there is context. The human homes are never pruned by
+the machine: the scorecard lists what it would move there and stops. One exception was
+approved by hand: a meeting report that has been summarised, mined for its tasks and left
+in `Inbox/` for two weeks moves to `Archive/`, which is what "a processed file leaves the
+inbox" always meant.

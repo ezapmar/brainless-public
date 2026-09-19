@@ -52,5 +52,8 @@
   "kill_unreadable": "taranamadı: {error}",
   "privacy_guards": "Gizlilik korumaları",
   "privacy_ok": "{count} korumalı alan, hepsi ignore listesinde",
-  "privacy_exposed": "IGNORE EDİLMİYOR: {paths}. Bir yeniden adlandırma .gitignore kuralını kırdı; commit'ten önce düzelt"
+  "privacy_exposed": "IGNORE EDİLMİYOR: {paths}. Bir yeniden adlandırma .gitignore kuralını kırdı; commit'ten önce düzelt",
+  "pile_label": "Yığın (Inbox'ta 14 günden eski)",
+  "pile_detail": "{inbox} dosya; inancın ölçütü sıfıra yakın. Karar başına analiz {qpd}, orphan sayfa {orphans}, sayım {date}",
+  "pile_missing": "henüz sayaç yok; tools/wiki_prune.py --count çalıştır"
 }

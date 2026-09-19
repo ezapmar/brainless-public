@@ -1,0 +1,12 @@
+[Unit]
+Description=brainless: weekly pile count and archive pass
+After=network-online.target
+OnFailure=brainless-notify-failure@%n.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=%h/projects/brainless
+# Dry run for the first two weeks: the candidates are listed in the scorecard
+# and nothing moves. Add --apply once the list has been read twice and reads
+# right. The Spiky move was applied by hand on 2026-09-19 and needs no flag.
+ExecStart=/bin/bash %h/projects/brainless/.agents/scripts/worker_job.sh tools/wiki_prune.py --count --archive

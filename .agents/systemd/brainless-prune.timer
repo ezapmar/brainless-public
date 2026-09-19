@@ -1,0 +1,11 @@
+[Unit]
+Description=brainless: weekly pile count and archive timer
+
+[Timer]
+# Sunday 16:30: before research (17:00), so the week's research starts from a
+# counted pile and never picks an epic the archive pass has just moved.
+OnCalendar=Sun *-*-* 16:30:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target

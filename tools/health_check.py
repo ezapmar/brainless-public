@@ -7,6 +7,8 @@ Fires a macOS notification when any check crosses the 2-day red-flag line.
 Runs hourly from cron_wrapper.sh; cheap by design (no LLM calls).
 """
 import os
+import re
+import json
 import subprocess
 import time
 from datetime import datetime
@@ -19,6 +21,7 @@ from owner_profile import PROTECTED_HOMES as profile_protected_homes  # noqa: E4
 from i18n import t  # noqa: E402
 HEALTH_FILE = os.path.join(VAULT, "_Agent-Context", "HEALTH.md")
 RED_FLAG_SECONDS = 2 * 24 * 3600
+PILE_INBOX_RED = 10  # tools/wiki_prune.py INBOX_STALE_RED, the belief's own criterion
 
 CHECKS = []  # (label, status, detail) with status in {OK, WARN, RED}
 
@@ -217,6 +220,31 @@ def check_kill_criteria():
                            missing=len(res["missing"])))
 
 
+def check_pile():
+    """The belief "capture everything, filter later" names its own failure:
+    Inbox files older than 14 days should sit near zero. tools/wiki_prune.py
+    counts them every Sunday and leaves a machine line in the scorecard; this
+    row carries it into the briefing, RED when the criterion is breached, so
+    the number cannot drift for a fortnight unseen the way it did in September."""
+    label = t("health_check.pile_label")
+    path = os.path.join(VAULT, "_Agent-Context", "PILE-SCORECARD.md")
+    try:
+        with open(path, errors="replace") as fh:
+            m = re.search(r"<!-- pile: (\{.*?\}) -->", fh.read())
+        data = json.loads(m.group(1)) if m else None
+    except (OSError, ValueError):
+        data = None
+    if not data:
+        add(label, "WARN", t("health_check.pile_missing"))
+        return
+    inbox = int(data.get("inbox_stale", 0))
+    decisions = data.get("decisions") or 0
+    qpd = f"{data.get('queries', 0) / decisions:.1f}" if decisions else f"{data.get('queries', 0)} : 0"
+    status = "RED" if inbox > PILE_INBOX_RED else ("WARN" if inbox > 0 else "OK")
+    add(label, status, t("health_check.pile_detail", inbox=inbox, qpd=qpd,
+                         orphans=data.get("orphans", "?"), date=data.get("date", "?")))
+
+
 def check_log_errors():
     """Recent error lines in the processor logs."""
     # nightly log lives on the worker now; the stale Mac file must not WARN.
@@ -342,6 +370,7 @@ def main():
     check_dialectic()
     check_morning_briefing()
     check_kill_criteria()
+    check_pile()
     check_llm_auth()
     check_crm()
     check_log_errors()

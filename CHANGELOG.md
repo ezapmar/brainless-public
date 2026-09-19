@@ -5,6 +5,24 @@ push. The private vault this is exported from has its own history.
 
 ## Unreleased
 
+- Count the pile, then drain it. `tools/wiki_prune.py --count` writes
+  `_Agent-Context/PILE-SCORECARD.md` every Sunday with no model: captures per graded
+  decision, filed analyses per decision, Inbox files past fourteen days (the capture
+  belief's own falsification line), orphan wiki pages, concept articles that bridge two
+  homes, decisions and challenged beliefs in the window. `--archive` applies mechanical
+  rules with a stated reason, dry run by default: an unlinked analysis after 30 days, a
+  summary whose source left the compiled roots after 60, any orphan after 60, and a
+  meeting report that has been summarised and mined after 14 days in Inbox. Nothing is
+  deleted; every move is logged to `.wiki/_archive/LOG.md` with its rule and reason, and
+  the archive is out of search, index and lint. `health_check.py` carries the Inbox count
+  into the briefing, red above ten. `lint_wiki.link_graph()` is now the one definition of
+  "linked" for lint and prune alike.
+- The nightly digest reads the epic/story/task label before it reads the note: a task
+  contributes its action items and no narrative, a story three lines, an epic is read in
+  full. The digest runs the classifier first so tonight's captures are labelled tonight,
+  caps the raw text it reads, and the task ledger applies the same near-duplicate guard
+  the meeting extractor had (`tools/task_dedup.py`), so a promise rephrased by the model
+  does not become a second row.
 - A sixth persona, Methodologist, built on Quivy and Van Campenhoudt's research
   method: it rewrites the thesis as a research question, names the hidden angle,
   builds concept, dimension and indicator, and writes the falsifiable hypothesis
