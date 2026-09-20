@@ -696,6 +696,18 @@ captures, produces two or three drafts in the voice of your production guide und
 decision is the owner's. The aim is to start from something on a Tuesday morning, and
 the draft is expected to be rewritten.
 
+### `tools/task_dedup.py`
+
+**Definition.** The one near-duplicate guard for task titles, shared by every writer of
+the ledger.
+
+**Description.** Folds Turkish diacritics, cuts words to five-character stems because
+the language is agglutinative, drops stop words, and calls two titles the same task at
+60 percent overlap. `spiky_actions.py` had it; `nightly_processor.py` now runs it too.
+
+**Philosophy.** Two writers with two ideas of "already there" grow a ledger of the same
+promise in different words. One module, one definition, both writers.
+
 ---
 
 ## Watch
@@ -713,6 +725,27 @@ result.
 **Philosophy.** Automation fails silently by default. This one refuses to: briefings
 must carry the health block at the top, so a broken pipe is the first thing I read in
 the morning and not something I discover three weeks later.
+
+### `tools/wiki_prune.py`
+
+**Definition.** Counts the pile, then drains it, with no model.
+
+**Description.** Sundays at 16:30 on the worker, before the research pass. `--count`
+writes `_Agent-Context/PILE-SCORECARD.md`: captures per graded decision, filed analyses
+per decision, Inbox files older than fourteen days, orphan wiki pages, concept articles
+that draw on more than one home, decisions and challenged beliefs in the window, pages
+archived. `--archive` lists what four mechanical rules would move to `.wiki/_archive/`
+and `--apply` moves it: an unlinked analysis after 30 days (research, decision and
+dialectic notes exempt), a summary whose source left the compiled roots after 60, any
+orphan after 60, a meeting report that has been summarised and mined after 14 days in
+Inbox. Every move goes to `.wiki/_archive/LOG.md` with its rule and reason; nothing is
+deleted. `health_check.py` carries the Inbox count into the briefing.
+
+**Philosophy.** "Capture everything, filter later" turns into "filter never" unless
+something counts the later. The count exists so the thinking layer, which has no output
+of its own, can visibly fail; the rules are mechanical so that no judgement call is made
+at 16:30 on a Sunday by a model; and the log exists because a move without a reason is a
+deletion with extra steps.
 
 ### `.agents/scripts/watchdog.py`
 
@@ -791,7 +824,17 @@ rename and removal; kill criteria must never become tasks.
 retried for the unsent items only, previews that write nothing, idempotent apply, stale
 buttons and changed sources rejected, deferral and dismissal rules.
 
-**Philosophy, for both.** No credentials and no model calls, so they run anywhere,
+### `tools/tests/test_wiki_prune.py` and `test_nightly_dedup.py`
+
+**Definition.** Offline regressions for the pile drain and the digest's task sync, on a
+throwaway vault.
+
+**Description.** A research note never ages out, a linked page is never an orphan, a
+summary the compiler would rebuild tomorrow is not moved today, a meeting report leaves
+Inbox only with a summary and two weeks behind it, and every move lands in both logs
+once. A rephrased task is dropped; a new one is added once.
+
+**Philosophy, for all of them.** No credentials and no model calls, so they run anywhere,
 including public CI:
 
 ```bash

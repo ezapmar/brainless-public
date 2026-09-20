@@ -10,8 +10,10 @@ reimplemented in a different language next year. This page is the part worth kee
 
 ## 1. How a note is worked over
 
-The method is **Zettelkasten**, Luhmann's slip-box, with one adaptation: the reading and
-the filing are done by a machine, and the judging is not. What survives from the
+The method is **Zettelkasten**, Luhmann's slip-box (his own account is the 1981 essay
+"Kommunikation mit Zettelkästen"; the readable modern one is Sönke Ahrens, *How to Take
+Smart Notes*, 2017), with one adaptation: the reading and the filing are done by a
+machine, and the judging is not. What survives from the
 original is the part that actually did the work, which was never the index cards.
 
 Four things make it a slip-box rather than a folder of files:
@@ -31,11 +33,9 @@ Four things make it a slip-box rather than a folder of files:
   something points at a note that was never written, and hands back a queue of notes the
   archive is demanding.
 
-Honest state, 2026-09-19: the slip-ids were live only on the machine side. All ten notes
-in `Thinking/Ideas/` were missing an address, while all six compiled ideas in
-`.wiki/ideas/` had one, which is backwards, since the compiled layer is the regenerable
-one. `tools/zk_id.py` exists to fix that, and it does not write to your notes unless you
-ask it to.
+The addresses tend to appear on the machine side first and reach the hand-written
+seeds later; `tools/zk_id.py --apply` closes that gap, and it does not write to your
+notes unless you ask it to.
 
 The rest of the loop is how a captured thought becomes a slip worth addressing.
 
@@ -160,7 +160,23 @@ binding parts are these.
 
 The book's three acts are **rupture** (break from what you already assume),
 **construction** (build an explanatory model), **verification** (confront it with
-reality). Seven steps, of which five are enforced mechanically:
+reality), and it walks them in seven steps. The adaptation keeps all seven and gives
+each one a file:
+
+| # | Quivy step | Here |
+|---|---|---|
+| 1 | Opening question | a question note: one sentence, three tests, a list of what is not known, what is out of scope |
+| 2 | Exploration | reading salvos filed as appendices, one angle per appendix, an interim synthesis between salvos, and the question rewritten if the salvo says so |
+| 3 | Problematique | the lens, one sentence, written into the question note before any hypothesis |
+| 4 | Explanatory model | the hypothesis table: hypothesis, expected observation, what would refute it, confidence |
+| 5 | Observation | data collection tied to a hypothesis, every finding labelled `verified`, `claim` or `unknown` |
+| 6 | Analysis | the synthesis note: an executive summary, a hypothesis-versus-finding table, and an interpretation of every deviation |
+| 7 | Conclusion | the terminal steps: consequences, next actions, at least one seed for `Thinking/Ideas/`, and a decision note with a calibration line when the research settles one |
+
+`/research` and `tools/weekly_research.py` walk the seven in that order. The salvo cap
+in step 2 and the label filter in step 5 are enforced in code, along with the two guards
+below; the other five are held by the prompt and the output template, which is a weaker
+guarantee and is said so here. The binding rules, step by step:
 
 **The opening question comes before any data.** One sentence, with three tests: every
 term defined, answerable with the time and access actually available, and a real
@@ -193,6 +209,12 @@ absence of evidence is not evidence.
 **The analysis compares what was observed against what the hypothesis expected, and
 interprets the deviations.** The deviations are the finding. A report that only confirms
 is a report that was not testing anything.
+
+**The pass ends in a seed, not a summary.** At least one question the research fertilised
+is proposed for `Thinking/Ideas/`, as a paste-ready block the owner moves or discards,
+and a research that settles a decision proposes the decision note with its prediction,
+confidence and review date. This is the step most often skipped, and it is where the
+library loop and the thinking loop connect; a pass without it is reading, not research.
 
 Two guards around the outside of the method, both about restraint:
 
@@ -229,8 +251,8 @@ graded decision, filed analyses per decision, Inbox files past the belief's four
 orphan wiki pages, the number of concept articles that draw on more than one home (a
 bridge in Burt's sense; an edge count is not one), decisions made and beliefs challenged
 in the window, and what was archived. For the first four weeks the numbers are the whole
-point. Ceilings come from the data afterwards, the way `editor_lint.py` calibrates against
-the owner's own prose rather than against a guess, and a breach shows up as a line in the
+point. Ceilings come from the data afterwards, calibrated against this vault's own numbers
+rather than against a guess, and a breach shows up as a line in the
 morning briefing through `health_check.py`, never as an automatic freeze.
 
 **Prune, mechanically and with a reason.** `tools/wiki_prune.py --archive` applies rules

@@ -250,7 +250,7 @@ within eight weeks is not researched again: the recurrence is reported instead, 
 a question that keeps coming back without closing is waiting for a decision, not for
 more evidence.
 
-The full adaptation, including the three acts and the seven steps, is in
+The full adaptation, the three acts and the seven steps each mapped to a file, is in
 [the method](docs/method.md).
 
 ### Where the clarity comes from
@@ -407,6 +407,21 @@ script is short enough to read first, and I would. What it does, in order:
 It is safe to re-run. Add `--schedule` to install the hourly conversion, the nightly
 digest and the weekly lint, as launchd agents on macOS and systemd user timers on Linux.
 Add `--yes` to skip the questions.
+
+**Optional inputs.** Step 3 covers documents: markitdown is installed with its PDF, DOCX,
+XLSX and PPTX extras, so a dropped file becomes Markdown with nothing more to install.
+The other two doors need something extra on the machine that runs the capture:
+
+- **Voice** needs `ffmpeg` and [whisper.cpp](https://github.com/ggml-org/whisper.cpp)
+  with a model file (this vault runs `large-v3-turbo`). Transcription stays on the
+  machine; only the cleaned text reaches a model. Without them, voice notes are kept as
+  audio and not transcribed.
+- **Photographs** are read by the vision lane of whichever backend you configured
+  (`capture-photo` in `tools/llm.py`), so a backend without vision means no OCR. A local
+  OCR option is on the list in [docs/local-inference.md](docs/local-inference.md).
+
+Neither is required to start: text, links, documents and the whole compile loop work
+without them. How each door is wired is in [docs/capture-flow.md](docs/capture-flow.md).
 
 To run the script with options instead of piping it:
 

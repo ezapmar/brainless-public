@@ -5,6 +5,15 @@ push. The private vault this is exported from has its own history.
 
 ## Unreleased
 
+- The method page now lists the seven Quivy steps with the file each one maps to, and
+  adds the seventh (the pass ends in a seed and, when it settles one, a decision note),
+  which the research command already enforced but the page never said. The dated audit
+  it used to carry moves here: on 2026-09-19 all ten seeds in `Thinking/Ideas/` lacked
+  a `zk:` address while all six compiled ideas had one, the wrong way round;
+  `tools/zk_id.py --apply` is the fix. The page no longer cites a tool that does not
+  ship (`editor_lint.py`), names a reading route for Zettelkasten, and the README's
+  Install section gains an "Optional inputs" note for voice (ffmpeg + whisper.cpp) and
+  photographs (a backend with vision).
 - Count the pile, then drain it. `tools/wiki_prune.py --count` writes
   `_Agent-Context/PILE-SCORECARD.md` every Sunday with no model: captures per graded
   decision, filed analyses per decision, Inbox files past fourteen days (the capture
