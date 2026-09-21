@@ -189,7 +189,12 @@ def next_kill_criterion(text):
 
 
 def last_log_date(text):
-    dates = LOG_DATE_RE.findall(text)
+    """Latest dated log entry. Headings (`### YYYY-MM-DD`) and list lines
+    (`- [YYYY-MM-DD]`) both count; UK Relocation uses the list form."""
+    body = section(text, "Log") or section(text, "Logs")
+    haystack = body or text
+    dates = LOG_DATE_RE.findall(haystack)
+    dates += re.findall(r"^-\s*\[(\d{4}-\d{2}-\d{2})\]", haystack, re.M)
     return max(dates) if dates else ""
 
 

@@ -276,6 +276,15 @@ class DashboardActionTests(unittest.TestCase):
         self.assertEqual(dashboard.next_action(template), "")
         self.assertEqual(dashboard.next_action("## Next Action\n- [ ]\n## Status\n- [ ] Real task"), "Real task")
 
+    def test_last_log_date_heading_and_bracket_list(self):
+        heading = "## Log\n### 2026-04-15\n- old\n### 2026-09-20\n- new"
+        self.assertEqual(dashboard.last_log_date(heading), "2026-09-20")
+        listed = "## Logs\n- [2026-04-15] old\n- [2026-09-20] new"
+        self.assertEqual(dashboard.last_log_date(listed), "2026-09-20")
+        mixed = "## Log\n### 2026-09-14\n- heading\n- [2026-09-20] list"
+        self.assertEqual(dashboard.last_log_date(mixed), "2026-09-20")
+        self.assertEqual(dashboard.last_log_date("## Outcome\nno log"), "")
+
 
 if __name__ == "__main__":
     unittest.main()
