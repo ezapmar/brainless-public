@@ -5,6 +5,18 @@ push. The private vault this is exported from has its own history.
 
 ## Unreleased
 
+- Give the nightly compile a wall-clock budget so a backlog at the front cannot eat
+  the whole window. Summaries, projects and entities check the clock before each file;
+  articles and ideas reserve the seconds their one call needs. The index always runs.
+  The nightly passes most of its timeout to the child as `--budget-seconds` and runs
+  it unbuffered, so a killed run still leaves a journal of where it stopped.
+- `health_check.py` notifies with `osascript` on macOS and `notify-send` on Linux, and
+  skips the call when neither is present, so a RED report on the worker no longer
+  crashes the run after writing the file.
+- `build_dashboard.py` reads last-log dates from the Log section only, and counts both
+  `### YYYY-MM-DD` headings and `- [YYYY-MM-DD]` list lines. A project that dates its
+  log as a list no longer looks months stale.
+
 - The method page now lists the seven Quivy steps with the file each one maps to, and
   adds the seventh (the pass ends in a seed and, when it settles one, a decision note),
   which the research command already enforced but the page never said. The dated audit
