@@ -9,6 +9,7 @@ Runs hourly from cron_wrapper.sh; cheap by design (no LLM calls).
 import os
 import re
 import json
+import shutil
 import subprocess
 import time
 from datetime import datetime
@@ -402,11 +403,15 @@ def main():
 
     if worst == "RED":
         reds = "; ".join(f"{l}: {d}" for l, s, d in CHECKS if s == "RED")[:180]
-        subprocess.run(
-            ["osascript", "-e",
-             f'display notification "{reds}" with title "{t("health_check.notify_title")}"'],
-            check=False,
-        )
+        title = t("health_check.notify_title")
+        if shutil.which("osascript"):  # macOS-only notification
+            subprocess.run(
+                ["osascript", "-e",
+                 f'display notification "{reds}" with title "{title}"'],
+                check=False,
+            )
+        elif shutil.which("notify-send"):  # Linux worker
+            subprocess.run(["notify-send", title, reds], check=False)
 
 
 if __name__ == "__main__":
