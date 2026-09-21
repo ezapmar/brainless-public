@@ -26,6 +26,7 @@ import os
 import re
 import subprocess
 import sys
+import time
 import unicodedata
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -95,6 +96,29 @@ def slugify(s: str) -> str:
 
 _CLAUDE_CALLS = 0
 _CLAUDE_FAILURES = 0
+
+# Wall-clock budget. The phases run in a fixed order and make serial LLM calls
+# of up to 300s each, so a backlog at the front ate the whole night: the nightly
+# wrapper's hard timeout killed the run mid-phase (Sep 15, 17, 19, 21, 2026) and
+# every cheap phase behind it, the index included, never ran at all. With a
+# budget the run stops itself between items, still reaches the index, and says
+# what is left for tomorrow. None = no budget, which is what a manual run gets.
+_DEADLINE = None
+_BUDGET_NOTED = set()
+
+
+def out_of_time(phase: str, *, need: int = 0) -> bool:
+    """True when the budget is spent. `need` reserves the seconds a phase's own
+    call would take, so we never start a call that the budget cannot finish."""
+    if _DEADLINE is None:
+        return False
+    if time.monotonic() + need < _DEADLINE:
+        return False
+    if phase not in _BUDGET_NOTED:
+        _BUDGET_NOTED.add(phase)
+        print(f"[budget] out of time in phase {phase}: the remainder is left "
+              f"for the next run", file=sys.stderr)
+    return True
 
 
 # Untrusted content (source file bodies) enters the compile prompts, so tool use
@@ -311,6 +335,8 @@ status: seed
 def phase_summaries(dry: bool, full: bool):
     n = 0
     for src in iter_sources(SUMMARY_SOURCES):
+        if not dry and out_of_time("summaries"):
+            break
         if summarize_file(src, dry, full):
             n += 1
     print(f"phase summaries: {n} file(s)")
@@ -333,6 +359,8 @@ def phase_projects(dry: bool, full: bool):
             notes = proj_dir / "notes.md"
             if not notes.exists() or _is_private(notes):
                 continue
+            if not dry and out_of_time("projects"):
+                break
             sources = sorted(iter_sources([proj_dir]))
             dst = WIKI / "projects" / cat / f"{proj_dir.name}.md"
             # Version the dependency policy so old notes-only mirrors are also
@@ -424,6 +452,8 @@ def phase_articles(dry: bool, full: bool):
     if dry:
         print(f"[dry] cluster {len(index)} summaries into wiki/articles/")
         return
+    if out_of_time("articles", need=300):
+        return
     prompt = f"""You have {len(index)} summary files in .wiki/summaries/. Cluster them into 8-20 concept articles.
 
 {CROSS_LINK_RULE}
@@ -495,6 +525,8 @@ def phase_ideas(dry: bool, full: bool):
         return
     if dry:
         print("[dry] derive ideas from beliefs+decisions")
+        return
+    if out_of_time("ideas", need=240):
         return
     prompt = f"""Auto-derive 5-15 atomic ideas from these beliefs and decisions. Each idea = one note.
 
@@ -665,6 +697,8 @@ def _entity_tasks(terms):
 def phase_entities(dry: bool, full: bool):
     n = 0
     for name, etype, aliases in parse_entity_registry():
+        if not dry and out_of_time("entities"):
+            break
         terms = [name] + aliases
         dst = WIKI / "entities" / f"{name}.md"
         sources = _entity_matches(terms)
@@ -765,7 +799,16 @@ def main():
     ap.add_argument("--full-rebuild", action="store_true")
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--only", choices=list(PHASES.keys()))
+    ap.add_argument("--budget-seconds", type=int,
+                    default=int(os.environ.get("BRAINLESS_COMPILE_BUDGET", "0")),
+                    help="wall-clock budget in seconds; 0 = unlimited. The run "
+                         "stops between items and still rebuilds the index.")
     args = ap.parse_args()
+
+    global _DEADLINE
+    if args.budget_seconds > 0 and not args.dry_run:
+        _DEADLINE = time.monotonic() + args.budget_seconds
+        print(f"=== budget: {args.budget_seconds}s ===")
 
     phases = [args.only] if args.only else list(PHASES.keys())
     for ph in phases:
@@ -773,6 +816,9 @@ def main():
         PHASES[ph](args.dry_run, args.full_rebuild)
 
     if not args.dry_run:
+        if _BUDGET_NOTED:
+            print(f"\n=== budget spent in: {', '.join(sorted(_BUDGET_NOTED))}; "
+                  f"run again to drain the rest ===")
         print(f"\n=== claude: {_CLAUDE_CALLS} call(s), {_CLAUDE_FAILURES} failure(s) ===")
         # Loud signal: a silent compile-to-empty is exactly what hid the broken
         # pipeline for weeks. Alarm if calls were made but most/all failed.

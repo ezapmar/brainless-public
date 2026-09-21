@@ -18,6 +18,15 @@ PROJECTS_PERSONAL_DIR = os.path.join(VAULT_ROOT, 'Personal')
 # The compile makes serial LLM calls of up to 300s each. 30 minutes cut a large
 # backlog short every night (Sep 8-10, 2026); 90 minutes lets it drain.
 COMPILE_TIMEOUT = int(os.environ.get("BRAINLESS_COMPILE_TIMEOUT", "5400"))
+# A window alone was not enough: a backlog larger than the window meant the hard
+# kill landed mid-phase every night (Sep 15, 17, 19, 21, 2026), took the cheap
+# phases behind it (INDEX.md) with it, and threw away the child's buffered
+# output, so the journal could not even show where it stopped. The compile now
+# gets its own smaller budget and stops itself between items; the timeout stays
+# as the backstop for a genuine hang, and the child runs unbuffered so its
+# progress reaches the journal as it happens.
+COMPILE_BUDGET = int(os.environ.get("BRAINLESS_COMPILE_BUDGET",
+                                    str(max(600, COMPILE_TIMEOUT - 600))))
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from resolve_bin import resolve_claude
 from llm import run_prompt  # noqa: E402
@@ -317,7 +326,9 @@ def main():
             # After daily digest, run incremental wiki compile
             try:
                 subprocess.run(
-                    [sys.executable, os.path.join(VAULT_ROOT, 'tools/compile_resources.py')],
+                    [sys.executable, "-u",
+                     os.path.join(VAULT_ROOT, 'tools/compile_resources.py'),
+                     f"--budget-seconds={COMPILE_BUDGET}"],
                     cwd=VAULT_ROOT, check=False, timeout=COMPILE_TIMEOUT,
                 )
             except Exception as e:
