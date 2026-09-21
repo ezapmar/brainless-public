@@ -57,6 +57,10 @@ COMPANY_AREA = (os.environ.get("BRAINLESS_COMPANY_AREA") or _fm.get("company_are
 # Name of the always-on worker machine; its commits carry "(<name>)" as suffix.
 WORKER = (os.environ.get("BRAINLESS_WORKER_NAME") or _fm.get("worker_name") or "worker").strip()
 # Extra private path segments (comma separated) on top of the generic ones.
+EDITOR_DIR = (os.environ.get("BRAINLESS_EDITOR_DIR") or _fm.get("editor_dir") or "Writings/Editor").strip().strip("/")
+WRITINGS_DIR = (os.environ.get("BRAINLESS_WRITINGS_DIR") or _fm.get("writings_dir") or "Writings").strip().strip("/")
+DRAFTS_DIR = (os.environ.get("BRAINLESS_DRAFTS_DIR") or _fm.get("drafts_dir") or "Writings/Drafts").strip().strip("/")
+NARRATIVES_DIR = (os.environ.get("BRAINLESS_NARRATIVES_DIR") or _fm.get("narratives_dir") or "Writings/Narratives").strip().strip("/")
 PRIVATE_SEGMENTS = tuple(x.strip() for x in (os.environ.get("BRAINLESS_PRIVATE_SEGMENTS")
                                               or _fm.get("private_segments") or "").split(",") if x.strip())
 GENERIC_PRIVATE_SEGMENTS = ("Official Docs", "Security Incidents")
@@ -66,6 +70,9 @@ PRIVATE_SUFFIXES = (" - Health",)
 def _csv(env_key, fm_key, default=()):
     raw = os.environ.get(env_key) or _fm.get(fm_key) or ""
     return tuple(x.strip() for x in raw.split(",") if x.strip()) or default
+
+LONGFORM_DIRS = _csv("BRAINLESS_LONGFORM_DIRS", "longform_dirs")
+CORPUS_DIRS = _csv("BRAINLESS_CORPUS_DIRS", "corpus_dirs")
 
 
 # Vault-relative homes that must never reach the remote. health_check.py reports on

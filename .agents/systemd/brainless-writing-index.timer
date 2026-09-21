@@ -1,0 +1,9 @@
+[Unit]
+Description=brainless: weekly writing map, Monday 06:50
+
+[Timer]
+OnCalendar=Mon *-*-* 06:50:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target

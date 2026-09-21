@@ -843,3 +843,23 @@ python3 -B -m unittest discover -s tools/tests -v
 
 Each test is a mistake that either happened or nearly did. They are less a proof that
 the engine is correct and more a list of the ways it is no longer allowed to be wrong.
+
+### `tools/writing_index.py` and `tools/writing_ideas.py`
+
+**Definition.** The writing channel's two feeders. `writing_index.py` walks the folders
+named in `PROFILE.md` (`writings_dir`, `drafts_dir`, `narratives_dir`, `editor_dir`,
+`longform_dirs`, `corpus_dirs`) and writes `_Agent-Context/WRITING.md`: pieces and working
+files, drafts in flight, open pitches, the published corpus by year, the editing files.
+No model call. `writing_ideas.py` reads beliefs, seed ideas, the latest dialectic
+syntheses and two weeks of captures, asks the model for three pitches (or one per
+`--topics` entry), files each in the drafts folder and posts each as a root message in
+Buzz `#writing`.
+
+**Schedule.** `brainless-writing-index.timer` Monday 06:50 with `--post`;
+`brainless-writing-ideas.timer` the 1st of every second month at 09:00.
+
+**Philosophy.** The agent that drafts in `#writing` should never have to ask where
+things are. The map is regenerated, so it is never stale and never hand-edited. Pitches
+are proposals with sources; the owner decides in the thread, and nothing is published by
+the system. See [writing-agent.md](writing-agent.md).
+

@@ -1,0 +1,9 @@
+[Unit]
+Description=brainless: pitch round every second month, the 1st at 09:00
+
+[Timer]
+OnCalendar=*-01,03,05,07,09,11-01 09:00:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target

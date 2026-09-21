@@ -1,0 +1,15 @@
+[Unit]
+Description=Buzz conversational agent %i (buzz-acp + Claude Code, writes only its drafts folder)
+After=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=%h/buzz-%i
+EnvironmentFile=%h/.config/brainless/buzz/%i.env
+Environment=PATH=%h/.cargo/bin:%h/.local/share/mise/shims:%h/.local/bin:/usr/local/bin:/usr/bin:/bin
+ExecStart=%h/.cargo/bin/buzz-acp
+Restart=on-failure
+RestartSec=15
+
+[Install]
+WantedBy=default.target

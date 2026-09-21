@@ -9,6 +9,7 @@ Always load `CONTEXT.md` and `PROJECTS-ACTIVE.md` before responding to any vault
 
 ### Rule 2: Never Write to the Vault Without Permission
 You may suggest edits, draft notes, and propose links. You do NOT modify vault files unless the owner explicitly instructs you to. The vault is human-authored truth.
+- Exception (2026-09-21): `Writings/Drafts/` and `Writings/Narratives/Drafts/` are agent-owned draft folders for the Buzz writing agents (`#writing`, `#narratives`). The agents create and edit files only there; `tools/writing_ideas.py` files pitches there. Moving a draft out of `Drafts/` into `Writings/` is the owner's act, never the agent's.
 
 ### Rule 3: Link, Don't Summarize
 When surfacing patterns, point to the specific notes (`[[Note Name]]`) rather than paraphrasing. Let the owner read the originals and form his own connections.

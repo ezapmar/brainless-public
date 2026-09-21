@@ -8,7 +8,7 @@ import sys
 import tempfile
 import time
 
-from buzz_delivery import Outbox, ROUTES, VAULT, event_id, messages
+from buzz_delivery import Outbox, ROUTES, HARNESS_CHANNELS, VAULT, event_id, messages
 from i18n import t
 from today_buzz import parents, handle as today_handle, send_queue
 import thinking_buzz
@@ -96,6 +96,10 @@ def file_answer(box, msg, body, created):
     atomic_write(receipt, f'---\nlang: {LANG}\nsummary_en: Read-only Buzz thread answer.\ncommand: buzz\nstatus: seed\n---\n\n' + body + '\n')
 
 
+def polled_routes():
+    return {k: v for k, v in ROUTES.items() if k not in HARNESS_CHANNELS}
+
+
 def poll_channel(box, name, identity, owner):
     cid = box.client.channel(name, identity)
     with box.db() as db:
@@ -155,7 +159,7 @@ def main():
                 thinking_buzz.resume_writes(state)
                 thinking_buzz.migrate(state, box)
         owner = box.client.owner()
-        for name, identity in ROUTES.items():
+        for name, identity in polled_routes().items():
             try:
                 failures += poll_channel(box, name, identity, owner)
             except Exception as exc:

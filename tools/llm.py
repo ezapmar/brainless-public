@@ -130,6 +130,7 @@ LANES = {
     "dialectic-connect":   "long   connection scan across the wiki",
     "dialectic-judge":     "short  usable or not, one word per local persona reply, JSON out",
     "content":             "long   content engine draft",
+    "writing-ideas":       "long   long-form pitch generation for the writing channel",
     "thinker-digest":      "long   digest of a thinker's corpus",
     "thinking-loop":       "long   weekly thinking loop",
     "research-plan":       "long   research question note and hypothesis table",

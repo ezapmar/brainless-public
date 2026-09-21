@@ -3,6 +3,21 @@
 All notable changes to the public brainless engine. Dates are the day of the public
 push. The private vault this is exported from has its own history.
 
+## 0.3.0 (2026-09-21)
+
+- Writing and narrative agents: `.agents/buzz/install_agent_channel.sh <slug>` installs a
+  conversational Buzz agent with its own channel from a card in `.agents/buzz/agents/`,
+  pinned to a model and effort level (`BUZZ_AGENT_MODEL`, default `claude-fable-5-1`).
+  Two cards ship: Writer (`#writing`, long-form pieces) and Narrator (`#narratives`,
+  children's stories). Each writes only inside its drafts folder, loads the editing
+  files first and runs the editor lint before every draft.
+- `tools/writing_index.py` compiles `_Agent-Context/WRITING.md`, the map of every
+  long-form asset; `tools/writing_ideas.py` posts a pitch round to `#writing` every
+  second month. New `PROFILE.md` fields: `editor_dir`, `writings_dir`, `drafts_dir`,
+  `narratives_dir`, `longform_dirs`, `corpus_dirs`.
+- The polling reply worker leaves harness channels alone (`HARNESS_CHANNELS`), so an
+  owner message in `#writing` gets exactly one reply.
+
 ## 0.2.0 (2026-09-21)
 
 - Telegram is capture-only; receipts and errors arrive in Buzz `#inbox`. Nothing is

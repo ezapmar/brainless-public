@@ -495,6 +495,11 @@ friction, and each needs its own credentials in `~/.config/brainless/`.
   `#thinking`, alerts in `#ops`. You reply in the thread; `apply` on the latest preview
   is the only way an automated path writes a human note. Messages wait in a local outbox
   until the relay acknowledges them. See [Buzz interactions](docs/buzz-interactions.md).
+- **Writing and narrative agents.** Two more channels, `#writing` and `#narratives`,
+  each with a live agent that drafts long-form pieces or children's stories in
+  conversation with you. It reads the whole vault, writes only to its drafts folder, runs
+  your editing lint before every draft and reports the counts. A weekly writing map and a
+  pitch round every second month feed it. See [Writing agents](docs/writing-agent.md).
 - **Buzz personas.** The six voices as live agents on a self-hosted
   [Buzz](https://github.com/block/buzz) relay. They answer in a channel twice a day and
   whenever you mention them. This is how I run it; `.agents/buzz/` has the prompts and
@@ -533,8 +538,9 @@ paths, the schedule) is what actually runs.
 - **A laptop running [Omarchy](https://omarchy.org) (Arch Linux).** The always-on worker.
   It stays on behind Tailscale and does everything unattended: the systemd timers, the
   Telegram capture with whisper.cpp, the Buzz relay that hosts the six personas as live
-  agents, and the two-minute reply worker that reads my answers in Buzz threads. It
-  pulls, runs, commits and pushes so the Mac can sleep.
+  agents, the two-minute reply worker that reads my answers in Buzz threads, and the
+  Writer and Narrator agents in `#writing` and `#narratives`. It pulls, runs, commits
+  and pushes so the Mac can sleep.
 
 ```mermaid
 flowchart LR
@@ -579,6 +585,8 @@ verbatim by `.agents/systemd/install.sh`:
 | 23:00 | `nightly` | write the digest, archive the raw capture, compile `.wiki/`, lint |
 | Mon 05:00, Fri 21:00 | `dashboard` | rebuild the active-projects view from every `notes.md` |
 | Mon 06:30 | `resurface` | bring decisions due for grading back to the top |
+| Mon 06:50 | `writing-index` | rebuild the writing map (`_Agent-Context/WRITING.md`), one-line summary to `#writing` |
+| 1st of every second month, 09:00 | `writing-ideas` | three long-form pitches, one thread each in `#writing` |
 | 08:00 | `reminder` | the Today queue: one decision, one commitment, one piece of evidence, posted to `#tasks` |
 | every 2 min | `buzz-interactions` | read your replies in Buzz threads, draft, apply on approval, drain the outbox |
 | Sun 19:00 | `thinking` | weekly themes, blind spots, promotion candidates; one reflective question posted to `#thinking` |

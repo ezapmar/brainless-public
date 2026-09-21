@@ -1,0 +1,8 @@
+[Unit]
+Description=brainless: rebuild the writing map (_Agent-Context/WRITING.md) and post a summary to Buzz #writing
+OnFailure=brainless-notify-failure@%n.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=%h/projects/brainless
+ExecStart=/bin/bash %h/projects/brainless/.agents/scripts/worker_job.sh tools/writing_index.py --post

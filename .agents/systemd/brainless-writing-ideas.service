@@ -1,0 +1,9 @@
+[Unit]
+Description=brainless: long-form pitch round posted to Buzz #writing
+OnFailure=brainless-notify-failure@%n.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=%h/projects/brainless
+ExecStart=/bin/bash %h/projects/brainless/.agents/scripts/worker_job.sh tools/writing_ideas.py
+TimeoutStartSec=20min

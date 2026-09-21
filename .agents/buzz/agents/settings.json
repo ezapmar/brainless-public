@@ -1,0 +1,30 @@
+{
+  "permissions": {
+    "allow": [
+      "Read",
+      "Glob",
+      "Grep",
+      "WebFetch",
+      "WebSearch",
+      "Write(//__VAULT__/__DRAFTS_DIR__/**)",
+      "Edit(//__VAULT__/__DRAFTS_DIR__/**)",
+      "Bash(python3 __VAULT__/tools/wiki_search.py *)",
+      "Bash(python3 __VAULT__/__EDITOR_DIR__/editor_lint.py *)",
+      "Bash(mkdir -p __VAULT__/__DRAFTS_DIR__*)",
+      "Bash(ls __VAULT__/__DRAFTS_DIR__*)",
+      "Bash(wc *)",
+      "Bash(__BUZZ_BIN__ messages send *)",
+      "Bash(__BUZZ_BIN__ messages get *)",
+      "Bash(__BUZZ_BIN__ messages thread *)"
+    ],
+    "deny": [
+      "NotebookEdit",
+      "Bash(git *)", "Bash(rm *)", "Bash(mv *)", "Bash(cp *)", "Bash(sudo *)", "Bash(ssh *)",
+      "Bash(curl *)", "Bash(wget *)", "Bash(python3 -c *)", "Bash(python *)", "Bash(node *)",
+      "Read(__HOME__/.config/**)", "Read(__HOME__/.ssh/**)", "Read(__HOME__/.claude/**)",
+      "Read(__HOME__/.aws/**)", "Read(__HOME__/.gnupg/**)", "Read(__HOME__/.netrc)",
+      "Read(__HOME__/.git-credentials)", "Read(__HOME__/.npmrc)", "Read(__HOME__/.docker/**)",
+      "Read(__HOME__/.kube/**)", "Read(__HOME__/.cargo/credentials)", "Read(__HOME__/.cargo/credentials.toml)"
+    ]
+  }
+}
