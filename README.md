@@ -40,7 +40,7 @@ wrong the same way twice without noticing. A pile of notes does not fix it.
    them.
 4. **It comes back when it is relevant.** A morning queue of at most three items. A search
    that answers "what do I already know about this". A brief before a meeting. A digest
-   overnight.
+   overnight. Since September 2026, a thread where it asks and I answer.
 5. **Then it argues.** Six personas, each built out of a book on thinking, test what I
    have just decided and post the disagreement to a channel I read on my phone. Decisions
    carry a prediction and a review date, and the system nags me until I write down what
@@ -372,7 +372,10 @@ you are wrong by a script at 21:20.
 
 ## What it is not
 
-- Not a chat app. You talk to it through notes, commands and, optionally, a channel.
+- Not a chat app, although it is getting conversational. You talk to it through notes,
+  commands and, since September 2026, threads in a channel where it answers, asks and
+  waits for your approval. The notes are still the record. The threads are how the record
+  gets made.
 - Not a knowledge graph you maintain. The graph is compiled, not curated.
 - Not a decision maker. It never picks. Duke would call that resulting in advance.
 - Not finished. I built it for one person, then made it installable in a day. Expect
@@ -720,6 +723,33 @@ capture without friction, and the Omarchy worker is where you go when the Mac be
 starts to cost you.
 
 ---
+
+## Where it is going now
+
+For a year the system was a pipeline. Notes went in, a compiler read them, timers posted
+the results and I read them on the phone. It talked. I did not talk back. The morning
+queue arrived as a message with buttons on it, and the buttons were the whole
+conversation.
+
+That changed on 21 September 2026. Telegram now only listens. Every answer the system
+gives me, every question it asks and every approval it needs lives in a Buzz channel, in
+a thread, next to the message it belongs to. I reply in the thread the way I would reply
+to a colleague. "Apply" under a preview writes the note. "Defer to Friday" moves it.
+Anything else gets an answer with the vault paths it stands on.
+
+Two channels went further. In `#writing` an agent drafts long-form pieces with me, one
+thread per piece, and runs my own editing lint before it shows me anything. In
+`#narratives` another one writes children's stories, chapter by chapter, with an
+illustration note at the end of each. Both read the whole vault and can write to exactly
+one folder. Moving a draft out of that folder is my job.
+
+So the work now is workflows and conversation. The pipeline stays. What I am building on
+top of it is the set of bounded exchanges a person and a system can have without either
+of them making a mess. A question with a revision-bound approval. A draft with a lint
+report. A pitch with its sources. Each one is small on purpose. I do not know yet which
+of them will survive a month of daily use, and I would rather find that out in threads
+than in a roadmap. See [Buzz interactions](docs/buzz-interactions.md) and
+[Writing agents](docs/writing-agent.md) for how each exchange is bounded.
 
 ## Honest limits
 
