@@ -6,8 +6,8 @@ publications, blog posts and book chapters. `#narratives` is for children's stor
 Social media drafts stay with the content engine and `#content`.
 
 Each agent is the same harness the personas use (`buzz-acp` in front of Claude
-Code), with three differences: it answers every owner message in its channel
-without a mention, it keeps one isolated session per thread, and it may write
+Code), with three differences: it subscribes to the whole channel and answers every owner
+message there without a mention (`BUZZ_ACP_SUBSCRIBE=all`, `BUZZ_ACP_NO_MENTION_FILTER`), it keeps one isolated session per thread, and it may write
 files, but only inside its own drafts folder.
 
 | Agent | Channel | Writes to | Reads first |
