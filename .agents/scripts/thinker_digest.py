@@ -27,7 +27,9 @@ sys.path.insert(0, os.path.join(VAULT, ".agents", "scripts"))
 from llm import run_prompt
 from owner_profile import OWNER, WORKER, LANG, output_lang_directive  # noqa: E402
 from i18n import t  # noqa: E402
-from watchdog import send_telegram
+from buzz_delivery import send
+from functools import partial
+send_buzz = partial(send, 'radar')
 from telegram_capture import fetch_page_text        # SSRF-protected fetcher
 
 REGISTRY = os.path.join(VAULT, "_Agent-Context", "thinkers.md")
@@ -217,7 +219,7 @@ RULES:
 
     who = sorted({i["who"] for i in fresh})
     links_part = t("thinker_digest.notify_links_part", n_links=len(links)) if links else ""
-    send_telegram(t("thinker_digest.notify_ready", n_new=len(fresh), links_part=links_part)
+    send_buzz(t("thinker_digest.notify_ready", n_new=len(fresh), links_part=links_part)
                   + (t("thinker_digest.notify_authors", who=", ".join(who)) if who else "")
                   + t("thinker_digest.notify_vault", path=f".wiki/digests/thinkers-{stamp}.md"))
     if errors:

@@ -1,26 +1,7 @@
 #!/usr/bin/env python3
-"""Thinking loop over Telegram (worker).
-
-Purpose: move the reflection step (decision grading, prediction, belief
-challenge, cadence step, seed idea) to the one channel the owner actually
-answers on, Telegram.
-
-Flow:
-  1. `--ask` (Sunday 19:00, brainless-thinking.timer): picks ONE question in
-     priority order, sends it to Telegram, records the pending question in state.
-  2. The owner REPLIES to that message (voice or text); telegram_capture tries
-     this module first on every turn via `try_handle`. The answer goes to the
-     LLM, which produces a DRAFT to be written into the target note; the draft
-     is sent back as a preview.
-  3. "apply" -> the draft is written into the human area (Thinking/), the change
-     is filed to loopback. "cancel" -> the draft is discarded. "skip" -> the
-     question is skipped and a different kind of question comes next week.
-
-Safety: the LLM only sees embedded text, no tools; the output is parsed as JSON
-and the fields are sanitized. Writing under Thinking/ happens ONLY after "apply"
-(AGENT-RULES rule 2: explicit approval). Written files come from a fixed list;
-the LLM cannot choose a file path.
-State: .agents/state/thinking_loop.json (gitignored).
+"""Weekly thinking question selection, draft generation and note rendering.
+Buzz transport, thread-bound approval and recoverable writes live in
+ tools/thinking_buzz.py. The --ask entry point uses that adapter.
 """
 import argparse
 import json
@@ -128,25 +109,6 @@ def clean(s, limit=600):
     return s[:limit]
 
 
-def send(text, reply_to=None):
-    """Send a Telegram message; returns message_id (for state)."""
-    import urllib.parse
-    import urllib.request
-    token = read(os.path.join(CONF_DIR, "telegram_token")).strip()
-    chat = read(os.path.join(CONF_DIR, "telegram_chat_id")).strip()
-    if not (token and chat):
-        log("telegram not configured; message not sent")
-        return None
-    params = {"chat_id": chat, "text": text}
-    if reply_to:
-        params["reply_to_message_id"] = reply_to
-    data = urllib.parse.urlencode(params).encode()
-    with urllib.request.urlopen(
-            f"https://api.telegram.org/bot{token}/sendMessage", data=data, timeout=30) as r:
-        out = json.load(r)
-    return (out.get("result") or {}).get("message_id")
-
-
 # ---------------------------------------------------------------------------
 # Question selection
 # ---------------------------------------------------------------------------
@@ -217,31 +179,8 @@ def pick_question(state):
 
 
 def ask(dry_run=False):
-    state = load_state()
-    if state.get("phase") in ("asked", "drafted"):
-        age = (time.time() - state.get("asked_at", 0)) / 86400
-        if age < PENDING_TTL_DAYS:
-            log(f"a pending question exists ({state.get('kind')}, {age:.0f} days); no new question asked")
-            if not dry_run:
-                send(t("thinking_loop.pending_open", question=state.get("question", "")))
-            return
-        state.setdefault("skipped", []).append(f"{state.get('kind')}:{state.get('target')}")
-        log("unanswered question timed out, skipped")
-    q = pick_question(state)
-    if not q:
-        log("nothing to ask (everything is up to date)")
-        return
-    kind, target, question = q
-    text = t("thinking_loop.ask_message", question=question)
-    if dry_run:
-        print(text)
-        return
-    mid = send(text)
-    state.update({"phase": "asked", "kind": kind, "target": target, "question": question,
-                  "asked_at": time.time(), "message_id": mid, "draft": None})
-    state["recent_kinds"] = (state.get("recent_kinds", []) + [kind])[-4:]
-    save_state(state)
-    log(f"question sent: {kind} / {target}")
+    from thinking_buzz import ask as buzz_ask
+    return buzz_ask(dry_run=dry_run)
 
 
 # ---------------------------------------------------------------------------
@@ -346,7 +285,7 @@ def _replace_section_line(text, heading, pattern, replacement):
     return text, False
 
 
-def _update_calibration(target, **cols):
+def _update_calibration(target, writer=write, **cols):
     text = read(CALIBRATION)
     if not text:
         return
@@ -362,12 +301,17 @@ def _update_calibration(target, **cols):
                     cells[idx[k]] = v
             line = "| " + " | ".join(cells) + " |\n"
         out.append(line)
-    write(CALIBRATION, "".join(out))
+    writer(CALIBRATION, "".join(out))
 
 
-def apply(kind, target, d, answer):
+def apply(kind, target, d, answer, *, collect=None, stamp=None):
     today = datetime.now().strftime("%Y-%m-%d")
-    stamp = datetime.now().strftime("%Y-%m-%d-%H%M%S")
+    stamp = stamp or datetime.now().strftime("%Y-%m-%d-%H%M%S")
+    def put(path, body):
+        if collect is None:
+            write(path, body)
+        else:
+            collect[path] = body
     touched = []
     if kind == "grade":
         path = target_path(kind, target)
@@ -379,9 +323,9 @@ def apply(kind, target, d, answer):
             text = text.rstrip("\n") + f"\n\n## Outcome ({today})\n{block}"
         text = set_fm(text, "graded", today)
         text = set_fm(text, "outcome_score", clean(d.get("score"), 10))
-        write(path, text)
+        put(path, text)
         touched.append(path)
-        _update_calibration(target, outcome=clean(d.get("outcome"), 160),
+        _update_calibration(target, writer=put, outcome=clean(d.get("outcome"), 160),
                             lesson=clean(d.get("lesson"), 160))
         touched.append(CALIBRATION)
     elif kind == "predict":
@@ -403,9 +347,9 @@ def apply(kind, target, d, answer):
                                         f"- **Review on:** {review}\n")
         text = set_fm(text, "confidence", f"{conf}%")
         text = set_fm(text, "review", review)
-        write(path, text)
+        put(path, text)
         touched.append(path)
-        _update_calibration(target, prediction=clean(d.get("prediction"), 160),
+        _update_calibration(target, writer=put, prediction=clean(d.get("prediction"), 160),
                             conf=f"{conf}%", review=review)
         touched.append(CALIBRATION)
     elif kind == "belief":
@@ -424,7 +368,7 @@ def apply(kind, target, d, answer):
         conf = str(d.get("confidence", "")).lower()
         if conf in ("high", "medium", "low"):
             text = set_fm(text, "confidence", conf)
-        write(path, text)
+        put(path, text)
         touched.append(path)
     elif kind == "cadence":
         text = read(CADENCE)
@@ -434,11 +378,11 @@ def apply(kind, target, d, answer):
                 if re.match(r"\s*- \[ \]", l) and target[:40] in l:
                     lines[i] = l.replace("- [ ]", "- [x]", 1).rstrip("\n") + f" ✅ {today}\n"
                     break
-            write(CADENCE, "".join(lines))
+            put(CADENCE, "".join(lines))
             touched.append(CADENCE)
         cap = os.path.join(DAILY_DIR, f"{stamp}-thinking.md")
         status = t("thinking_loop.cadence_done") if d.get("done") else t("thinking_loop.cadence_not_done")
-        write(cap, t("thinking_loop.note_cadence_capture", target=clean(target, 120), status=status,
+        put(cap, t("thinking_loop.note_cadence_capture", target=clean(target, 120), status=status,
                      note=clean(d.get('note')), stamp=stamp))
         touched.append(cap)
     elif kind == "seed":
@@ -446,20 +390,21 @@ def apply(kind, target, d, answer):
         fname = re.sub(r'[\\/:*"<>|]', "", title).strip() or t("thinking_loop.seed_default_name", today=today)
         path = os.path.join(IDEAS_DIR, fname + ".md")
         connects = [f"[[{clean(c, 80)}]]" for c in (d.get("connects") or [])][:5] or ["[[CONTEXT]]"]
-        write(path, (f"---\ndate: {today}\ntype: idea\nstatus: seed\ntags: [idea, status/seed]\n"
+        put(path, (f"---\ndate: {today}\ntype: idea\nstatus: seed\ntags: [idea, status/seed]\n"
                      f"source: {t('thinking_loop.seed_source')}\n---\n\n# {title}\n\n## The Idea\n"
                      f"{clean(d.get('idea'), 1500)}\n\n## Why It Matters\n{clean(d.get('why'))}\n\n"
                      f"## Connects To\n" + "\n".join(f"- {c}" for c in connects) +
                      f"\n\n## Open Questions\n- {clean(d.get('question'))}\n\n## Next Action\n- marinate\n"))
         touched.append(path)
     # Loopback: question + answer + applied draft accumulate in the wiki.
-    os.makedirs(QUERIES_DIR, exist_ok=True)
+    if collect is None:
+        os.makedirs(QUERIES_DIR, exist_ok=True)
     # Long or markdown-heavy targets (cadence steps) go into the frontmatter shortened.
     target = clean(re.sub(r"[*`\[\]]", "", target or ""), 120)
     slug = re.sub(r"[^\w\s-]", "", (target or d.get("title", "seed")), flags=re.U).strip().lower()
     slug = re.sub(r"-{2,}", "-", re.sub(r"[\s/]+", "-", slug))[:50].strip("-") or kind
     qpath = os.path.join(QUERIES_DIR, f"{today}-thinking-{kind}-{slug}.md")
-    write(qpath, (f"---\nlang: {LANG}\nsummary_en: Telegram thinking loop entry ({kind}) applied to "
+    put(qpath, (f"---\nlang: {LANG}\nsummary_en: Buzz thinking loop entry ({kind}) applied to "
                   f"{target or 'a new seed'} on {today}.\ncommand: thinking\nkind: {kind}\n"
                   f"target: \"{target}\"\ncompiled_at: {datetime.now().isoformat(timespec='seconds')}\n"
                   f"status: seed\ntags: [query, thinking, {kind}]\n---\n\n" +
@@ -468,73 +413,6 @@ def apply(kind, target, d, answer):
                     touched=", ".join(os.path.relpath(t_, VAULT) for t_ in touched))))
     return touched
 
-
-# ---------------------------------------------------------------------------
-# telegram_capture hook
-# ---------------------------------------------------------------------------
-def _is_reply_to_us(msg, state):
-    r = msg.get("reply_to_message") or {}
-    return bool(state.get("message_id")) and r.get("message_id") == state.get("message_id")
-
-
-def try_handle(token, msg, chat_id, transcribe, notify):
-    """telegram_capture.handle_message calls this FIRST. If the message belongs to
-    this loop it is handled and True is returned (it does not enter the capture
-    flow); otherwise False."""
-    state = load_state()
-    phase = state.get("phase")
-    if phase not in ("asked", "drafted"):
-        return False
-    text = (msg.get("text") or "").strip()
-    low = text.lower()
-    if phase == "drafted" and low in APPLY_WORDS:
-        d, kind, target = state.get("draft") or {}, state["kind"], state["target"]
-        touched = apply(kind, target, d, state.get("answer", ""))
-        rel = ", ".join(os.path.relpath(t_, VAULT) for t_ in touched)
-        notify(t("thinking_loop.applied", files=rel))
-        save_state({"skipped": state.get("skipped", []), "recent_kinds": state.get("recent_kinds", [])})
-        log(f"applied: {kind} / {target}")
-        return True
-    if low in CANCEL_WORDS and phase in ("asked", "drafted"):
-        notify(t("thinking_loop.cancelled"))
-        state["phase"] = "asked"
-        state["draft"] = None
-        save_state(state)
-        return True
-    if low in SKIP_WORDS:
-        state.setdefault("skipped", []).append(f"{state.get('kind')}:{state.get('target')}")
-        save_state({"skipped": state["skipped"][-20:], "recent_kinds": state.get("recent_kinds", [])})
-        notify(t("thinking_loop.skipped"))
-        return True
-    is_reply = _is_reply_to_us(msg, state)
-    is_prefixed = low.startswith(tuple(p + ":" for p in ANSWER_PREFIXES) + tuple(p + " " for p in ANSWER_PREFIXES))
-    if not (is_reply or is_prefixed):
-        return False   # ordinary capture; telegram_capture continues
-    # Answer: voice or text
-    answer = None
-    from telegram_capture import audio_file_id
-    audio = audio_file_id(msg)
-    if audio:
-        answer = transcribe(token, audio[0])
-        if not answer:
-            notify(t("thinking_loop.transcribe_failed"))
-            return True
-    elif text:
-        answer = re.sub(r"^(?:" + "|".join(re.escape(p) for p in ANSWER_PREFIXES) + r"):?\s*", "",
-                        text, flags=re.I)
-    if not answer:
-        notify(t("thinking_loop.unsupported_message"))
-        return True
-    notify(t("thinking_loop.drafting"))
-    d = draft(state["kind"], state["target"], answer)
-    if not d:
-        notify(t("thinking_loop.draft_failed"))
-        return True
-    state.update({"phase": "drafted", "draft": d, "answer": answer})
-    save_state(state)
-    notify(preview(state["kind"], state["target"], d) + t("thinking_loop.draft_footer"))
-    log(f"draft ready: {state['kind']} / {state['target']}")
-    return True
 
 
 def main():

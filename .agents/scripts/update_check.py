@@ -2,7 +2,7 @@
 """Arch update notification (worker, weekly).
 
 Counts pending packages with `checkupdates` (pacman-contrib, no root needed);
-if security-critical ones are among them it reports via Telegram. It does NOT
+if security-critical ones are among them it reports via Buzz. It does NOT
 upgrade automatically: on Arch a partial/automatic upgrade is a breakage risk;
 the decision and `pacman -Syu` stay with a human. Goal: prevent silent aging.
 """
@@ -15,7 +15,9 @@ sys.path.insert(0, os.path.join(VAULT, ".agents", "scripts"))
 sys.path.insert(0, os.path.join(VAULT, "tools"))
 from owner_profile import WORKER  # noqa: E402
 from i18n import t  # noqa: E402
-from watchdog import send_telegram
+from buzz_delivery import send
+from functools import partial
+send_buzz = partial(send, 'ops')
 
 # Packages that deserve special attention when an update arrives (substring match).
 SECURITY_PKGS = (
@@ -41,7 +43,7 @@ def main():
     if security:
         msg.append(t("update_check.msg_security", pkgs=", ".join(security[:15])))
     msg.append(t("update_check.msg_hint"))
-    send_telegram("\n".join(msg))
+    send_buzz("\n".join(msg))
     print(f"notification sent ({len(lines)} packages, {len(security)} security)")
 
 

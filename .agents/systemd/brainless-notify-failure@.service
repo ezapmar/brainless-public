@@ -1,5 +1,5 @@
 [Unit]
-Description=brainless: Telegram alert for failed unit %i
+Description=brainless: Buzz alert for failed unit %i
 
 [Service]
 Type=oneshot

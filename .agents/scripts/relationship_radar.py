@@ -4,7 +4,7 @@
 Plan 3: a signal/alert layer on top of the person dossiers (Plan 1). No LLM,
 deterministic: computes last contact + cadence + score momentum from Spiky
 meetings and reciprocity (whom you owe / who owes you) from TASKS.md; on a
-deviation it drops a weekly radar to Telegram and writes .wiki/relationships/radar.md.
+deviation it drops a weekly radar to Buzz and writes .wiki/relationships/radar.md.
 
 Thresholds (owner, 2026-08-28): silence 20 weeks = yellow, 32 weeks = red;
 a momentum drop of 15+ points is flagged. Scope: person rows in entities.md + scope label.
@@ -18,7 +18,9 @@ from datetime import datetime
 VAULT = os.environ.get("BRAINLESS_VAULT") or os.path.expanduser("~/projects/brainless")
 sys.path.insert(0, os.path.join(VAULT, ".agents", "scripts"))
 sys.path.insert(0, os.path.join(VAULT, "tools"))
-from watchdog import send_telegram
+from buzz_delivery import send
+from functools import partial
+send_buzz = partial(send, 'radar')
 from owner_profile import LANG  # noqa: E402
 from i18n import t, t_list  # noqa: E402
 
@@ -246,7 +248,7 @@ def main():
     write_snapshot(rows)
     report = build_report(rows)
     if report:
-        send_telegram(t("relationship_radar.telegram_title") + "\n\n" + report +
+        send_buzz(t("relationship_radar.telegram_title") + "\n\n" + report +
                       "\n\n" + t("relationship_radar.telegram_detail"))
         print(f"radar sent ({len(rows)} people analysed)")
     else:

@@ -18,7 +18,7 @@ item does not refill its slot that day.
 ```bash
 brainless today                 # read-only preview
 brainless today --build         # save _Agent-Context/TODAY.md and queue state
-brainless today --send          # deliver to the configured Telegram chat
+brainless today --send          # deliver to Buzz #tasks
 ```
 
 For scripted or local interaction, use the item ID printed in the note:
@@ -34,18 +34,17 @@ The date supplied to `defer` must be in the future. IDs above are placeholders;
 the command prints the actual IDs. `edit` discards a preview and accepts a new
 answer. For a commitment, the new answer becomes a proposed task title.
 
-## Telegram
+## Buzz
 
 The existing `.agents/scripts/task_reminder.py` entry point now sends Today
 instead of the old stale-task list. Existing daily reminder schedules need no
 new timer once their checkout has been updated. Installations without a reminder
 schedule can use the local commands or schedule that entry point themselves.
 
-The existing Telegram capture poller handles `/today`, replies to Today messages,
-and inline buttons. Credentials stay in `~/.config/brainless/telegram_token` and
-`telegram_chat_id`. The poller enforces its existing chat whitelist before routing
-messages or buttons. Today does not claim unaddressed `apply` messages that might
-belong to the weekly thinking loop.
+The Buzz interaction worker handles replies within the corresponding #tasks
+thread. Reply directly to the latest preview to apply it. The configured owner
+pubkey, channel, thread and revision must all match. Telegram only captures notes;
+its old commands and buttons cannot apply anything.
 
 - **Apply:** a commitment is marked complete. A decision or evidence response
   requires a preview first. Applying a task-title edit leaves the task open.
@@ -70,19 +69,18 @@ are recorded in `.wiki/digests/queries/`, without modifying their source notes.
 Every applied action has a receipt there. Seven-day counts appear in TODAY.md.
 
 Queue state, delivery IDs, deferrals, draft revisions, and a recovery journal live
-in the gitignored `.agents/state/today_queue.json`. Run the Telegram sender and
+in the gitignored `.agents/state/today_queue.json`. Run the Buzz sender and
 poller against the same vault on one machine: this state is intentionally local.
 Back up that state with the worker if you need to preserve dismissal history.
 
-Buttons are tied to draft revisions. Changed sources and ambiguous duplicate task
+Approvals are tied to the displayed draft revision. Changed sources and ambiguous duplicate task
 rows cannot be overwritten by an old preview. Approved writes can resume after a
 process interruption. A stale source requires review at the source or the next
 day's rebuilt queue.
 
-Successful sends are remembered individually, so ordinary reruns and partial
-batch retries send only outstanding items. As with the existing bot, a network
-timeout after Telegram accepted a message but before it returned the message ID
-can still produce a duplicate on retry.
+Successful sends are remembered individually. Pending delivery survives restarts;
+lost acknowledgements are reconciled against the author's message marker before
+retrying. See [Buzz interactions](buzz-interactions.md).
 
 ## Verification
 
@@ -90,5 +88,5 @@ can still produce a duplicate on retry.
 python3 -B -m unittest discover -s tools/tests -v
 ```
 
-Tests use a fictional vault and mocked Telegram responses. No credentials,
+Tests use a fictional vault and a mocked Buzz relay. No credentials,
 messages to real chats, or model calls are needed.

@@ -49,6 +49,7 @@ class PollerFixture(unittest.TestCase):
         self.enterContext(patch.object(capture.time, "sleep", Mock()))
         self.enterContext(patch.dict(os.environ, {}, clear=False))
         os.environ.pop("BRAINLESS_TG_ALLOW_ADOPT", None)
+        self.buzz = self.enterContext(patch("buzz_delivery.send", Mock(return_value=True)))
         self.out = io.StringIO()
         self.enterContext(contextlib.redirect_stdout(self.out))
 
@@ -81,7 +82,8 @@ class WhitelistTest(PollerFixture):
         log = self.poll([update(1, STRANGER, "let me in"), update(2, OWNER, "a thought")])
         self.assertEqual(self.handled_chats(), [OWNER])
         self.assertIn(f"Unauthorized chat ignored: {STRANGER}", log)
-        self.assertEqual([m["chat_id"] for m in self.sent()], [OWNER], "no reply to a stranger, ever")
+        self.assertEqual(self.sent(), [], "Telegram is capture-only")
+        self.assertEqual(self.buzz.call_count, 1)
         self.assertEqual(self.offset(), "2", "ignored updates still advance the offset")
 
     def test_no_whitelist_and_no_setup_flag_adopts_nobody(self):
@@ -98,7 +100,8 @@ class WhitelistTest(PollerFixture):
         self.assertEqual(stat.S_IMODE(self.chat.stat().st_mode), 0o600)
         self.assertEqual(self.handled_chats(), [OWNER], "the adopting message itself is not captured; later ones are")
         self.assertEqual(self.handle.call_args.args[1]["text"], "third")
-        self.assertEqual([m["chat_id"] for m in self.sent()], [OWNER, OWNER], "a connected reply, then a saved reply")
+        self.assertEqual(self.sent(), [])
+        self.assertEqual(self.buzz.call_count, 2)
 
     def test_setup_flag_does_not_reopen_an_existing_whitelist(self):
         os.environ["BRAINLESS_TG_ALLOW_ADOPT"] = "1"
@@ -126,14 +129,14 @@ class WhitelistTest(PollerFixture):
         self.assertEqual(self.handle.call_count, 0)
         self.assertEqual(self.offset(), "3")
 
-    def test_today_button_from_the_owner_reaches_the_handler_as_a_callback(self):
+    def test_old_owner_callback_is_consumed_without_action(self):
         self.chat.write_text(OWNER)
         callback = {"update_id": 4, "callback_query": {"id": "cb", "data": "today:x:1:apply",
                     "message": {"message_id": 30, "chat": {"id": int(OWNER)}, "text": "queue"}}}
         self.poll([callback])
-        msg = self.handle.call_args.args[1]
-        self.assertEqual(msg["_today_callback"]["data"], "today:x:1:apply")
-        self.assertNotIn("text", msg, "the button's message text must not be captured as a note")
+        self.handle.assert_not_called()
+        self.assertEqual(self.sent(), [])
+        self.assertEqual(self.offset(), "4")
 
 
 class PollerRobustnessTest(PollerFixture):
@@ -167,6 +170,7 @@ class PollerRobustnessTest(PollerFixture):
         self.assertIn("Message handling error", log)
         self.assertEqual(self.handle.call_count, 2)
         self.assertEqual(self.offset(), "2")
+        self.assertTrue((self.state.parent / "telegram_pending/1.json").exists())
 
     def test_telegram_outage_leaves_the_offset_alone(self):
         self.chat.write_text(OWNER)

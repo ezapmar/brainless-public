@@ -75,7 +75,7 @@ flowchart TD
 
   subgraph grade["5. Grade"]
     cal["calibrate.py, kill_criteria.py"]
-    today["today_queue.py, today_telegram.py,<br/>task_reminder.py"]
+    today["today_queue.py, today_buzz.py,<br/>task_reminder.py"]
     mem["resurface.py, weekly_reconcile.py"]
   end
 
@@ -255,14 +255,10 @@ media documents are transcribed locally with whisper.cpp in the owner's language
 cleans the transcript and corrects proper nouns against `CONTEXT.md`. Photos are read by
 vision, and links are fetched only when the host is public, then written to
 `Inbox/Links/`. Everything else lands in `Thinking/Daily/` with a confirmation reply.
-Each turn is first offered to `thinking_loop.py` and `today_telegram.py`, in case the
-message is an answer to one of their questions.
-
-**Philosophy.** Audio never leaves the machine. Only one chat id is served; the first
-sender ever becomes the whitelist and then it locks, so message the bot the minute you
-create it. The part I care about most is the failure path. Telegram's offset advances
-whether or not the handler succeeds, so a silently dropped message is gone for good.
-Anything the handler cannot process is logged and answered in the chat.
+Telegram is capture-only. Raw updates are journaled before the polling offset
+advances; failed processing retries from that journal. Receipts, setup notices and
+errors go to Buzz #inbox. No Telegram replies, callbacks or approval handlers run.
+See [Buzz interactions](buzz-interactions.md).
 
 ### `.agents/scripts/buzz_capture.py`
 
@@ -508,7 +504,7 @@ is computed in Python so it cannot be invented.
 
 ### `.agents/scripts/thinking_loop.py`
 
-**Definition.** The weekly reflection question, asked where I actually answer: Telegram.
+**Definition.** The weekly reflection question, asked in Buzz #thinking.
 
 **Description.** `--ask` (Sunday 19:00) picks one question in priority order, such as
 grading a decision, adding a missing prediction, challenging the stalest belief, the
@@ -573,7 +569,7 @@ so it has no opinion and no mercy.
 commitment, one piece of evidence to review.
 
 **Description.** Selection is local, with no model calls. `brainless today` previews,
-`--build` saves `TODAY.md` and the queue state, `--send` delivers to Telegram, and
+`--build` saves `TODAY.md` and the queue state, `--send` delivers to Buzz #tasks, and
 `--action ID answer|apply|edit|defer|dismiss --text "..."` acts on an item. Full
 behaviour: [today-queue.md](today-queue.md).
 
@@ -583,16 +579,20 @@ dismissal needs a reason, and after repeated deferrals it asks for the blocker o
 smaller step. Writes are atomic and tied to a revision, so a stale button or a source
 that changed underneath is rejected and nothing is applied twice.
 
-### `tools/today_telegram.py`
+### `tools/today_buzz.py`, `tools/thinking_buzz.py`
 
-**Definition.** The router for Today replies and buttons arriving over Telegram.
+**Definition.** Thread-bound reply and approval adapters for the daily queue and
+weekly thinking question. They retain pending previews during migration, reject
+stale or cross-thread approvals, and recover prepared writes after interruption.
+The old `today_telegram.py` entry point is inert and cannot apply anything.
 
-**Description.** `handle()` is called by the capture worker and claims a message only
-when it is explicitly addressed to a Today item or carries a revision-bound button.
+### `tools/buzz_delivery.py`, `tools/buzz_interactions.py`
 
-**Philosophy.** Narrow by design. Anything it does not recognise for certain falls
-through and becomes an ordinary capture, because a thought swallowed by the wrong
-handler is worse than an unanswered question.
+**Definition.** Durable outgoing queue and owner-reply worker. All notification
+producers use Buzz; delivery failures stay queued. The interaction timer polls
+#inbox, #tasks, #thinking, #ops, #radar, #content, #daily and #crm. Dedicated
+Today/thinking workflows handle approved writes; other replies are read-only.
+See [installation and recovery](buzz-interactions.md).
 
 ### `.agents/scripts/task_reminder.py`
 
@@ -665,7 +665,7 @@ phone app is a convenient window onto it. It can disappear tomorrow and nothing 
 
 **Description.** Every 15 minutes it looks for calendar events starting within about 45
 minutes, gathers the attendees, the gist of past meeting reports and the related open
-items in the ledger, compiles one brief and sends it over Telegram. Calendar access is
+items in the ledger, compiles one brief and sends it to Buzz #tasks. Calendar access is
 read-only, and each event is briefed once.
 
 **Philosophy.** The vault already knows what I promised this person last time. The
@@ -678,7 +678,7 @@ useful moment to be reminded is ten minutes before I see them, and not during.
 **Description.** Computes last contact, cadence and score momentum from meeting notes,
 and reciprocity (whom you owe, who owes you) from the ledger. Silence of 20 weeks is
 yellow and 32 weeks is red; a momentum drop of 15 points or more is flagged. Output goes
-to `.wiki/relationships/radar.md` and, on a deviation, to Telegram.
+to `.wiki/relationships/radar.md` and, on a deviation, to Buzz #radar.
 
 **Philosophy.** Relationships decay quietly and a calendar will not tell you. The
 arithmetic is deterministic and the thresholds are ones I set by hand. It reports a
@@ -690,7 +690,7 @@ silence and leaves the phone call to you.
 
 **Description.** Tuesdays at 09:00 it reads the week's meeting reports, links and
 captures, produces two or three drafts in the voice of your production guide under
-`Inbox/Content Drafts/`, and sends a summary to Telegram.
+`Inbox/Content Drafts/`, and sends a summary to Buzz #content.
 
 **Philosophy.** It never publishes. A draft is a proposal like any other, and the
 decision is the owner's. The aim is to start from something on a Tuesday morning, and
@@ -749,7 +749,7 @@ deletion with extra steps.
 
 ### `.agents/scripts/watchdog.py`
 
-**Definition.** The worker's hourly watch, reporting over Telegram.
+**Definition.** The worker's hourly watch, reporting in Buzz #ops.
 
 **Description.** Checks for laptop silence (no non-worker commit reaching the remote in
 26 hours), a red `HEALTH.md`, failed `brainless-*` units and LLM authentication errors.
@@ -763,7 +763,7 @@ whose charger has been borrowed is always-on only until the battery runs out.
 
 ### `.agents/scripts/notify_failure.py`
 
-**Definition.** An immediate Telegram alert when a systemd unit fails.
+**Definition.** An immediate Buzz #ops alert when a systemd unit fails.
 
 **Description.** Wired as `OnFailure=brainless-notify-failure@%n.service`. It receives
 the failed unit's name and sends the status with a tail of the journal.
@@ -776,7 +776,7 @@ never raises, so a failure to notify cannot itself cascade into another failure.
 **Definition.** A weekly notice of pending system updates on an Arch worker.
 
 **Description.** Counts pending packages with `checkupdates`, which needs no root, and
-reports over Telegram when security-critical ones are among them.
+reports in Buzz #ops when security-critical ones are among them.
 
 **Philosophy.** It does not upgrade. On Arch an automatic or partial upgrade is how you
 break a machine while asleep. The goal is only to prevent silent ageing; the decision

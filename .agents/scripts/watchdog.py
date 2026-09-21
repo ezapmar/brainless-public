@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """brainless watchdog (runs hourly on the worker).
 
-Reports silent breakages via Telegram. Checks:
+Reports silent breakages via Buzz #ops. Checks:
   1. Mac silence: the last commit on origin/master without the worker signature
      is > 26 hours old (note: this is the last commit that REACHED GitHub; the
      Mac may be committing locally while its push fails, as on 2026-09-01/02)
@@ -57,46 +57,25 @@ def run(cmd, **kw):
     return subprocess.run(cmd, capture_output=True, text=True, cwd=VAULT, **kw)
 
 
-# Buzz (Layer 1): every message going to Telegram is also posted to a Buzz
-# channel chosen by the calling script. Identity and channel mapping; skipped
-# silently when buzz_post.sh is missing.
-BUZZ_ROUTES = {
-    "watchdog.py": ("watchdog", "ops"),
-    "update_check.py": ("watchdog", "ops"),
-    "task_reminder.py": ("tasks", "tasks"),
-    "meeting_brief.py": ("tasks", "tasks"),
-    "relationship_radar.py": ("radar", "radar"),
-    "thinker_digest.py": ("radar", "radar"),
-    "content_engine.py": ("content", "content"),
-}
+# Every producer supplies its category explicitly; delivery is persisted before
+# a watchdog topic is marked reported. Telegram is capture-only.
+def send_buzz(text, channel="ops"):
+    from buzz_delivery import send
+    return send(channel, text)
 
 
-def buzz_mirror(text, route=None):
-    """Best effort: post text to the Buzz channel mapped to the calling script."""
-    import sys
-    route = route or BUZZ_ROUTES.get(os.path.basename(sys.argv[0] or ""))
-    script = os.path.join(VAULT, ".agents", "scripts", "buzz_post.sh")
-    if not route or not os.access(script, os.X_OK):
-        return False
+def check_buzz(issues):
+    path = os.path.join(VAULT, ".agents/state/buzz_interactions_status.json")
+    if not os.path.exists(path):
+        return
     try:
-        subprocess.run([script, route[0], route[1]], input=text, text=True,
-                       capture_output=True, timeout=45, cwd=VAULT)
-        return True
-    except Exception as exc:  # never break the Telegram path
-        log(f"buzz mirror skipped: {exc}")
-        return False
-
-
-def send_telegram(text):
-    buzz_mirror(text)
-    token = read_file(os.path.join(CONF_DIR, "telegram_token"))
-    chat = read_file(os.path.join(CONF_DIR, "telegram_chat_id"))
-    if not (token and chat):
-        return False
-    data = urllib.parse.urlencode({"chat_id": chat, "text": text}).encode()
-    urllib.request.urlopen(
-        f"https://api.telegram.org/bot{token}/sendMessage", data=data, timeout=30)
-    return True
+        status = json.loads(read_file(path))
+        if time.time() - status.get("checked_at", 0) > 900:
+            issues["buzz-stale"] = "Buzz reply worker has not completed a poll for 15 minutes."
+        if status.get("pending_messages") or status.get("pending_replies"):
+            issues["buzz-pending"] = f"Buzz pending: {status.get('pending_messages', 0)} messages, {status.get('pending_replies', 0)} replies."
+    except (ValueError, TypeError):
+        issues["buzz-state"] = "Buzz interaction status is unreadable."
 
 
 def check_mac_silence(issues):
@@ -164,7 +143,7 @@ def check_dialectic(issues):
 def check_llm_auth(issues):
     s = read_file(os.path.join(VAULT, ".agents", "state", "llm_status"))
     if s and "\tauth\t" in s:
-        # Do not carry raw CLI stderr to Telegram; env/argv/credentials could leak.
+        # Do not carry raw CLI stderr to Buzz; env/argv/credentials could leak.
         # Report only the timestamp (first field), drop the detail field.
         stamp = s.split("\t", 1)[0]
         issues["llm-auth"] = t("watchdog.llm_auth", stamp=stamp)
@@ -218,7 +197,7 @@ def main():
             log(f"check_power error: {e}")
     else:
         for check in (check_mac_silence, check_health_red, check_failed_units,
-                      check_llm_auth, check_dialectic):
+                      check_llm_auth, check_dialectic, check_buzz):
             try:
                 check(issues)
             except Exception as e:
@@ -229,7 +208,7 @@ def main():
 
     if fresh:
         text = t("watchdog.header") + "\n".join(f"- {v}" for v in fresh.values())
-        if send_telegram(text):
+        if send_buzz(text):
             log(f"Alert sent: {list(fresh)}")
             state.update({k: now for k in fresh})
     else:

@@ -50,6 +50,20 @@ def ago(seconds):
 PROTECTED_HOMES = list(profile_protected_homes)
 
 
+def check_buzz_delivery():
+    path = os.path.join(VAULT, ".agents/state/buzz_interactions_status.json")
+    if not os.path.exists(path):
+        return  # worker-only state; absent on the primary Mac
+    try:
+        status = json.loads(open(path).read())
+        age = time.time() - status.get("checked_at", 0)
+        pending = status.get("pending_messages", 0) + status.get("pending_replies", 0)
+        level = "RED" if age > 900 else ("WARN" if pending or status.get("failures") else "OK")
+        add("Buzz", level, f"{pending} pending; last completed poll {age_str(age)}")
+    except (OSError, ValueError, TypeError):
+        add("Buzz", "RED", "Unreadable interaction status")
+
+
 def check_git():
     now = time.time()
     try:
@@ -373,6 +387,7 @@ def main():
     check_kill_criteria()
     check_pile()
     check_llm_auth()
+    check_buzz_delivery()
     check_crm()
     check_log_errors()
 

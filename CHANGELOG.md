@@ -3,7 +3,18 @@
 All notable changes to the public brainless engine. Dates are the day of the public
 push. The private vault this is exported from has its own history.
 
-## Unreleased
+## 0.2.0 (2026-09-21)
+
+- Telegram is capture-only; receipts and errors arrive in Buzz `#inbox`. Nothing is
+  sent back over Telegram any more: no replies, no buttons, no `/today`. Old Telegram
+  message ids stop authorising writes; pending previews are re-posted to Buzz and must be
+  approved there. This is the reason for the minor version bump.
+- Today and weekly thinking use owner-only Buzz threads with revision-bound
+  approval, pending-preview migration and recoverable writes.
+- Notifications use a durable Buzz outbox with relay acknowledgement and lost-ack
+  reconciliation. The interaction timer retries failed delivery and saved replies.
+- Added delivery, workflow and capture-only regression coverage. See
+  [Buzz interactions](docs/buzz-interactions.md) for cutover and recovery.
 
 - Give the nightly compile a wall-clock budget so a backlog at the front cannot eat
   the whole window. Summaries, projects and entities check the clock before each file;

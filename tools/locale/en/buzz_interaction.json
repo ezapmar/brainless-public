@@ -1,0 +1,5 @@
+{
+  "today_help": "Reply in this thread. Apply / edit / defer / dismiss. To apply, reply directly to the latest preview (revision {revision}).",
+  "source_changed": "The source changed. Send a new answer to prepare a current preview.",
+  "reply_failed": "Could not process the reply; it is saved for retry."
+}

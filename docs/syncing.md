@@ -55,8 +55,9 @@ git add -A && git commit -m "notes" && git push
   `_Agent-Context/TRUNK-BASED-DEVELOPMENT.md`.
 - **The phone.** You usually do not sync the whole vault to a phone here. Capture goes
   through the Telegram bot instead, landing in `Thinking/Daily/` on whichever machine runs
-  the poller, and you read the day back in the `#dialectic` channel or the
-  [Today queue](today-queue.md) over Telegram. If you do want the vault in your pocket, put
+  the poller, and you read the day back in Buzz: the `#dialectic` channel, the
+  [Today queue](today-queue.md) in `#tasks`, receipts in `#inbox`. Telegram never
+  answers. If you do want the vault in your pocket, put
   Obsidian mobile on the phone with the community Git plugin, so the phone is just another
   git client and the transport stays uniform.
 - **Pros:** conflict discipline, full history, works headless, free.
@@ -85,7 +86,8 @@ Honest caveats, because Drive is file sync with no idea what brainless is:
   automation on a single machine keeps that state coherent; some Drive clients also let you
   exclude a subfolder from sync, which is worth doing for `.agents/` and `.venv/`.
 - **Good for:** a Mac plus one other machine, a single active writer, capture mostly from
-  the phone over Telegram, and no headless worker.
+  the phone over Telegram (capture only; there is no Buzz conversation without a worker),
+  and no headless worker.
 
 ## Option C: Obsidian Sync (Obsidian's own cloud)
 

@@ -1,30 +1,27 @@
 #!/usr/bin/env python3
-"""Telegram alert for a failed systemd unit.
+"""Buzz alert for a failed systemd unit.
 
 Wired as `OnFailure=brainless-notify-failure@%n.service` on the brainless job
 units: when a unit fails, systemd starts brainless-notify-failure@<unit>, which
-runs this script with the failed unit's name. It reports the failure to Telegram
+runs this script with the failed unit's name. It reports the failure to Buzz
 straight away, instead of waiting for the watchdog's periodic sweep to notice a
 stale failed state.
 
 Usage: notify_failure.py <failed-unit-name>
 
-Reuses the same token/chat files as watchdog.py (~/.config/brainless/
-telegram_token, telegram_chat_id). Best effort: never raises, so a notify
-failure cannot cascade.
+Alerts enter the durable Buzz outbox. Enqueue failures are logged without
+cascading another failed unit.
 """
 import os
 import subprocess
 import sys
-import urllib.parse
-import urllib.request
 
 VAULT = os.environ.get("BRAINLESS_VAULT") or os.path.expanduser("~/projects/brainless")
 sys.path.insert(0, os.path.join(VAULT, "tools"))
 from i18n import t  # noqa: E402
 
 CONF_DIR = os.path.expanduser("~/.config/brainless")
-MAX_LOG = 1200  # keep the message well under Telegram's 4096 char limit
+MAX_LOG = 1200  # bound journal excerpts
 
 
 def read_conf(name):
@@ -56,20 +53,9 @@ def unit_status(unit):
         return ""
 
 
-def send_telegram(text):
-    token = read_conf("telegram_token")
-    chat = read_conf("telegram_chat_id")
-    if not (token and chat):
-        print("no telegram token/chat configured", file=sys.stderr)
-        return False
-    data = urllib.parse.urlencode({"chat_id": chat, "text": text}).encode()
-    try:
-        urllib.request.urlopen(
-            f"https://api.telegram.org/bot{token}/sendMessage", data=data, timeout=30)
-        return True
-    except Exception as exc:
-        print(f"telegram send failed: {exc}", file=sys.stderr)
-        return False
+def send_buzz(text):
+    from buzz_delivery import send
+    return send("ops", text)
 
 
 def main():
@@ -84,9 +70,9 @@ def main():
         msg += f"{status}\n"
     if log:
         msg += f"\n{t('notify_failure.log_label')}\n{log}"
-    ok = send_telegram(msg)
+    ok = send_buzz(msg)
     if not ok:
-        # A transient send failure (network down, Telegram unreachable) must not
+        # A transient send failure (network down, Buzz unreachable) must not
         # leave this oneshot unit in `failed` state: the watchdog would then
         # report the notifier itself as a broken unit forever, an alert loop that
         # only a manual `systemctl --user reset-failed` clears. Log and exit 0.

@@ -12,7 +12,7 @@ FILE="$VAULT/_Agent-Context/THINKING.md"
 grep -qx "$TODAY" "$STATE" 2>/dev/null && exit 0
 BODY="$(cat "$FILE")"
 [ -n "$(printf '%s' "$BODY" | tr -d '[:space:]')" ] || exit 0
-if printf '%s\n' "$BODY" | "$VAULT/.agents/scripts/buzz_post.sh" thinking thinking 2>&1 | grep -q "posted as"; then
+if printf '%s\n' "$BODY" | "$VAULT/.agents/scripts/buzz_post.sh" thinking thinking 2>&1 | grep -q "queued as"; then
   mkdir -p "$(dirname "$STATE")"; echo "$TODAY" >> "$STATE"
 fi
 exit 0

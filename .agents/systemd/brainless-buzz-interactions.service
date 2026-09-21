@@ -1,0 +1,11 @@
+[Unit]
+Description=brainless Buzz replies and durable delivery
+After=network-online.target
+OnFailure=brainless-notify-failure@%n.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=%h/projects/brainless
+Environment=PYTHONDONTWRITEBYTECODE=1
+ExecStart=/bin/bash %h/projects/brainless/.agents/scripts/worker_job.sh tools/buzz_interactions.py
+TimeoutStartSec=30min

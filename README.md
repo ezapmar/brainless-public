@@ -50,7 +50,9 @@ wrong the same way twice without noticing. A pile of notes does not fix it.
 
 - **All day, with no effort.** I send things to a Telegram bot: a voice note in the car, a
   photo of a whiteboard, a link. Transcription runs locally. That is the whole capture
-  ritual. No folders, no tags, no inbox to process later.
+  ritual. No folders, no tags, no inbox to process later. The bot never talks back.
+  Receipts, the morning queue, the weekly question and every alert arrive in Buzz
+  channels on the same phone, and I answer them there, in the thread.
 - **Before anything hard.** `brainless search`, or a slash command inside Claude Code, to
   ask what I have already written about a subject, including the parts I had forgotten
   writing. Before a real decision, `brainless dialectic "<the thesis>"`, then read what
@@ -207,7 +209,7 @@ lists what is due, and the [Today queue](docs/today-queue.md) keeps the daily as
 `brainless today` offers at most three items: a decision, a commitment and one piece of
 evidence to review, each with a link to its source. Answers are previews until you apply
 them. You can defer an item to a date or dismiss it with a reason, and the existing
-morning worker sends the queue over Telegram, so there is no new timer to install.
+morning worker sends the queue to Buzz #tasks, so there is no new timer to install.
 
 Ten years of ungraded decisions is one year repeated ten times. If you do only this
 step, you are ahead of most people I know. Including me, for most of this year.
@@ -486,7 +488,13 @@ The loop above runs on one laptop with none of these. Each one removes a specifi
 friction, and each needs its own credentials in `~/.config/brainless/`.
 
 - **Telegram capture.** Voice notes, photos, links and text from your phone become
-  `Thinking/Daily/` notes. Transcription runs locally with whisper.cpp.
+  `Thinking/Daily/` notes. Transcription runs locally with whisper.cpp. It is an inbox
+  only: nothing is sent back over Telegram.
+- **Buzz conversation.** Everything the system says to you goes through Buzz channels:
+  capture receipts in `#inbox`, the Today queue in `#tasks`, the weekly question in
+  `#thinking`, alerts in `#ops`. You reply in the thread; `apply` on the latest preview
+  is the only way an automated path writes a human note. Messages wait in a local outbox
+  until the relay acknowledges them. See [Buzz interactions](docs/buzz-interactions.md).
 - **Buzz personas.** The six voices as live agents on a self-hosted
   [Buzz](https://github.com/block/buzz) relay. They answer in a channel twice a day and
   whenever you mention them. This is how I run it; `.agents/buzz/` has the prompts and
@@ -514,37 +522,41 @@ edits are to secret values. Tokens, keys, relay URLs and the Tailscale address a
 as placeholders, because they must never be committed. Everything else (the units, the
 paths, the schedule) is what actually runs.
 
-- **iPhone 16 Pro.** Capture. A Telegram bot receives voice notes, photos, links and text
-  through the day. Voice is transcribed locally, images are read by Claude vision, and each
-  one lands as a Markdown note in `Thinking/Daily/`.
+- **iPhone 16 Pro.** Capture and conversation. A Telegram bot receives voice notes, photos,
+  links and text through the day. Voice is transcribed locally, images are read by Claude
+  vision, and each one lands as a Markdown note in `Thinking/Daily/`. Everything coming
+  back (receipts, the Today queue, the weekly question, alerts) is a Buzz channel on the
+  same phone, and replies go in the thread.
 - **MacBook Pro (macOS).** The author. I write notes and run the slash commands here. Claude
   Code signed in with a subscription, no API key. launchd runs the hourly compile, the
   nightly digest and the weekly lint. This machine pushes when I close it for the night.
 - **A laptop running [Omarchy](https://omarchy.org) (Arch Linux).** The always-on worker.
   It stays on behind Tailscale and does everything unattended: the systemd timers, the
-  Telegram capture with whisper.cpp, and the Buzz relay that hosts the six personas as
-  live agents. It pulls, runs, commits and pushes so the Mac can sleep.
+  Telegram capture with whisper.cpp, the Buzz relay that hosts the six personas as live
+  agents, and the two-minute reply worker that reads my answers in Buzz threads. It
+  pulls, runs, commits and pushes so the Mac can sleep.
 
 ```mermaid
 flowchart LR
   iphone["iPhone 16 Pro<br/>Telegram"]
   mac["MacBook Pro (macOS)<br/>author: Claude Code<br/>launchd timers"]
   vault[("Git repo: the vault")]
-  chan["#dialectic channel"]
+  chan["Buzz channels<br/>#dialectic #inbox #tasks #thinking #ops"]
 
   subgraph omarchy["Laptop running Omarchy (Arch), always on, Tailscale"]
     cap["Telegram capture<br/>whisper.cpp + ffmpeg"]
     tmr["systemd user timers"]
-    relay["Buzz relay<br/>6 persona agents (read-only)"]
+    relay["Buzz relay<br/>6 persona agents (read-only)<br/>outbox + reply worker"]
   end
 
   iphone -->|voice, photo, link| cap
   cap --> vault
+  cap -->|receipt| relay
   mac <-->|git pull / push| vault
   omarchy <-->|flock: pull, run, commit, push| vault
-  tmr -->|dialectic 12:30 and 21:20| relay
-  relay -->|synthesis and bet| chan
-  chan -.->|you read on the phone| iphone
+  tmr -->|dialectic 12:30 and 21:20, Today 08:00, alerts| relay
+  relay -->|synthesis, queue, questions| chan
+  chan <-.->|you read and reply on the phone| iphone
 ```
 
 Both machines run the same `claude` CLI, no API key. One rule keeps two writers from
@@ -567,7 +579,9 @@ verbatim by `.agents/systemd/install.sh`:
 | 23:00 | `nightly` | write the digest, archive the raw capture, compile `.wiki/`, lint |
 | Mon 05:00, Fri 21:00 | `dashboard` | rebuild the active-projects view from every `notes.md` |
 | Mon 06:30 | `resurface` | bring decisions due for grading back to the top |
-| Sun 19:00 | `thinking` | weekly themes, blind spots, promotion candidates |
+| 08:00 | `reminder` | the Today queue: one decision, one commitment, one piece of evidence, posted to `#tasks` |
+| every 2 min | `buzz-interactions` | read your replies in Buzz threads, draft, apply on approval, drain the outbox |
+| Sun 19:00 | `thinking` | weekly themes, blind spots, promotion candidates; one reflective question posted to `#thinking` |
 | Sun 20:00 | `reconcile` | cross-check recent notes against your written beliefs |
 | Sun 22:00 | `lint` | fix links and frontmatter across `.wiki/` |
 
@@ -706,7 +720,7 @@ starts to cost you.
   whiteboard photos uses the Claude CLI's own file-reading tool, so on another backend
   image capture is the part that will not work yet. Text, voice and documents are fine.
 - `output_lang` in `PROFILE.md` sets the language of every LLM output. Fixed labels and
-  bot replies ship in English and Turkish (`tools/locale/`); another language is a new
+  Buzz replies ship in English and Turkish (`tools/locale/`); another language is a new
   locale directory.
 - The six personas are my shelf. Yours may be different, and should be.
 - I am not a decision scientist. I am an operator who got tired of being wrong in the

@@ -170,6 +170,7 @@ class TodayQueue:
                 record = {**item, "status": "open", "deferrals": count,
                           "adaptive": count >= 2, "messages": previous.get("messages", []),
                           "chat_id": previous.get("chat_id"), "revision": previous.get("revision", 0) + 1}
+                record.update({k: v for k, v in previous.items() if k.startswith("buzz_")})
                 # Keep unanswered previews when the input has not changed.
                 if (previous.get("draft") and previous.get("status") in ("open", "drafted", "deferred")
                         and previous.get("fingerprint") == item["fingerprint"]
@@ -207,7 +208,7 @@ class TodayQueue:
         return "\n".join(lines)
 
     def act(self, state, key, action, text="", revision=None):
-        if key not in state.get("selected", []):
+        if key not in state.get("selected", []) and not state.get("records", {}).get(key, {}).get("buzz_root"):
             raise ValueError(t("today_queue.expired"))
         item = state["records"][key]
         if revision is not None and revision != item["revision"]:
@@ -319,50 +320,15 @@ class TodayQueue:
         del state["pending_apply"]
 
 
-def keyboard(item):
-    return {"inline_keyboard": [[{"text": t("today_queue." + verb),
-                                 "callback_data": f"today:{item['id']}:{item['revision']}:{verb}"}
-                                for verb in ("apply", "edit")],
-                               [{"text": t("today_queue." + verb),
-                                 "callback_data": f"today:{item['id']}:{item['revision']}:{verb}"}
-                                for verb in ("defer", "dismiss")]]}
-
-
-def send_queue(queue=None, *, config=None, api=None):
-    config = Path(config) if config else Path.home() / ".config/brainless"
-    try:
-        token = (config / "telegram_token").read_text().strip()
-        chat = (config / "telegram_chat_id").read_text().strip()
-    except OSError:
-        return False
-    if not token or not chat:
-        return False
-    if api is None:
-        sys.path.insert(0, str(Path(__file__).resolve().parents[1] / ".agents/scripts"))
-        from telegram_capture import api
-    queue = queue or TodayQueue()
-    with queue.locked() as state:
-        queue.finish_apply(state)
-        queue.build(state)
-        for key in state["selected"]:
-            item = state["records"][key]
-            if item.get("sent_on") == state["day"] or item["status"] not in ("open", "drafted"):
-                continue
-            response = api(token, "sendMessage", {"chat_id": chat, "text": queue.render_item(item),
-                           "reply_markup": json.dumps(keyboard(item))})
-            mid = response.get("result", {}).get("message_id")
-            if not response.get("ok") or not mid:
-                raise RuntimeError("Telegram did not acknowledge the Today item")
-            item.update(sent_on=state["day"], chat_id=str(chat), approval_message=mid)
-            item["messages"].append(mid)
-            atomic_write(queue.state_path, json.dumps(state, ensure_ascii=False))
-    return True
+def send_queue(queue=None, **kwargs):
+    from today_buzz import send_queue as send_buzz_queue
+    return send_buzz_queue(queue, **kwargs)
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--build", action="store_true", help="persist the queue and refresh TODAY.md")
-    parser.add_argument("--send", action="store_true", help="send today's items to configured Telegram chat")
+    parser.add_argument("--send", action="store_true", help="send today's items to Buzz #tasks")
     parser.add_argument("--action", nargs=2, metavar=("ID", "ACTION"))
     parser.add_argument("--text", default="", help="answer, dismissal reason, or defer date")
     args = parser.parse_args()

@@ -112,6 +112,7 @@ _LOCAL_PROVIDERS = {"goose"}
 # output. "long" lanes carry thousands of tokens of Turkish prose and are worth
 # a big model. Keep this table in step with the call sites; --lanes prints it.
 LANES = {
+    "buzz-reply":          "long   read-only answer to an owner Buzz thread reply",
     "capture-note":        "medium voice or text note filed into the vault, note out",
     "capture-link":        "long   summary of a fetched page, up to 12k characters",
     "capture-photo":       "long   photo OCR, needs the Read tool and vision",

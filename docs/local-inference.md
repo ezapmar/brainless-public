@@ -192,8 +192,9 @@ BRAINLESS_LLM_FALLBACK_NOTE_CLASSIFY=goose
 BRAINLESS_LLM_FALLBACK_SPIKY_ACTIONS=goose
 ```
 
-Those three lose data when they fail: a Telegram capture advances its offset whether or
-not the note was written, and a meeting action nobody extracted never comes back. A
+Those three are the lanes where a missing answer hurts most: a Telegram capture keeps
+its raw update in a local journal until a note is written, but the owner is waiting for
+the receipt in `#inbox`, and a meeting action nobody extracted never comes back. A
 degraded answer beats a dropped one there. There is deliberately **no global fallback**:
 a nightly digest or a weekly synthesis written by a small model is worse than a missing
 one, because it reads fluent and lands in the wiki. Those lanes should fail visibly and

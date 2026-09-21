@@ -1,23 +1,7 @@
 #!/usr/bin/env python3
-"""Telegram voice/text capture channel for the brainless vault.
-
-Polls the Telegram bot for new messages every 2 minutes (launchd,
-<prefix>.brainless.telegram). Voice notes, audio files, video notes and
-audio/video documents are all transcribed LOCALLY with whisper.cpp (the owner's
-language from PROFILE.md, large-v3-turbo); audio never leaves this machine.
-Anything the handler cannot process is logged AND answered in the chat, because
-the offset advances either way and a silently dropped message is gone for good.
-Claude then cleans the transcript (fixing mis-heard proper nouns against
-CONTEXT.md) and the result lands in Thinking/Daily/ as a normal capture,
-which the 23:00 nightly processor digests like any other note.
-
-Security posture:
-- Only the whitelisted chat id is served; everything else is ignored and
-  logged. The first sender EVER becomes the whitelist (then it locks), so
-  message the bot immediately after creating it.
-- Bot token lives outside the vault repo in ~/.config/brainless/ (0600).
-- The LLM gets embedded text only (no tools); the only writes are the
-  capture file and a Telegram confirmation reply to the owner.
+"""Capture-only Telegram inbox. Owner text, images and audio enter the vault.
+All receipts and errors go to Buzz #inbox. Raw updates remain in a local
+journal until processing succeeds; no Telegram interaction or outgoing API.
 """
 import json
 import os
@@ -61,6 +45,8 @@ def log(msg):
 
 
 def api(token, method, params=None, timeout=30):
+    if method not in {"getUpdates", "getFile"}:
+        raise ValueError("Telegram is capture-only")
     url = f"https://api.telegram.org/bot{token}/{method}"
     data = urllib.parse.urlencode(params or {}).encode()
     with urllib.request.urlopen(url, data=data, timeout=timeout) as resp:
@@ -171,7 +157,7 @@ RULES:
     return run_prompt(prompt, timeout=180, lane="capture-link")
 
 
-def handle_link(raw_text, url_match):
+def handle_link(raw_text, url_match, stamp=None):
     url = url_match.group(0).rstrip(").,>]")
     comment = URL_RE.sub("", raw_text).strip()
     log(f"Link received: {url}")
@@ -185,7 +171,7 @@ def handle_link(raw_text, url_match):
         note = make_link_note(url, page, comment)
     if not note:
         note = f"# Link\n\n{comment}".rstrip()
-    stamp = datetime.now().strftime("%Y-%m-%d-%H%M%S")
+    stamp = stamp or datetime.now().strftime("%Y-%m-%d-%H%M%S")
     os.makedirs(LINKS_DIR, exist_ok=True)
     domain = re.sub(r"^www\.", "", urllib.parse.urlparse(url).netloc) or "link"
     path = os.path.join(LINKS_DIR, f"{stamp[:10]} {domain} {stamp[11:]}.md")
@@ -282,38 +268,17 @@ def audio_file_id(msg):
 
 
 def handle_message(token, msg, chat_id=None):
+    from buzz_delivery import send
+    mid = str(msg.get("message_id", "unknown"))
+    event = f"telegram:{chat_id}:{mid}"
+    stamp = datetime.fromtimestamp(msg.get("date") or time.time()).strftime("%Y-%m-%d-%H%M%S") + "-" + mid
+
     def notify(text):
-        """End silent drops: tell the sender about every message we could not process."""
-        if not chat_id:
-            return
-        try:
-            api(token, "sendMessage", {"chat_id": chat_id, "text": text})
-        except Exception:
-            pass
+        send("inbox", text, key=event + ":notice:" + __import__('hashlib').sha256(text.encode()).hexdigest())
 
-    # Today replies must never fall through to an unrelated weekly approval or capture.
-    try:
-        from today_telegram import handle as handle_today
-        if handle_today(token, msg, chat_id, api, transcribe):
-            return None
-    except Exception as e:
-        log(f"today queue error: {type(e).__name__}")
-        notify(t("today_queue.unavailable"))
+    if (msg.get("text") or "").startswith("/"):
+        notify("Telegram yalnızca inbox. Sorular ve onaylar için Buzz'daki ilgili thread'i kullan.")
         return None
-
-    # Thinking loop (thinking_loop.py): if a weekly question is pending and this
-    # message is an answer to it or an apply/cancel/skip word, it is handled first
-    # and does not enter the ordinary capture flow. On error the message continues
-    # as a normal capture.
-    try:
-        import thinking_loop
-        if thinking_loop.try_handle(token, msg, chat_id, transcribe, notify):
-            return None
-    except Exception as e:
-        log(f"thinking_loop error, falling back to capture: {e}")
-
-    if "text" in msg and msg["text"].startswith("/"):
-        return None  # bot command, skip silently
 
     text = None
     source = None
@@ -326,17 +291,16 @@ def handle_message(token, msg, chat_id=None):
         if not text:
             log("Transcript came back empty (20 MB limit or whisper error)")
             notify(t("telegram_capture.reply_transcribe_failed"))
-            return None
+            raise RuntimeError("Transcription failed")
         if is_empty_transcript(text):
             log("Meaningless transcript (silence/whisper artefact), skipped")
             notify(t("telegram_capture.reply_no_speech"))
             return None
     elif "photo" in msg:
         log("Image received, processing...")
-        stamp = datetime.now().strftime("%Y-%m-%d-%H%M%S")
         img = fetch_photo(token, msg, stamp)
         if not img:
-            return None
+            raise RuntimeError("Image download failed")
         caption = msg.get("caption", "")
         note = make_photo_note(img, caption) or f"# {t('telegram_capture.image_note_title')}\n\n{caption}".rstrip()
         note += f"\n\n![[{os.path.basename(img)}]]"
@@ -349,7 +313,7 @@ def handle_message(token, msg, chat_id=None):
         raw = msg["text"].strip()
         m = URL_RE.search(raw)
         if m and len(URL_RE.sub("", raw).strip()) < 200:
-            return handle_link(raw, m)
+            return handle_link(raw, m, stamp=stamp)
         text = raw
         source = t("telegram_capture.source_text")
     if not text:
@@ -362,7 +326,6 @@ def handle_message(token, msg, chat_id=None):
         return None
 
     note = make_note(text, source) or f"# {t('telegram_capture.quick_note_title')}\n\n{text}"
-    stamp = datetime.now().strftime("%Y-%m-%d-%H%M%S")
     os.makedirs(CAPTURE_DIR, exist_ok=True)
     path = os.path.join(CAPTURE_DIR, f"{stamp}-telegram.md")
     with open(path, "w") as fh:
@@ -370,6 +333,34 @@ def handle_message(token, msg, chat_id=None):
     log(f"Note written: {path}")
     title = note.splitlines()[0].lstrip("# ").strip() if note else t("telegram_capture.note_title_fallback")
     return title
+
+
+def retry_pending(token, allowed):
+    from pathlib import Path
+    from buzz_delivery import send
+    for pending in sorted((Path(STATE_FILE).parent / "telegram_pending").glob("*.json")):
+        try:
+            record = json.loads(pending.read_text())
+            chat, msg = record["chat"], record["message"]
+            if chat != allowed:
+                continue
+            key = f"telegram:{chat}:{msg['message_id']}"
+            # Persist the result before network delivery so retries do not rerun
+            # successful OCR/transcription or change the receipt body.
+            if "result" not in record:
+                record["result"] = handle_message(token, msg, chat)
+                from today_queue import atomic_write
+                atomic_write(pending, json.dumps(record, ensure_ascii=False))
+            if record["result"]:
+                stamp = datetime.fromtimestamp(msg.get("date") or time.time()).strftime("%Y-%m-%d-%H%M%S") + "-" + str(msg['message_id'])
+                files = [str(p.relative_to(VAULT)) for base in (CAPTURE_DIR, LINKS_DIR)
+                         for p in Path(base).glob(stamp + "*.md")]
+                send("inbox", t("telegram_capture.reply_saved", title=record["result"]) + "\n" + "\n".join(files), key=key + ":saved")
+            pending.unlink()
+        except Exception as exc:
+            log(f"Message handling error: {type(exc).__name__}")
+            send("inbox", "Telegram kaydı işlenemedi; girdi saklandı, yeniden denenecek.",
+                 key="telegram:failure:" + pending.stem)
 
 
 def main():
@@ -387,7 +378,7 @@ def main():
     for attempt in range(3):
         try:
             updates = api(token, "getUpdates", {"offset": offset + 1, "timeout": 0,
-                          "allowed_updates": json.dumps(["message", "callback_query"])})
+                          "allowed_updates": json.dumps(["message"])})
             break
         except Exception as e:
             if attempt == 2:
@@ -409,11 +400,6 @@ def main():
     for upd in updates.get("result", []):
         offset = max(offset, upd["update_id"])
         msg = upd.get("message") or {}
-        callback = upd.get("callback_query") or {}
-        if str(callback.get("data", "")).startswith("today:"):
-            msg = dict(callback.get("message") or {})
-            msg.pop("text", None)
-            msg["_today_callback"] = callback
         chat_id = str(msg.get("chat", {}).get("id", ""))
         if not chat_id:
             # edited_message, channel_post etc: no "message". The offset advanced
@@ -431,25 +417,28 @@ def main():
             os.chmod(CHAT_FILE, 0o600)
             allowed = chat_id
             log(f"Whitelist locked (adoption): chat {chat_id}")
-            try:
-                api(token, "sendMessage",
-                    {"chat_id": chat_id,
-                     "text": t("telegram_capture.reply_connected")})
-            except Exception:
-                pass
+            from buzz_delivery import send
+            send("inbox", t("telegram_capture.reply_connected"), key=f"telegram:connected:{chat_id}")
             continue
         if chat_id != allowed:
             log(f"Unauthorized chat ignored: {chat_id}")
             continue
-        try:
-            title = handle_message(token, msg, chat_id)
-            if title:
-                api(token, "sendMessage",
-                    {"chat_id": chat_id, "text": t("telegram_capture.reply_saved", title=title)})
-        except Exception as e:
-            log(f"Message handling error: {e}")
+        # Keep raw input until processing succeeds. Retry failures even after
+        # getUpdates advances, and use deterministic filenames on replay.
+        from pathlib import Path
+        from buzz_delivery import send
+        journal = Path(STATE_FILE).parent / "telegram_pending"
+        journal.mkdir(parents=True, exist_ok=True)
+        pending = journal / f"{upd['update_id']}.json"
+        if not pending.exists():
+            msg.setdefault("date", int(time.time()))
+            from today_queue import atomic_write
+            atomic_write(pending, json.dumps({"chat": chat_id, "message": msg}, ensure_ascii=False))
+            pending.chmod(0o600)
 
+    # All authorised updates are durable before advancing the polling offset.
     touch_state(offset)
+    retry_pending(token, allowed)
 
 
 if __name__ == "__main__":

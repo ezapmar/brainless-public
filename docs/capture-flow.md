@@ -106,3 +106,10 @@ notes. The compiler owns `.wiki/`. Worker commits are path-scoped and serialised
 raw images, source documents and failed conversions are retained. If a model call,
 network request or scheduled job fails, the source stays in place and the retry
 state records what happened.
+
+## Conversation boundary
+
+Telegram only receives captures. All receipts and processing errors appear in
+Buzz #inbox. Daily actions, thinking questions and approvals happen in Buzz
+threads. See [Buzz interactions](buzz-interactions.md) for the channel map and
+delivery recovery.

@@ -1,4 +1,4 @@
-"""Offline Today workflow tests using a fictional vault and mocked Telegram."""
+"""Offline Today workflow tests using a fictional vault and mocked Buzz."""
 from datetime import date, timedelta
 import json
 from pathlib import Path
@@ -12,8 +12,10 @@ sys.path.insert(0, str(ROOT / "tools"))
 sys.path.insert(0, str(ROOT / ".agents/scripts"))
 import calibrate
 import today_queue as module
-from today_queue import TodayQueue, keyboard
-from today_telegram import handle
+from today_queue import TodayQueue
+from today_buzz import handle, send_queue
+from buzz_delivery import Outbox
+from buzz_fixture import Relay, OWNER, reply
 
 
 class QueueFixture(unittest.TestCase):
@@ -42,37 +44,35 @@ class QueueFixture(unittest.TestCase):
 
 class QueueTests(QueueFixture):
     def test_sends_at_most_three_items_and_does_not_resend(self):
-        config = self.root / "config"
-        self.write("config/telegram_token", "fixture-token")
-        self.write("config/telegram_chat_id", "42")
-        api = Mock(side_effect=[{"ok": True, "result": {"message_id": mid}} for mid in (10, 11, 12)])
-        module.send_queue(self.queue, config=config, api=api)
-        module.send_queue(self.queue, config=config, api=api)
-        self.assertEqual(api.call_count, 3)
+        relay = Relay()
+        box = Outbox(self.root, relay)
+        send_queue(self.queue, box=box)
+        send_queue(self.queue, box=box)
+        self.assertEqual(len(relay.posts), 3)
         self.assertTrue(self.queue.surface.exists())
 
-    def test_partial_send_failure_retries_only_unsent_items(self):
-        config = self.root / "config"
-        self.write("config/telegram_token", "fixture-token")
-        self.write("config/telegram_chat_id", "42")
-        api = Mock(side_effect=[{"ok": True, "result": {"message_id": 10}}, OSError("offline")])
-        with self.assertRaises(OSError):
-            module.send_queue(self.queue, config=config, api=api)
-        api = Mock(side_effect=[{"ok": True, "result": {"message_id": mid}} for mid in (11, 12)])
-        module.send_queue(self.queue, config=config, api=api)
-        self.assertEqual(api.call_count, 2)
+    def test_offline_queue_is_durable_and_retries(self):
+        relay = Relay()
+        relay.offline = True
+        box = Outbox(self.root, relay)
+        send_queue(self.queue, box=box)
+        state = json.loads(self.queue.state_path.read_text())
+        self.assertTrue(all('buzz_root' not in i for i in state['records'].values()))
+        relay.offline = False
+        send_queue(self.queue, box=box)
+        self.assertEqual(len(relay.posts), 3)
 
-    def test_bad_delivery_acknowledgement_does_not_mark_sent(self):
-        config = self.root / "config"
-        self.write("config/telegram_token", "fixture-token")
-        self.write("config/telegram_chat_id", "42")
-        api = Mock(return_value={"ok": False})
-        with self.assertRaises(RuntimeError):
-            module.send_queue(self.queue, config=config, api=api)
-        self.assertFalse(self.queue.state_path.exists())
-
-    def test_missing_telegram_config_is_a_noop(self):
-        self.assertFalse(module.send_queue(self.queue, config=self.root / "missing-config", api=lambda *_: None))
+    def test_migration_ignores_telegram_sent_on_and_reposts_preview(self):
+        item = self.item('decision')
+        self.queue.act(self.state, item['id'], 'answer', 'Launch a pilot.')
+        item.update(sent_on=self.day.isoformat(), messages=[123], approval_message=123, chat_id='42')
+        with self.queue.locked() as state:
+            state.update(self.state)
+        relay = Relay()
+        send_queue(self.queue, box=Outbox(self.root, relay))
+        self.assertIn('Launch a pilot.', relay.posts[0]['content'])
+        state = json.loads(self.queue.state_path.read_text())
+        self.assertNotIn('approval_message', state['records'][item['id']])
 
     def test_three_categories_without_replenishment(self):
         self.assertEqual(len(self.state["selected"]), 3)
@@ -237,85 +237,69 @@ class QueueTests(QueueFixture):
         self.assertEqual(self.decision.read_text().count("Launch a pilot."), 1)
         self.assertEqual(len(recovered["history"]), 1)
 
-    def test_keyboard_data_fits_telegram_limit(self):
-        for row in keyboard(self.item("decision"))["inline_keyboard"]:
-            for button in row:
-                self.assertLessEqual(len(button["callback_data"].encode()), 64)
 
 
-class TelegramTests(QueueFixture):
+class BuzzTests(QueueFixture):
     def setUp(self):
         super().setUp()
-        self.decision_item = self.item("decision")
-        self.decision_item.update(chat_id="42", messages=[100], approval_message=100)
-        with self.queue.locked() as state:
-            state.update(self.state)
-        self.counter = 200
-        def response(token, method, params):
-            self.counter += 1
-            return {"ok": True, "result": {"message_id": self.counter}}
-        self.api = Mock(side_effect=response)
-        self.transcribe = Mock(return_value="Launch a pilot.")
+        self.relay = Relay()
+        self.box = Outbox(self.root, self.relay)
+        send_queue(self.queue, box=self.box)
+        self.key = self.item('decision')['id']
 
-    def message(self, text, mid=1, reply=100):
-        return {"text": text, "message_id": mid, "reply_to_message": {"message_id": reply}}
+    def current(self):
+        return json.loads(self.queue.state_path.read_text())['records'][self.key]
 
-    def handle(self, message, chat="42"):
-        return handle("fixture-token", message, chat, self.api, self.transcribe, self.queue)
+    def handle(self, msg, channel='channel-tasks'):
+        return handle(msg, channel, OWNER, queue=self.queue, box=self.box)
 
-    def test_unrelated_apply_is_not_claimed(self):
-        self.assertFalse(self.handle({"text": "apply", "message_id": 1}))
-        self.assertFalse(self.handle(self.message("apply", reply=999)))
-        self.api.assert_not_called()
+    def test_preview_then_explicit_apply(self):
+        self.handle(reply(self.current()['buzz_root'], 'Launch a pilot.'))
+        self.assertIn('status: pending', self.decision.read_text())
+        self.handle(reply(self.current()['buzz_approval'], 'apply', 101))
+        self.assertIn('status: decided', self.decision.read_text())
 
-    def test_cross_chat_reply_is_not_claimed(self):
-        self.assertFalse(self.handle(self.message("Launch"), chat="99"))
-
-    def test_reply_preview_then_explicit_apply(self):
-        self.assertTrue(self.handle(self.message("Launch a pilot.")))
-        state = json.loads(self.queue.state_path.read_text())
-        item = state["records"][self.decision_item["id"]]
-        self.assertEqual(item["status"], "drafted")
-        self.assertTrue(self.handle(self.message("apply", mid=2, reply=item["approval_message"])))
-        self.assertIn("status: decided", self.decision.read_text())
+    def test_unrelated_cross_channel_and_cross_owner_ignored(self):
+        msg = reply(self.current()['buzz_root'], 'apply')
+        self.assertFalse(self.handle(msg, 'channel-inbox'))
+        self.assertFalse(self.handle({**msg, 'pubkey': 'b' * 64}))
+        self.assertFalse(self.handle(reply('f' * 64, 'apply')))
+        self.assertIn('status: pending', self.decision.read_text())
 
     def test_duplicate_delivery_does_not_redraft(self):
-        message = self.message("Launch a pilot.")
-        self.handle(message)
-        first = self.queue.state_path.read_text()
-        self.handle(message)
-        self.assertEqual(self.queue.state_path.read_text(), first)
+        msg = reply(self.current()['buzz_root'], 'Launch a pilot.')
+        self.handle(msg)
+        revision = self.current()['revision']
+        self.handle(msg)
+        self.assertEqual(self.current()['revision'], revision)
+        self.assertEqual(len(self.relay.posts), 4)
 
-    def test_old_button_does_not_approve_new_draft(self):
-        old_revision = self.decision_item["revision"]
-        self.handle(self.message("Launch a pilot."))
-        callback = {"message_id": 100, "_today_callback": {
-            "id": "cb1", "data": f"today:{self.decision_item['id']}:{old_revision}:apply"}}
-        self.handle(callback)
-        self.assertIn("status: pending", self.decision.read_text())
+    def test_old_preview_does_not_approve_new_draft(self):
+        self.handle(reply(self.current()['buzz_root'], 'Pilot A'))
+        old = self.current()['buzz_approval']
+        self.handle(reply(old, 'Pilot B', 101))
+        self.handle(reply(old, 'apply', 102))
+        self.assertIn('status: pending', self.decision.read_text())
+        self.assertIn('Pilot B', self.relay.posts[-1]['content'])
 
-    def test_defer_button_followed_by_date(self):
-        item = self.decision_item
-        self.handle({"message_id": 100, "_today_callback": {
-            "id": "cb2", "data": f"today:{item['id']}:{item['revision']}:defer"}})
-        state = json.loads(self.queue.state_path.read_text())
-        item = state["records"][item["id"]]
-        self.handle(self.message("2026-01-15", mid=2, reply=item["approval_message"]))
-        state = json.loads(self.queue.state_path.read_text())
-        self.assertEqual(state["records"][item["id"]]["until"], "2026-01-15")
+    def test_defer_then_date(self):
+        self.handle(reply(self.current()['buzz_root'], 'defer'))
+        prompt = self.relay.posts[-1]['id']
+        self.handle(reply(prompt, '2026-01-15', 101))
+        self.assertEqual(self.current()['until'], '2026-01-15')
 
-    def test_voice_reply_uses_the_same_preview_flow(self):
-        self.handle({"message_id": 9, "reply_to_message": {"message_id": 100},
-                     "voice": {"file_id": "fixture-audio"}})
-        self.transcribe.assert_called_once()
-        state = json.loads(self.queue.state_path.read_text())
-        self.assertEqual(state["records"][self.decision_item["id"]]["status"], "drafted")
-        self.assertIn("status: pending", self.decision.read_text())
+    def test_failed_reply_delivery_retains_preview_for_retry(self):
+        self.relay.lose_ack = True
+        self.handle(reply(self.current()['buzz_root'], 'Launch a pilot.'))
+        self.handle(reply(self.current()['buzz_root'], 'Launch a pilot.'))
+        self.assertEqual(len(self.relay.posts), 4)
+        self.assertEqual(self.current()['status'], 'drafted')
 
-    def test_corrupt_queue_state_does_not_block_ordinary_capture(self):
-        self.queue.state_path.write_text("invalid JSON")
-        self.assertFalse(self.handle({"text": "A new thought", "message_id": 55}))
+    def test_telegram_transport_cannot_apply(self):
+        from today_telegram import handle as retired
+        self.assertFalse(retired('token', {'text': 'apply'}, '42', Mock(), Mock(), self.queue))
+        self.assertIn('status: pending', self.decision.read_text())
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     unittest.main()

@@ -3,7 +3,7 @@
 
 For calendar events starting within the next ~45 minutes: attendees, a gist
 from past Spiky reports and the related open items in the task ledger are
-compiled by Claude into one brief and sent over Telegram.
+compiled by Claude into one brief and sent over Buzz.
 
 Requires: tools/tasks-sync/token_gcal.json (calendar.readonly) and the gtasks
 venv python (google libraries). State: .agents/state/brief_done.
@@ -24,7 +24,9 @@ sys.path.insert(0, os.path.join(VAULT, ".agents", "scripts"))
 from llm import run_prompt
 from owner_profile import OWNER, output_lang_directive  # noqa: E402
 from i18n import t  # noqa: E402
-from watchdog import send_telegram
+from buzz_delivery import send
+from functools import partial
+send_buzz = partial(send, 'tasks')
 from net_wait import wait_for_network  # noqa: E402
 
 TOKEN = os.path.join(VAULT, "tools", "tasks-sync", "token_gcal.json")
@@ -174,7 +176,7 @@ def main():
         spiky, tasks = gather_context(name_tokens(event))
         brief = make_brief(event, spiky, tasks)
         if brief:
-            send_telegram(f"📅 {brief}")
+            send_buzz(f"📅 {brief}")
             log("Brief sent")
         done.add(eid)
     # Do not clobber what a concurrently running copy wrote: merge before writing.

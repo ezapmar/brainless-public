@@ -1,0 +1,10 @@
+[Unit]
+Description=brainless Buzz replies every two minutes
+
+[Timer]
+OnBootSec=90s
+OnUnitInactiveSec=2min
+Persistent=true
+
+[Install]
+WantedBy=timers.target

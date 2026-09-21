@@ -19,7 +19,7 @@ grep -qx "$TODAY" "$STATE" 2>/dev/null && exit 0
 [ -n "$NO_MORNING" ] && grep -qF -f <(printf '%s\n' "$NO_MORNING") "$FILE" && exit 0
 BODY="$(awk -v m="$MARKERS" 'BEGIN{n=split(m,a,"\t")} {for(i=1;i<=n;i++) if(a[i]!="" && index($0,a[i])==1) exit; print}' "$FILE")"
 [ -n "$(printf '%s' "$BODY" | tr -d '[:space:]')" ] || exit 0
-if printf '%s\n' "$BODY" | "$VAULT/.agents/scripts/buzz_post.sh" briefing daily 2>&1 | grep -q "posted as"; then
+if printf '%s\n' "$BODY" | "$VAULT/.agents/scripts/buzz_post.sh" briefing daily 2>&1 | grep -q "queued as"; then
   mkdir -p "$(dirname "$STATE")"; echo "$TODAY" >> "$STATE"
 fi
 exit 0

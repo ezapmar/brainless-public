@@ -3,7 +3,7 @@
 
 From the week's material (Spiky reports, read links, daily captures) it
 produces 2-3 LinkedIn drafts in the founder voice of the production guide.
-Drafts land under Inbox/Content Drafts/, a summary goes to Telegram.
+Drafts land under Inbox/Content Drafts/, a summary goes to Buzz.
 It never publishes; it only proposes drafts, the decision is the owner's.
 """
 import os
@@ -16,7 +16,9 @@ sys.path.insert(0, os.path.join(VAULT, ".agents", "scripts"))
 from llm import run_prompt
 from owner_profile import OWNER, WORKER, output_lang_directive  # noqa: E402
 from i18n import t  # noqa: E402
-from watchdog import send_telegram
+from buzz_delivery import send
+from functools import partial
+send_buzz = partial(send, 'content')
 
 GUIDE = os.path.join(VAULT, "Writings", "Editor", "Rehberler", "uretim-rehberi.md")
 EDITOR_RULES = os.path.join(VAULT, "Writings", "Editor", "Editör Kuralları.md")
@@ -93,7 +95,7 @@ RULES:
                  f"{out}\n")
     log(f"Drafts written: {path}")
     titles = [l.strip("# ").strip() for l in out.splitlines() if l.startswith("## ")]
-    send_telegram(t("content_engine.telegram_header") + "\n" +
+    send_buzz(t("content_engine.telegram_header") + "\n" +
                   "\n".join(f"- {x}" for x in titles) +
                   "\n\n" + t("content_engine.telegram_vault_line", filename=os.path.basename(path)))
 

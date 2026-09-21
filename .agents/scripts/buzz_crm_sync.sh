@@ -13,7 +13,7 @@ BODY="$(cat "$FILE")"
 [ -n "$(printf '%s' "$BODY" | tr -d '[:space:]')" ] || exit 0
 HASH="$(printf '%s' "$BODY" | sed -E 's/[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}//g' | shasum -a 256 | cut -d' ' -f1)"
 [ -s "$STATE" ] && [ "$(head -1 "$STATE")" = "$HASH" ] && exit 0
-if printf '%s\n' "$BODY" | "$VAULT/.agents/scripts/buzz_post.sh" crm crm 2>&1 | grep -q "posted as"; then
+if printf '%s\n' "$BODY" | "$VAULT/.agents/scripts/buzz_post.sh" crm crm 2>&1 | grep -q "queued as"; then
   mkdir -p "$(dirname "$STATE")"; printf '%s\n%s\n' "$HASH" "$(date '+%F %T')" > "$STATE"
 fi
 exit 0
