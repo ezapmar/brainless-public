@@ -1,5 +1,7 @@
 # Local inference: running lanes on the worker
 
+> **In the loop:** [Keep it yours](../README.md#keep-it-yours). Keeping the model calls on your own hardware.
+
 The batch brain talks to a model through one door, `tools/llm.py`. By default that door
 leads to the `claude` CLI in the cloud. This guide is about the other door: running a
 model on the always-on worker itself, through the Goose CLI, so that some of the vault's

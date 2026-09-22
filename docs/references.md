@@ -1,5 +1,7 @@
 # References
 
+> **In the loop:** where the ideas behind the four lines come from.
+
 Three kinds of credit, and nothing else. **Intellectual** sources are the books,
 papers and essays the method and the six voices are built on. **Idea** sources are
 mechanisms the forms and commands enforce whose standard statement the code does not
@@ -452,7 +454,7 @@ A reader who has just been given a bibliography deserves the other half. These a
 design rules of this repository. They are not taken from a paper, and looking for one
 will not find it.
 
-- The loop as one machine: capture, compile, bet, argue, grade, file the result back.
+- The loop as one machine in four lines: gather, think, decide, get it done, and file the result back.
 - Propose, never write. Commands paste a block. A person moves it, or it does not enter.
   The grade means something only if the decision stayed yours.
 - The text-processing model does not get general file tools. Context is embedded in the

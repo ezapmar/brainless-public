@@ -1,5 +1,7 @@
 # Syncing across devices
 
+> **Run it:** keeping one vault in step across several machines.
+
 The engine repo holds no notes. Your vault is a folder wherever `BRAINLESS_VAULT`
 points, and syncing brainless means keeping that folder in step across the machines that
 read or write it. There are three sensible transports: **Git**, **Google Drive** and
@@ -51,7 +53,7 @@ git add -A && git commit -m "notes" && git push
   against the backup timer, and the two-writer rule (one owner per file, append-only for
   anything two machines touch) is what stops the failure mode where two devices write the
   same file and every push is rejected. That discipline only exists in the git path. See
-  the "Usage example" section of [the README](../README.md) and
+  [the reference setup](how-it-works.md#usage-example-our-real-setup) and
   `_Agent-Context/TRUNK-BASED-DEVELOPMENT.md`.
 - **The phone.** You usually do not sync the whole vault to a phone here. Capture goes
   through the Telegram bot instead, landing in `Thinking/Daily/` on whichever machine runs

@@ -1,5 +1,7 @@
 # Today queue
 
+> **In the loop:** [3. Decide](../README.md#3-decide) and [4. Get shit done](../README.md#4-bonus-get-shit-done). The morning three.
+
 Today selects at most three items, with no model calls during selection:
 
 1. A pending decision due within 14 days, a deferred decision whose review date

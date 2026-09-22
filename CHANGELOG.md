@@ -3,6 +3,18 @@
 All notable changes to the public brainless engine. Dates are the day of the public
 push. The private vault this is exported from has its own history.
 
+## 0.3.2 (2026-09-22)
+
+- The docs follow the README's four lines. Each page opens with the line it serves
+  (gather, think, decide, get shit done) or says it is setup. `docs/how-it-works.md` is
+  regrouped under the four lines with a new get-shit-done section, and `docs/scripts.md`
+  names its sections the same way.
+- "Every command proposes and you paste" becomes "the machine proposes and you apply",
+  and "the same five steps" becomes "the same loop", wherever they appeared.
+- Link labels in `docs/commands.md`, `docs/thinking-clearer.md` and `docs/scripts.md` read
+  as page names, and `docs/syncing.md` points at the reference setup in
+  `docs/how-it-works.md` instead of a README section that no longer exists.
+
 ## 0.3.1 (2026-09-22)
 
 - The README is rewritten for people, not for the code: the problem, the solution and

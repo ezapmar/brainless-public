@@ -1,5 +1,7 @@
 # The commands
 
+> **In the loop:** [2. Think deeper and clearer](../README.md#2-think-deeper-and-clearer) and [3. Decide](../README.md#3-decide). The tools you run by hand.
+
 brainless has two kinds of command. The **slash commands** are the thinking tools: fifteen
 Markdown prompts in `.wiki/_commands/`, run by an agent (Claude Code or Gemini CLI) from
 the vault root. The wrappers in `.claude/commands/` and `.gemini/commands/` only point back
@@ -80,4 +82,4 @@ date, and an Outcome section that starts as "Pending review" and nags until it i
 date. `_Templates/Idea.md` carries a permanent `zk:` id and a rule that every idea
 links to at least one other note.
 
-Why each of these exists is on [thinking-clearer.md](thinking-clearer.md).
+Why each of these exists is on [Thinking Clearer](thinking-clearer.md).

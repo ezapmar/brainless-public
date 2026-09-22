@@ -1,5 +1,7 @@
 # Telegram capture, Buzz conversation
 
+> **In the loop:** [4. Get shit done](../README.md#4-bonus-get-shit-done). Where reminders arrive and where you answer them.
+
 Telegram is an incoming inbox. Text, photos, voice and supported audio/video files
 still enter `Thinking/Daily/` or `Inbox/Links/`. All receipts, failures, questions,
 previews and approvals go to Buzz. The Telegram API helper permits only

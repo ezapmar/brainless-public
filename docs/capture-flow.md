@@ -1,5 +1,7 @@
 # The capture flow
 
+> **In the loop:** [1. Gather information](../README.md#1-gather-information). Every door a thought comes in through, and the jobs behind each one.
+
 brainless starts with a wide front door. A thought does not need to arrive as a
 finished note. It can be a handwritten page, a photograph, a voice memo, a link,
 a sentence in Telegram or Buzz, or a document dropped into the vault. The first

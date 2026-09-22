@@ -1,5 +1,7 @@
 # The scripts
 
+> **In the loop:** all four lines. Every script, grouped by the line it serves.
+
 Every Python script in the engine, with three things for each: a **definition** (what
 it is, in a sentence), a **description** (what it reads, what it writes, when it runs)
 and a **philosophy** (why it is built the way it is). The third part is the one I would
@@ -53,27 +55,27 @@ flowchart TD
     nw["net_wait.py"]
   end
 
-  subgraph capture["1. Capture"]
+  subgraph capture["1. Gather: capture"]
     tg["telegram_capture.py"]
     bz["buzz_capture.py"]
     sp["smart_processor.py"]
     ing["spiky_capture.py, crm_capture.py,<br/>thinker_digest.py, batch_markitdown.py"]
   end
 
-  subgraph compile["2. Compile"]
+  subgraph compile["1. Gather: compile"]
     night["nightly_processor.py"]
     comp["compile_resources.py"]
     lint["lint_wiki.py"]
     find["wiki_search.py, file_query.py,<br/>build_dashboard.py"]
   end
 
-  subgraph argue["3 and 4. Bet and argue"]
+  subgraph argue["2 and 3. Think and decide: bet and argue"]
     dia["dialectic.py, dialectic_trigger.py"]
     close["evening_closeout.py"]
     think["thinking_loop.py, think_surface.py"]
   end
 
-  subgraph grade["5. Grade"]
+  subgraph grade["3. Decide: grade"]
     cal["calibrate.py, kill_criteria.py"]
     today["today_queue.py, today_buzz.py,<br/>task_reminder.py"]
     mem["resurface.py, weekly_reconcile.py"]
@@ -243,7 +245,7 @@ its own kind of outage.
 
 ---
 
-## 1. Capture
+## 1. Gather: capture
 
 ### `.agents/scripts/telegram_capture.py`
 
@@ -330,7 +332,7 @@ changes), one event log per organisation under `Inbox/CRM/` (appended only when
 something happens), a snapshot for the next delta and a status line for the health
 check. Flags: `--dry-run`, `--self-test` (fixture, no network), `--no-activity-days`,
 `--stage-days`, `--lang`. Without a token file it exits quietly. Details:
-[addons/crm-pipedrive.md](addons/crm-pipedrive.md).
+[the CRM snapshot addon](addons/crm-pipedrive.md).
 
 **Philosophy.** Person data is deliberately not fetched. The provider mapping passes
 organisation and deal fields only, so the privacy boundary lives in code and cannot be
@@ -354,7 +356,7 @@ baseline.
 
 ---
 
-## 2. Compile
+## 1. Gather: compile
 
 ### `tools/nightly_processor.py`
 
@@ -445,7 +447,7 @@ condition under which you would stop is not a thing to do.
 
 ---
 
-## 3 and 4. Bet and argue
+## 2 and 3. Think and decide: bet and argue
 
 ### `tools/dialectic.py`
 
@@ -534,7 +536,7 @@ cadence step has waited more than two weeks, it says so, in days.
 
 ---
 
-## 5. Grade
+## 3. Decide: grade
 
 ### `tools/calibrate.py`
 
@@ -631,7 +633,7 @@ apply or reject the proposals.
 
 ---
 
-## Tasks, meetings and people
+## 4. Get shit done: tasks, meetings and people
 
 These are addons. None is needed for the loop.
 

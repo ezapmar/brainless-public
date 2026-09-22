@@ -1,5 +1,7 @@
 # How it makes you think clearer
 
+> **In the loop:** [2. Think deeper and clearer](../README.md#2-think-deeper-and-clearer). What the forms and the order of operations do to your thinking.
+
 Most of what brainless does to your thinking is done by forms and by order of
 operations, not by the model. The model reads and argues. The forms decide what you have
 to write down before you are allowed to move on, and the order decides what you see
@@ -94,4 +96,4 @@ for the owner. `/calibrate` never writes an outcome the owner did not state. The
 load the frame and count the votes. The decision stays yours, which is the only way the
 grade can mean anything.
 
-The commands themselves are listed in [commands.md](commands.md).
+The commands themselves are listed in [Commands](commands.md).

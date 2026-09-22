@@ -1,5 +1,7 @@
 # CRM snapshot addon (Pipedrive example)
 
+> **In the loop:** an addon for [1. Gather information](../../README.md#1-gather-information). Your CRM, read-only.
+
 A read-only pull from your CRM into the vault, so the daily briefing can say "these
 three deals are stale" without you opening the CRM. Deterministic, no LLM, no person
 data. Pipedrive is the first provider; the script has a seam for others.

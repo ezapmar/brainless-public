@@ -1,5 +1,7 @@
 # Writing and narrative agents
 
+> **In the loop:** an addon, outside the four lines. See [Addons](how-it-works.md#addons).
+
 Two conversational agents live in their own Buzz channels and talk with the owner
 about long-form writing. `#writing` is for essays, opinion pieces for business
 publications, blog posts and book chapters. `#narratives` is for children's stories.

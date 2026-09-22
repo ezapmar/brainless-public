@@ -6,23 +6,24 @@ setup I run.
 
 ## The loop
 
-Five steps, with the mechanics and the file names. brainless is one
-loop, and each part is there because the one before it is useless alone. Notes that
-nobody reads are a warehouse. Summaries that nobody argues with are a tidier warehouse.
-And an argument that nobody grades is entertainment, which Galatasaray already provides.
+Four lines, with the mechanics and the file names. brainless is one loop, and each part
+is there because the one before it is useless alone. Notes that nobody reads are a
+warehouse. Summaries that nobody argues with are a tidier warehouse. And an argument that
+nobody grades is entertainment, which Galatasaray already provides.
 
 ```mermaid
 flowchart LR
-  C["1. Capture<br/>everything, unjudged"] --> M["2. Compile<br/>the machine reads"]
-  M --> B["3. Bet<br/>beliefs and decisions"]
-  B --> A["4. Argue<br/>six voices, two rounds"]
-  A --> G["5. Grade<br/>outcome against prediction"]
-  G -->|"filed back, so tomorrow builds on today"| C
+  G["1. Gather information<br/>capture everything, the machine reads"]
+  T["2. Think deeper and clearer<br/>ask what you know, six voices argue"]
+  D["3. Decide<br/>write a bet, grade it later"]
+  X["4. Bonus: get shit done<br/>promises become tasks, three a morning"]
+  G --> T --> D --> X
+  D -->|"filed back, so tomorrow builds on today"| G
 ```
 
 ### Three layers, and the failure they guard against
 
-The bet underneath all five steps is connectivity. A note on its own is storage. Notes
+The bet underneath all four lines is connectivity. A note on its own is storage. Notes
 wired to each other are a map, and the value shows up when you move across it: an
 argument from a meeting in May lands beside a belief written in March and the two change
 each other.
@@ -32,14 +33,19 @@ holds none of them is very good at sounding informed and no use at all when some
 has to be decided. So the loop is read as three layers, each one worth its cost only if
 it feeds the next.
 
-1. **Collect.** Everything comes in through one door and the machine reads it. Steps 1
-   and 2 below.
+1. **Collect.** Everything comes in through one door and the machine reads it. Line 1
+   below.
 2. **Think clearly.** The point is not a tidier disk, it is what you can hold in your own
-   head afterwards, which is why the vault argues instead of agreeing. Steps 3 and 4.
+   head afterwards, which is why the vault argues instead of agreeing. Line 2.
 3. **Decide.** A small number of dated calls, each carrying a prediction and a review
-   date. Steps 4 and 5.
+   date. Line 3.
 
-### 1. Capture everything, filter later
+Line 4 is the bonus: the promises that fall out of all three, kept where they cannot be
+lost.
+
+### 1. Gather information
+
+#### Capture everything, filter later
 
 Handwritten pages, voice notes, photos, links, documents, half sentences, Telegram
 messages and Buzz `#inbox` posts all come in through the same wide front door. They land
@@ -47,7 +53,7 @@ in `Inbox/`, `Inbox/Links/` and `Thinking/Daily/` as Markdown, and nothing is ju
 the way in. Judging a thought at capture time is how good ones die in a car park. The
 [capture flow guide](capture-flow.md) maps every entrance and every scheduled job.
 
-### 2. Let the machine read so you do not have to
+#### Let the machine read so you do not have to
 
 A pile of captures is only useful if somebody reads it, and I was never going to be that
 somebody. So a compiler turns every note into a summary, clusters summaries into
@@ -76,17 +82,9 @@ at each one, are written up in [the method](method.md). The books, papers and to
 behind the method, the voices and the engine are listed in
 [References](references.md).
 
-### 3. Write what you believe and what you decided, as bets
+### 2. Think deeper and clearer
 
-Reading is still not thinking. The compiled layer can tell you what you wrote, but it
-cannot tell you what you hold to be true, so that part is typed by hand. Beliefs live in
-`Thinking/Beliefs/`, each with a line for "what would change my mind". Decisions live in
-`Thinking/Decisions/`, each with a prediction, a confidence and a review date.
-
-The format matters more than it looks. A bet can lose, and something that can lose can
-be argued with.
-
-### 4. Argue before you act
+#### Argue before you act
 
 Six personas test a thesis in two rounds. In round one each persona gets its own
 thread, applies its own method without seeing the others, and votes YES, NO or
@@ -131,23 +129,7 @@ set each other off. It is the best-behaved meeting in my week. Each persona's pr
 a Markdown file in `.agents/buzz/personas/`. Edit them. Add a seventh. The moderator does
 not care how many there are.
 
-### 5. Grade yourself
-
-An argument ends in a bet, and a bet is worth nothing until somebody settles it. When a
-review date passes, the system nags until you write the outcome. `brainless calibrate`
-lists what is due, and the [Today queue](today-queue.md) keeps the daily ask small.
-`brainless today` offers at most three items: a decision, a commitment and one piece of
-evidence to review, each with a link to its source. Answers are previews until you apply
-them. You can defer an item to a date or dismiss it with a reason, and the existing
-morning worker sends the queue to Buzz #tasks, so there is no new timer to install.
-
-Ten years of ungraded decisions is one year repeated ten times. If you do only this
-step, you are ahead of most people I know. Including me, for most of this year.
-
-Every analysis, graded or not, is filed back into `.wiki/digests/queries/`. That is
-where the loop closes, because tomorrow's question gets to build on today's answer.
-
-### Research, but only when the week earns it
+#### Research, but only when the week earns it
 
 The loop above runs on what you already know. Sometimes a topic turns up that the vault
 cannot answer, and the tempting move is to point agents at the internet and read the
@@ -185,7 +167,7 @@ more evidence.
 The full adaptation, the three acts and the seven steps each mapped to a file, is in
 [the method](method.md).
 
-### Where the clarity comes from
+#### Where the clarity comes from
 
 Nothing above makes you smarter. It changes what you have to write down before you may
 move on, and the order you see things in. Criteria before options, so a favourite
@@ -195,6 +177,53 @@ at the end, so a decision cannot pass as an opinion. A red line when all five ag
 Each mechanism, with the file it lives in, is in
 [docs/thinking-clearer.md](thinking-clearer.md); every command, with what it asks
 and what it guards against, is in [docs/commands.md](commands.md).
+
+---
+
+### 3. Decide
+
+#### Write what you believe and what you decided, as bets
+
+Reading is still not thinking. The compiled layer can tell you what you wrote, but it
+cannot tell you what you hold to be true, so that part is typed by hand. Beliefs live in
+`Thinking/Beliefs/`, each with a line for "what would change my mind". Decisions live in
+`Thinking/Decisions/`, each with a prediction, a confidence and a review date.
+
+The format matters more than it looks. A bet can lose, and something that can lose can
+be argued with.
+
+#### Grade yourself
+
+An argument ends in a bet, and a bet is worth nothing until somebody settles it. When a
+review date passes, the system nags until you write the outcome. `brainless calibrate`
+lists what is due, and the [Today queue](today-queue.md) keeps the daily ask small.
+`brainless today` offers at most three items: a decision, a commitment and one piece of
+evidence to review, each with a link to its source. Answers are previews until you apply
+them. You can defer an item to a date or dismiss it with a reason, and the existing
+morning worker sends the queue to Buzz #tasks, so there is no new timer to install.
+
+Ten years of ungraded decisions is one year repeated ten times. If you do only this
+step, you are ahead of most people I know. Including me, for most of this year.
+
+Every analysis, graded or not, is filed back into `.wiki/digests/queries/`. That is
+where the loop closes, because tomorrow's question gets to build on today's answer.
+
+### 4. Bonus: get shit done
+
+Decisions come with promises attached, and promises are the first thing to fall out of a
+busy head.
+
+- **Promises become tasks.** Commitments from meeting reports and the day's captures are
+  appended to the task ledger in `_Agent-Context/TASKS.md`, with a near-duplicate check so
+  a promise rephrased on a later day does not become a second task. An optional sync keeps
+  the ledger and Google Tasks in step both ways.
+- **At most three things a morning.** `brainless today` offers a decision due for
+  grading, the oldest open commitment and one piece of evidence to review, each with a
+  link to its source. Empty categories stay empty, and finishing an item does not refill
+  its slot. See the [Today queue](today-queue.md).
+- **Answer in a thread.** The queue, reminders and the weekly question arrive in Buzz.
+  Answers are previews until you apply them: "apply" writes the note, "defer to Friday"
+  moves it, "dismiss" drops it with a reason. See [Buzz interactions](buzz-interactions.md).
 
 ---
 
@@ -216,8 +245,8 @@ covers what a small model can and cannot do, with measurements from a laptop-cla
 worker rather than promises.
 
 A loop that runs unattended against a folder holding your life needs one rule above all
-the others, which is that nothing writes into your notes without you. Every command
-proposes and you paste. Private folders never reach the compiled layer. The engine and
+the others, which is that nothing writes into your notes without you. The machine
+proposes and you apply. Private folders never reach the compiled layer. The engine and
 the notes are separate repos, so you can share one and keep the other.
 
 The rule is enforced by who owns which folder.
@@ -358,7 +387,7 @@ are now serialised with `flock` against a 30 minute backup timer, and
 
 ### The loop, on the clock
 
-The same five steps, with times attached. These are the worker's timers, installed
+The same loop, with times attached. These are the worker's timers, installed
 verbatim by `.agents/systemd/install.sh`:
 
 | When | Runs | What it does |

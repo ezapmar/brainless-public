@@ -1,5 +1,7 @@
 # Localization
 
+> **Run it:** the language brainless writes to you in.
+
 brainless is written in English. What the owner reads is written in the language
 set by `output_lang` in `_Agent-Context/PROFILE.md` (any ISO code, `en` by default;
 `BRAINLESS_OUTPUT_LANG` overrides it).

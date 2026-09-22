@@ -1,5 +1,7 @@
 # The method
 
+> **In the loop:** [1. Gather information](../README.md#1-gather-information), [2. Think deeper and clearer](../README.md#2-think-deeper-and-clearer) and [3. Decide](../README.md#3-decide). The method underneath the code.
+
 Four things in brainless are method rather than software: how a captured note is
 worked over, why every input becomes Markdown, how a research pass is run, and what
 keeps the compiled layer from growing into a pile. The code
@@ -243,7 +245,7 @@ names its own failure in its falsification line: the number of Inbox files older
 days should stay near zero. On 19 September 2026 it was 125, up from 121 at an audit two
 weeks earlier. Filter later had become filter never, and the counters looked fine.
 
-Three mechanisms, each mapped to one of the three layers, and a rule about what is
+Three mechanisms, each mapped to one of the three layers (the first three lines of the loop: gather, think, decide), and a rule about what is
 deliberately left alone.
 
 **Count, so the second layer can fail.** The layer called think clearly has no output of
