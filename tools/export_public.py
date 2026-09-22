@@ -40,7 +40,6 @@ SHIP_FILES = [
     "README.public.md",
     "install.sh",
     "bin/brainless",
-    "setup.sh",
     "requirements.txt",
     "requirements-core.txt",
     ".env.example",
@@ -173,6 +172,8 @@ OWNER_WORDS = ("Tunca", "Üçer", "tuncaucer", "kolayik", "Kolay İK", "Kolay IK
 # still scans them for real secrets; only the owner-word check is waived.
 OWNER_ALLOW = (
     "README.md",
+    # The long half of the README, moved out on 2026-09-22: same voice, same review.
+    "docs/how-it-works.md",
     "LICENSE",
     "_Agent-Context/TRUNK-BASED-DEVELOPMENT.md",
     "tools/export_public.py",

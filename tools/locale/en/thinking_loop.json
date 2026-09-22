@@ -17,7 +17,6 @@
   "q_cadence": "🎯 Cadence step: {step}\nDid you do it this week? If yes, what came out of it; if not, what got in the way?",
   "q_belief": "🧭 Belief challenge: [[{name}]] was last challenged on {date}.\nIn recent weeks, was there a concrete event that confirmed or refuted this belief? Tell one example; did your confidence change?",
   "q_seed": "🌱 Seed: no new question has landed in Thinking/Ideas for two weeks.\nWhat question has your mind kept circling this week? One sentence is enough, I will expand the rest.",
-  "pending_open": "⏳ Last week's question is still open. Reply to that message to answer it, or write 'skip' to skip it.\n\n{question}",
   "ask_message": "🧠 Weekly thinking question\n\n{question}\n\nReply to this message (thread içinde) by voice or text. Write 'skip' to skip.",
   "preview_grade": "📊 Outcome draft for [[{target}]]\n\nOutcome ({score}): {outcome}\nLesson: {lesson}\n\nThe Calibration.md row will be filled too.",
   "preview_predict": "🔮 Prediction draft for [[{target}]]\n\nPrediction: {prediction}\nConfidence: {confidence}%\nReview: {review}",
@@ -40,9 +39,5 @@
   "applied": "✅ Applied: {files}",
   "cancelled": "OK, draft discarded. The question stays open; answer again if you like, or 'skip'.",
   "skipped": "Skipped. A different question comes next week.",
-  "transcribe_failed": "Could not transcribe the audio; can you try again?",
-  "unsupported_message": "I cannot process this message type as an answer; send voice or text.",
-  "drafting": "Got it, preparing the draft...",
-  "draft_failed": "Could not produce a draft (LLM returned nothing). Your answer is not lost; try again or 'skip'.",
   "draft_footer": "\n\nWrite 'apply' and I will write it into the note; 'cancel' discards it."
 }

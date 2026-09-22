@@ -5,6 +5,8 @@ worked over, why every input becomes Markdown, how a research pass is run, and w
 keeps the compiled layer from growing into a pile. The code
 enforces them, but none of them came from the code, and any of them would survive being
 reimplemented in a different language next year. This page is the part worth keeping.
+What was taken from each book, paper and tool, and where it shows up, is in
+[References](references.md).
 
 ---
 

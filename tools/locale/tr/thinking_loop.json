@@ -22,7 +22,6 @@
   "q_cadence": "🎯 Kademe adımı: {step}\nBu hafta yaptın mı? Yaptıysan ne çıktı; yapmadıysan ne engelledi?",
   "q_belief": "🧭 İnanç sınaması: [[{name}]] en son {date} tarihinde sınandı.\nSon haftalarda bu inancı doğrulayan ya da çürüten somut bir olay oldu mu? Bir örnek anlat; güvenin değişti mi?",
   "q_seed": "🌱 Tohum: iki haftadır Thinking/Ideas'a yeni soru düşmedi.\nBu hafta zihninin dönüp durduğu soru ne? Bir cümle yeter, gerisini ben açarım.",
-  "pending_open": "⏳ Geçen haftanın sorusu hâlâ açık. Cevaplamak için o mesaja yanıt ver, atlamak için 'geç' yaz.\n\n{question}",
   "ask_message": "🧠 Haftalık düşünme sorusu\n\n{question}\n\nBu mesaja yanıt vererek (thread içinde) sesli ya da yazılı cevapla. Atlamak için 'geç'.",
   "preview_grade": "📊 [[{target}]] için Outcome taslağı\n\nSonuç ({score}): {outcome}\nDers: {lesson}\n\nCalibration.md satırı da dolacak.",
   "preview_predict": "🔮 [[{target}]] için tahmin taslağı\n\nTahmin: {prediction}\nGüven: %{confidence}\nReview: {review}",
@@ -45,9 +44,5 @@
   "applied": "✅ Uygulandı: {files}",
   "cancelled": "Tamam, taslak silindi. Soru açık kalıyor; istersen yeniden cevapla ya da 'geç'.",
   "skipped": "Atlandı. Gelecek hafta başka bir soru gelir.",
-  "transcribe_failed": "Ses transkript edilemedi; tekrar dener misin?",
-  "unsupported_message": "Bu mesaj tipini cevap olarak işleyemiyorum; ses ya da yazı gönder.",
-  "drafting": "Aldım, taslağı hazırlıyorum...",
-  "draft_failed": "Taslak üretilemedi (LLM boş döndü). Cevabın kaybolmadı; tekrar dene ya da 'geç'.",
   "draft_footer": "\n\n'uygula' yazarsan nota işlerim; 'iptal' ile silerim."
 }

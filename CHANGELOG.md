@@ -3,6 +3,16 @@
 All notable changes to the public brainless engine. Dates are the day of the public
 push. The private vault this is exported from has its own history.
 
+## 0.3.1 (2026-09-22)
+
+- The README is rewritten for people, not for the code: the problem, the solution and
+  four lines (gather, think, decide, get shit done), then the install. The long
+  technical half moves to `docs/how-it-works.md` and the wiki, where the README links.
+- `docs/references.md`: the books, papers and tools the method, the voices and the
+  engine are built on, each with what was taken and where it shows up. Also a wiki page.
+- `setup.sh` is gone; `install.sh` has done its job since 0.1. Unused weekly-question
+  labels are dropped from `tools/locale/*/thinking_loop.json`.
+
 ## 0.3.0 (2026-09-21)
 
 - Writing and narrative agents: `.agents/buzz/install_agent_channel.sh <slug>` installs a
