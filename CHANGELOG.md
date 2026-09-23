@@ -5,7 +5,7 @@ push. The private vault this is exported from has its own history.
 
 ## 0.5.2 (2026-09-23)
 
-The README says what it runs on.
+The README says what it runs on, and the root shows the engine.
 
 - **What it runs on.** A new README section names the three devices behind the reference
   setup: an iPhone for Telegram capture and Buzz replies, a Mac for writing and commands,
@@ -15,6 +15,9 @@ The README says what it runs on.
   units, persona sandbox, placeholder secrets) moved out of `docs/how-it-works.md` into
   `docs/reference-deployment.md`, and the wiki page is now generated from it instead of
   being written by hand. How-it-works keeps a one-paragraph pointer.
+- **The root shows the engine.** The eleven empty content folders (`Work/`, `Inbox/`,
+  `Thinking/Daily/` and the rest) no longer ship with a `.gitkeep` each; `install.sh`
+  makes them on the first run. The repo root goes from thirty entries to twenty one.
 
 ## 0.5.1 (2026-09-23)
 
