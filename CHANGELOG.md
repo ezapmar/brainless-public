@@ -3,6 +3,19 @@
 All notable changes to the public brainless engine. Dates are the day of the public
 push. The private vault this is exported from has its own history.
 
+## 0.5.2 (2026-09-23)
+
+The README says what it runs on.
+
+- **What it runs on.** A new README section names the three devices behind the reference
+  setup: an iPhone for Telegram capture and Buzz replies, a Mac for writing and commands,
+  and an always-on Arch Linux laptop behind Tailscale that runs the timers, the
+  capture, the Buzz relay and the persona agents. One laptop is still enough to start.
+- **Reference deployment is its own doc.** The real setup (devices, diagram, schedule,
+  units, persona sandbox, placeholder secrets) moved out of `docs/how-it-works.md` into
+  `docs/reference-deployment.md`, and the wiki page is now generated from it instead of
+  being written by hand. How-it-works keeps a one-paragraph pointer.
+
 ## 0.5.1 (2026-09-23)
 
 Shipped files name nobody real.

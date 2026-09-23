@@ -65,12 +65,12 @@ EXCLUDE = [
     ".agents/scripts/omarchy_job.sh",
     ".agents/scripts/omarchy_backup.sh",
 ]
-# Empty homes so the layout is visible on first clone.
+# Empty machine folders the tools expect on first clone. The content homes (Work,
+# Inbox, Thinking and the rest) do not ship: install.sh makes them, so the repo root
+# shows the engine and not a row of empty folders.
 SKELETON = [
-    "Work", "Personal", "Library", "Inbox", "raw", "Archive", "Daily Briefings",
-    "Thinking/Daily", "Thinking/Ideas", "Thinking/Beliefs", "Thinking/Decisions",
     ".wiki/summaries", ".wiki/concepts", ".wiki/ideas", ".wiki/digests/queries",
-    ".wiki/projects", ".wiki/moc", ".wiki/entities", "logs", ".agents/state",
+    ".wiki/projects", ".wiki/moc", ".wiki/entities", ".agents/state",
 ]
 # Private data files replaced by stubs.
 STUBS = {

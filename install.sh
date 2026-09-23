@@ -9,6 +9,7 @@
 # What it does, idempotently:
 #   1. checks git and python3 (3.10+)
 #   2. clones the engine into the vault directory (or pulls if it is already there)
+#      and creates the content folders (Inbox, Work, Thinking and the rest)
 #   3. creates .venv and installs the core Python dependency (markitdown)
 #   4. checks the LLM backend: the claude CLI, or an OpenAI-compatible endpoint from env
 #   5. asks for your name and output language and writes _Agent-Context/PROFILE.md
@@ -62,6 +63,8 @@ else
   git clone --quiet "$REPO" "$VAULT"
 fi
 cd "$VAULT"
+mkdir -p Work Personal Library Inbox raw Archive "Daily Briefings" logs \
+  Thinking/Daily Thinking/Ideas Thinking/Beliefs Thinking/Decisions
 
 # 3. venv + core dependency
 say "Python environment (.venv)"
