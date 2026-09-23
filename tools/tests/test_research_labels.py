@@ -139,6 +139,8 @@ class StaleSources(unittest.TestCase):
         self.assertEqual(len(after["sources"]), 3, "stale_sources must not mutate the registry")
 
 
+@unittest.skipUnless((ROOT / "_Agent-Context" / "SOURCES.json").exists(),
+                     "the source registry is private data and does not ship")
 class ShippedRegistry(unittest.TestCase):
     def test_real_registry_is_valid_and_owner_controlled(self):
         data = json.loads((ROOT / "_Agent-Context" / "SOURCES.json").read_text())

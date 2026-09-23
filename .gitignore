@@ -15,6 +15,7 @@
 **/*Passport*
 **/*Pasaport*
 **/Security Incidents/
+**/_local/
 
 # Machine noise
 .DS_Store

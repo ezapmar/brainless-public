@@ -16,12 +16,15 @@ point: the thing under test is what git actually does with the rules, and a
 reimplementation of gitignore matching here would be testing the wrong thing.
 """
 from pathlib import Path
+import os
 import re
 import subprocess
 import sys
 import unittest
 
 ROOT = Path(__file__).resolve().parents[2]
+# Read the profile of the tree under test, not whatever vault sits at the default path.
+os.environ.setdefault("BRAINLESS_VAULT", str(ROOT))
 sys.path.insert(0, str(ROOT / "tools"))
 from owner_profile import (  # noqa: E402
     GITIGNORE_NETS, PRIVATE_NAME_PARTS, PROTECTED_HOMES, private_segment_patterns)
@@ -47,6 +50,12 @@ FORBIDDEN_TRACKED = [
 # failure, which is why their absence is a test failure and not a preference.
 REQUIRED_PATTERNS = list(GITIGNORE_NETS)
 
+# The protected homes are untracked, so they exist only in the private vault's own
+# checkout. A public clone never has them and a linked worktree of the vault does
+# not either. There a missing home is expected; the ignore rule is still checked.
+PRIVATE_CHECKOUT = ((ROOT / "_Agent-Context" / "AGENT-RULES-PRIVATE.md").exists()
+                    and (ROOT / ".git").is_dir())
+
 
 def git(*args):
     return subprocess.run(["git", *args], cwd=ROOT, capture_output=True,
@@ -58,12 +67,15 @@ class TestProtectedPathsAreIgnored(unittest.TestCase):
         for rel in PROTECTED:
             with self.subTest(path=rel):
                 path = ROOT / rel
-                self.assertTrue(
-                    path.exists(),
-                    f"{rel} is gone. Either the data moved, and the rule now "
-                    f"protects nothing, or the PROFILE.md entry is stale. Both "
-                    f"need a look.")
-                result = git("check-ignore", "-v", rel)
+                if PRIVATE_CHECKOUT:
+                    self.assertTrue(
+                        path.exists(),
+                        f"{rel} is gone. Either the data moved, and the rule now "
+                        f"protects nothing, or the PROFILE.md entry is stale. Both "
+                        f"need a look.")
+                # A home is a folder. Git cannot tell a missing path is one, so
+                # ask about it as a folder or a folder rule would not match.
+                result = git("check-ignore", "-v", rel if path.exists() else rel + "/")
                 self.assertEqual(
                     result.returncode, 0,
                     f"{rel} is NOT ignored. A rename probably broke its rule; "

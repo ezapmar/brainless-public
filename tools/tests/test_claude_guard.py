@@ -146,6 +146,8 @@ class FailOpen(unittest.TestCase):
         self.assertEqual(out.returncode, 0)
 
 
+@unittest.skipUnless((ROOT / "_Agent-Context" / "CONTEXT.md").exists(),
+                     "a fresh public clone has no context files; .gitignore keeps them out")
 class SessionContext(unittest.TestCase):
     def test_both_context_files_are_injected(self):
         _, _, raw = run("session", {})

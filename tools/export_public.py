@@ -120,6 +120,7 @@ CONTENT_HOMES_IGNORE = """# brainless public engine repo
 **/*Passport*
 **/*Pasaport*
 **/Security Incidents/
+**/_local/
 
 # Machine noise
 .DS_Store
