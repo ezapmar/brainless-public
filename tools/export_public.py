@@ -18,6 +18,7 @@ import os
 import re
 import shutil
 import sys
+import unicodedata
 
 VAULT = os.environ.get("BRAINLESS_VAULT") or os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -208,6 +209,64 @@ OWNER_ALLOW = (
 )
 
 
+# Real people and companies the vault tracks. Their names are read at scan time from
+# private files that never ship, so this file holds none of them, and in the public
+# checkout (where those files are absent) the check simply finds no names. Test
+# fixtures and prompt examples must use invented names; a first name alone is enough
+# to identify a colleague to anyone who knows the company.
+REGISTRY_FILES = ("_Agent-Context/entities.md", "_Agent-Context/entity-candidates.md")
+PEOPLE_GLOB_DIR = "About People"  # Work/<company>/About People/<team>/<Full Name>.md
+# Registered names that are also everyday words in the shipped code and docs.
+NAME_COMMON = {"Can", "Doğan", "Zafer", "Metin", "Deniz", "Elif", "Su", "Bayrak", "Advisors", "Financial"}
+
+
+def registry_names(vault=VAULT):
+    """Every name the private registry knows: full names, aliases, and the single
+    words inside a person's name (a first name or a surname on its own is a leak)."""
+    names = set()
+    for f in REGISTRY_FILES:
+        try:
+            with open(os.path.join(vault, f), errors="replace") as fh:
+                lines = fh.read().splitlines()
+        except OSError:
+            continue
+        for line in lines:
+            parts = [x.strip() for x in re.sub(r"^- \[.\]\s*", "", line).split("|")]
+            if len(parts) < 2 or parts[1] not in ("person", "company"):
+                continue
+            found = [parts[0].strip("* ")]
+            # entities.md: Name | type | aliases | scope. The candidates file puts the scope third.
+            if f.endswith("entities.md") and len(parts) > 2:
+                found += [a.strip() for a in parts[2].split(",") if a.strip()]
+            names.update(found)
+            if parts[1] == "person":
+                for n in found:
+                    names.update(n.split())
+    work = os.path.join(vault, "Work")
+    if os.path.isdir(work):
+        for area in os.listdir(work):
+            people = os.path.join(work, area, PEOPLE_GLOB_DIR)
+            for _dirpath, _dirs, files in os.walk(people):
+                for fn in files:
+                    if fn.endswith(".md"):
+                        stem = fn[:-3]
+                        names.add(stem)
+                        names.update(stem.split())
+    # The owner has a check of their own, with an allow-list (OWNER_WORDS, OWNER_ALLOW).
+    owner = tuple(w.lower() for w in OWNER_WORDS)
+    return {n for n in names if len(n) >= 3 and n not in NAME_COMMON and not n.islower()
+            and not any(w in n.lower() for w in owner)}
+
+
+def name_patterns(names):
+    """Case-sensitive, whole word, but a Turkish suffix after an apostrophe still counts:
+    "Aylin'e" is Aylin."""
+    if not names:
+        return None
+    alts = "|".join(re.escape(unicodedata.normalize("NFC", n)) for n in sorted(names, key=len, reverse=True))
+    return re.compile(rf"(?<![\w])(?:{alts})(?![\w])")
+
+
 def rel(path):
     return os.path.relpath(path, VAULT)
 
@@ -282,8 +341,9 @@ def write_tree(out):
 BINARY_EXT = (".png", ".jpg", ".jpeg", ".gif", ".webp", ".ico")
 
 
-def leak_scan(out):
+def leak_scan(out, names=None):
     findings = []
+    name_rx = name_patterns(registry_names() if names is None else names)
     for dirpath, dirnames, filenames in os.walk(out):
         dirnames[:] = [d for d in dirnames if d != ".git"]  # git's own metadata is not content
         for fn in filenames:
@@ -301,6 +361,9 @@ def leak_scan(out):
             for label, rx in LEAK_PATTERNS:
                 for m in rx.finditer(text):
                     findings.append((r, label, m.group(0)[:40]))
+            if name_rx:
+                for m in name_rx.finditer(unicodedata.normalize("NFC", text)):
+                    findings.append((r, "registry name", m.group(0)))
             if not r.startswith(OWNER_ALLOW):
                 low = text.lower()
                 for w in OWNER_WORDS:

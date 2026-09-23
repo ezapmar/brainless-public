@@ -12,9 +12,10 @@ Tools:
   index(topic)       INDEX.md, or one topic index from .wiki/_index/
 
 What may leave: a page git would not push does not go out through this server
-either. Every path is checked against .gitignore (finance resources, family folders, the
-other local-only rules) and against a second, hard-coded deny list, so a
-gitignore edit alone cannot open them. Only .md under .wiki/ is served.
+either. Every path is checked against .gitignore (finance resources, family
+folders, the other local-only rules) and against a second deny list, built
+from fixed parts plus the private_segments in PROFILE.md, so a gitignore edit
+alone cannot open them. Only .md under .wiki/ is served.
 
 Transports:
   stdio (default)   for a client that starts the server itself
@@ -37,10 +38,12 @@ import re
 import secrets
 import subprocess
 import sys
+import unicodedata
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+from owner_profile import PRIVATE_SEGMENTS  # noqa: E402
 from wiki_search import VAULT, mode, passage, search  # noqa: E402
 
 WIKI = VAULT / ".wiki"
@@ -50,7 +53,24 @@ TOKEN_FILE = Path.home() / ".config" / "brainless" / "mcp_token"
 MAX_PAGE = 60_000  # characters; a raw import can be a whole book
 
 # Second lock behind .gitignore: these never leave, whatever the ignore file says.
-DENY = re.compile(r"finance_resources|security-incidents|official-docs|/_archive/", re.I)
+# The owner's own private folders (a child's name, say) come from PROFILE.md, so
+# no real name lives in this file. Text is folded before the test: lower case,
+# no diacritics, and space, hyphen and underscore all read as one separator.
+_FOLD = str.maketrans({"ı": "i", " ": "-", "_": "-"})
+
+
+def _fold(s: str) -> str:
+    s = "".join(c for c in unicodedata.normalize("NFKD", s) if not unicodedata.combining(c))
+    return s.lower().translate(_FOLD)
+
+
+DENY_PARTS = tuple(_fold(x) for x in ("finance_resources", "security-incidents", "official-docs",
+                                       "/_archive/", *PRIVATE_SEGMENTS))
+
+
+def denied(text: str) -> bool:
+    folded = _fold(text)
+    return any(part in folded for part in DENY_PARTS)
 
 TOOLS = [
     {"name": "search",
@@ -95,7 +115,7 @@ def ignored(rels: list[str]) -> set[str]:
 
 
 def allowed(rels: list[str]) -> list[str]:
-    ok = [r for r in rels if r.startswith(".wiki/") and r.endswith(".md") and not DENY.search("/" + r)]
+    ok = [r for r in rels if r.startswith(".wiki/") and r.endswith(".md") and not denied("/" + r)]
     blocked = ignored(ok)
     return [r for r in ok if r not in blocked]
 
@@ -144,7 +164,7 @@ def tool_index(topic: str | None = None) -> str:
         return "\n".join(sorted(p.stem.removeprefix("index-") for p in (WIKI / "_index").glob("index-*.md")))
     rel = ".wiki/INDEX.md" if not topic else f".wiki/_index/index-{topic.removeprefix('index-')}.md"
     # Index lines name pages; a line naming a page this server would refuse goes too.
-    return "\n".join(l for l in tool_read_page(rel).splitlines() if not DENY.search(l))
+    return "\n".join(l for l in tool_read_page(rel).splitlines() if not denied(l))
 
 
 def call(name: str, args: dict) -> str:

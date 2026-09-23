@@ -3,6 +3,21 @@
 All notable changes to the public brainless engine. Dates are the day of the public
 push. The private vault this is exported from has its own history.
 
+## 0.5.1 (2026-09-23)
+
+Shipped files name nobody real.
+
+- **Invented names in examples.** Test fixtures, locale self-tests, comments and one prompt
+  example named real people and companies. They use invented names now; the Turkish suffix
+  cases still test the same thing.
+- **MCP deny list from the profile.** `tools/mcp_server.py` builds its second deny list from
+  fixed parts plus `private_segments` in `PROFILE.md`, folding case, accents and separators.
+  Put a family member's folder name there and the server will not serve it.
+- **Leak scan checks tracked names.** `tools/export_public.py` reads the entity registry, the
+  entity candidates and the `Work/*/About People/` file names at scan time and flags any of
+  those names in a shipped file. The names never enter the code; in a checkout without those
+  files the check has nothing to look for.
+
 ## 0.5.0 (2026-09-23)
 
 Search by meaning, and a wiki that proposes its own links.

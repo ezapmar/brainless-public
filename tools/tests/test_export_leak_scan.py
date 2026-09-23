@@ -44,8 +44,9 @@ class LeakScanTest(unittest.TestCase):
             path.write_text(data, encoding="utf-8")
         return path
 
-    def scan(self):
-        return export.leak_scan(str(self.out))
+    def scan(self, names=()):
+        # names=() keeps these tests off the private registry; the name tests pass their own.
+        return export.leak_scan(str(self.out), names=names)
 
     def labels(self, relative):
         return {label for r, label, _ in self.scan() if r == relative}
@@ -126,6 +127,39 @@ class LeakScanTest(unittest.TestCase):
             self.assertNotIn(d.split("/")[0], homes, d)
         for f in export.SHIP_FILES:
             self.assertNotIn(f.split("/")[0], homes, f)
+
+    # --- registry names ------------------------------------------------------
+
+    def test_a_registry_first_name_is_caught_with_a_turkish_suffix(self):
+        self.write("tools/tests/t.py", "task = \"Dashboard örneklerini Aylin'e gönder\"\n")
+        hits = [(r, label, hit) for r, label, hit in self.scan(names={"Aylin"})]
+        self.assertEqual(hits, [("tools/tests/t.py", "registry name", "Aylin")])
+
+    def test_a_name_inside_a_longer_word_is_not_a_hit(self):
+        self.write("docs/a.md", "Defneli bir ekip; Aylinda diye bir yer.\n")
+        self.assertEqual(self.scan(names={"Defne", "Aylin"}), [])
+
+    def test_registry_names_are_read_from_the_private_files(self):
+        with tempfile.TemporaryDirectory() as vault:
+            ctx = Path(vault) / "_Agent-Context"
+            ctx.mkdir()
+            (ctx / "entities.md").write_text(
+                "## Kisiler\nAylin Korkmaz | person | Aylo | internal\n"
+                "Kuzeybank | company | Kuzey Bankasi | partnership\n", encoding="utf-8")
+            (ctx / "entity-candidates.md").write_text(
+                "- [ ] Defne Toprak | person | internal (5 pages, QA Team)\n", encoding="utf-8")
+            team = Path(vault) / "Work" / "Acme" / "About People" / "QA Team"
+            team.mkdir(parents=True)
+            (team / "Ozan Tekin.md").write_text("", encoding="utf-8")
+            names = export.registry_names(vault)
+        for n in ("Aylin Korkmaz", "Aylin", "Korkmaz", "Aylo", "Kuzeybank", "Kuzey Bankasi",
+                  "Defne", "Toprak", "Ozan", "Tekin"):
+            self.assertIn(n, names)
+        self.assertNotIn("internal (5 pages, QA Team)", names)
+
+    def test_no_registry_means_no_name_check(self):
+        with tempfile.TemporaryDirectory() as vault:
+            self.assertEqual(export.registry_names(vault), set())
 
 
 if __name__ == "__main__":
