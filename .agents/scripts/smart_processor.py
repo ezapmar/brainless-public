@@ -527,6 +527,8 @@ def main():
         print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] No new files. "
               f"{len(failures)} failed, {backed_off} backed off.")
 
+    print(f"RUNLOG converted={converted} failed={len(failures)} backed_off={backed_off}")
+
     # Alerting: surface failures instead of letting them rot silently in the log.
     if failures:
         sample = os.path.basename(failures[0])

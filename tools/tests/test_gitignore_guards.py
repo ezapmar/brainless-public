@@ -24,7 +24,7 @@ import unittest
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "tools"))
 from owner_profile import (  # noqa: E402
-    GITIGNORE_NETS, PROTECTED_HOMES, private_segment_patterns)
+    GITIGNORE_NETS, PRIVATE_NAME_PARTS, PROTECTED_HOMES, private_segment_patterns)
 
 # Every home that must never reach the remote. The list is deployment data and
 # lives in PROFILE.md, which is private: naming these folders here would put the
@@ -40,7 +40,7 @@ FORBIDDEN_TRACKED = [
     r"(?i)passport|pasaport|schengen|kimlik|n[uü]fus",
     r"(?i)security incidents/",
     r"(?i)finance[_/]resources",
-] + private_segment_patterns()
+] + private_segment_patterns() + ["(?i)" + re.escape(p) for p in PRIVATE_NAME_PARTS]
 
 # The pattern nets added on 2026-09-19. Each one is the backup for a rule that
 # names a single path; losing one puts that home back on a single point of

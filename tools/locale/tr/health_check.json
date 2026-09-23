@@ -55,5 +55,17 @@
   "privacy_exposed": "IGNORE EDİLMİYOR: {paths}. Bir yeniden adlandırma .gitignore kuralını kırdı; commit'ten önce düzelt",
   "pile_label": "Yığın (Inbox'ta 14 günden eski)",
   "pile_detail": "{inbox} dosya; inancın ölçütü sıfıra yakın. Karar başına analiz {qpd}, orphan sayfa {orphans}, sayım {date}",
-  "pile_missing": "henüz sayaç yok; tools/wiki_prune.py --count çalıştır"
+  "pile_missing": "henüz sayaç yok; tools/wiki_prune.py --count çalıştır",
+  "graph_label": "Wiki grafı",
+  "graph_detail": "orphan {orphans}, derece {degree}, ana bileşen {main} ({date})",
+  "runs_label": "Koşu logu",
+  "runs_ok": "{jobs} iş, hata, sessizlik veya boş koşu yok",
+  "runs_failed": "{job} son koşuda hata verdi ({day} {time})",
+  "runs_quiet": "{job} {days} gündür sessiz",
+  "runs_dry": "{job} {days} gündür {field}=0, yakalama yolu bozuk olabilir",
+  "runs_retrieval": "geri getirme hit@5 {now}% seviyesine düştü (iki haftanın en iyisi {best}%), bkz. tools/retrieval_eval.py",
+  "backup_label": "Yedek",
+  "backup_none": "henüz şifreli arşiv yok (tools/vault_archive.py create)",
+  "backup_detail": "son arşiv {made} gün önce, son geri yükleme testi: {verified} gün önce",
+  "backup_never": "hiç yapılmadı"
 }

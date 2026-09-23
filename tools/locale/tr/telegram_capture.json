@@ -13,5 +13,7 @@
   "reply_saved": "Vault'a düştü: {title}",
   "reply_transcribe_failed": "Ses alındı ama transkript edilemedi. Muhtemel sebep: 20 MB indirme sınırı ya da whisper hatası. Kayıt vault'a düşmedi.",
   "reply_no_speech": "Ses alındı ama konuşma algılanmadı (sessizlik ya da whisper artefaktı). Kayıt vault'a düşmedi.",
-  "reply_unsupported": "Bu mesaj tipi işlenemiyor ({kinds}), vault'a düşmedi. Sesli not, ses dosyası, fotoğraf ya da yazı gönderebilirsin."
+  "reply_unsupported": "Bu mesaj tipi işlenemiyor ({kinds}), vault'a düşmedi. Sesli not, ses dosyası, fotoğraf ya da yazı gönderebilirsin.",
+  "media_queued": "Transkript sıraya alındı, hazır olunca mesaj gelecek",
+  "media_known": "Bu link zaten sırada ya da transkripti çıkarıldı"
 }

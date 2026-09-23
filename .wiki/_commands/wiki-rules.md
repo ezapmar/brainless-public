@@ -7,7 +7,8 @@ The foundational rules and structure for maintaining this wiki. This document en
 - Every wiki file starts with a one-paragraph summary.
 - Link related topics to each other using `[[topic-name]]` format.
 - Maintain an `INDEX.md` in `wiki/` that lists every topic with a one-line description.
-- When new raw sources are added, update the relevant wiki articles.
+- When new raw sources are added, update the relevant concept pages in `.wiki/concepts/` (the compiler does this nightly; see `_Agent-Context/concepts.md`).
+- A disagreement is recorded, never overwritten; an outdated claim is struck through, never deleted (see `_shared-rules.md`).
 
 ## Linked Topics
 - [[INDEX]]: The central entry point for all wiki topics.

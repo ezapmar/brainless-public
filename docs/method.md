@@ -252,7 +252,7 @@ deliberately left alone.
 its own: nobody can count clarity. `tools/wiki_prune.py --count` writes a stand-in to
 `_Agent-Context/PILE-SCORECARD.md` every Sunday, with no model involved: captures per
 graded decision, filed analyses per decision, Inbox files past the belief's fourteen days,
-orphan wiki pages, the number of concept articles that draw on more than one home (a
+orphan wiki pages, the number of concept pages that draw on more than one home (a
 bridge in Burt's sense; an edge count is not one), decisions made and beliefs challenged
 in the window, and what was archived. For the first four weeks the numbers are the whole
 point. Ceilings come from the data afterwards, calibrated against this vault's own numbers

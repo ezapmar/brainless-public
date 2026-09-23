@@ -3,6 +3,46 @@
 All notable changes to the public brainless engine. Dates are the day of the public
 push. The private vault this is exported from has its own history.
 
+## 0.4.0 (2026-09-23)
+
+- **Concept pages.** A summary says what one source said; a concept page says what the
+  vault knows about one idea, and every new source updates it in place.
+  - A disagreement keeps both positions with sources and dates.
+  - An outdated claim is struck through, never deleted.
+  - Every claim carries a confidence label.
+  - `tools/concepts.py` validates each rewrite.
+  - New concepts are proposed into `_Agent-Context/concepts.md` and wait for a yes.
+  - The old articles phase is retired, and `--only concept-migrate` moves its pages over.
+- **A connected graph.**
+  - A deterministic linker ties summaries to the people, companies and concepts they
+    mention. It holds back when a first name belongs to someone else.
+  - INDEX.md gives one line per page, with topic indexes in `.wiki/_index/`.
+  - Aliases in `_Agent-Context/aliases.md` catch the words people actually use.
+  - Search folds Turkish letters.
+  - A project mirror that shares a name with an entity becomes "(project)".
+- **Measured.**
+  - `tools/wiki_metrics.py` tracks the orphan rate, links per page, the main component and
+    the bridge pages, week on week, in the scorecard and in HEALTH.md.
+  - `tools/retrieval_eval.py` scores golden questions every night.
+  - `tools/wiki_dedupe.py` proposes merges and never merges.
+  - `brainless graph` writes a Gephi file coloured by page type.
+- **Checks, not requests.**
+  - Claude Code hooks (`tools/hooks/claude_guard.py`) ask before human-area writes and
+    deletions, and refuse secrets and misplaced briefings.
+  - `tools/output_guard.py` refuses model chatter and nested pages before they are
+    written.
+  - `tools/run_log.py` records every scheduled run with its counts, so a job that ran and
+    did nothing shows up.
+  - The nightly job no longer swallows a failed digest or the compiler's exit code.
+- **New doors.**
+  - `brainless media` turns YouTube and Apple Podcasts episode links into timestamped
+    transcripts, queued and transcribed locally.
+  - `brainless chats` brings Claude or ChatGPT history in, triaged and filtered first.
+- **Backups.** `brainless backup` seals the vault and its history with `age` once a month,
+  into a folder sync does not reach. `verify` is the restore test.
+- **Answer rule.** Answers from the vault cite a page for every claim, keep outside
+  knowledge under its own heading, and end with what was read and what is not covered.
+
 ## 0.3.2 (2026-09-22)
 
 - The docs follow the README's four lines. Each page opens with the line it serves

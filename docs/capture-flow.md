@@ -40,6 +40,15 @@ flowchart LR
   adds useful wikilinks and tags, and writes the result as a normal daily capture.
 - **Links.** Send a URL with an optional comment. The fetcher checks that the host is
   public, extracts readable page text, and writes a reading note to `Inbox/Links/`.
+- **YouTube and podcasts.** Send a YouTube link or an Apple Podcasts episode link. The
+  capture only queues it and answers at once. The media job fetches the captions, or
+  transcribes the episode locally with `whisper.cpp`. A cleaning pass adds punctuation
+  and speaker turns without cutting anything, and keeps a `[mm:ss]` marker every three
+  minutes. The transcript lands in `Inbox/Media/` and Buzz `#inbox` says when it is ready.
+- **Chat history.** A Claude or ChatGPT export goes through `brainless chats triage`
+  (writes nothing), then `import` into `raw/chats/`, skipping short and personal
+  conversations and redacting secrets. `promote` moves the ones worth compiling to
+  `Library/Chats/`.
 - **Documents.** Put PDFs, Word files, spreadsheets, presentations or supported
   audio in `Work/`, `Personal/` or `Library/`. MarkItDown creates a raw Markdown
   conversion beside the original. High-value resources also get a Summary and a
@@ -81,9 +90,11 @@ the source.
 | Every 2 minutes on the worker | `telegram_worker.sh` | Polls Telegram, transcribes voice locally, reads photos, fetches links, and writes `Thinking/Daily/` or `Inbox/Links/`. |
 | Every 2 minutes on the worker | `buzz_capture_worker.sh` | Reads owner posts in Buzz `#inbox`, handles text, voice, images and links, and writes the same capture homes. |
 | Hourly | `cron_wrapper.sh` -> `smart_processor.py` | Converts documents, OCRs missed Inbox images, validates outputs, and records retry state. |
+| Every 10 minutes on the worker | `tools/media_import.py run` | Works the YouTube and podcast queue one link at a time and writes `Inbox/Media/`. |
 | 12:30 and 21:20 | `tools/dialectic.py` | Clusters that day's Telegram and Buzz captures, asks six critical personas to argue them in `#dialectic`, and files the synthesis. |
 | 21:00 | `tools/evening_closeout.py` | Reads the day's captures and proposes one seed, one decision and one contradiction. |
-| 23:00 | `tools/nightly_processor.py` | Turns daily captures into a digest, extracts owner tasks, archives raw files, compiles `.wiki/`, and refreshes lint. |
+| 23:00 | `tools/nightly_processor.py` | Turns daily captures into a digest, extracts owner tasks, archives raw files, compiles `.wiki/` (summaries, concept pages, entities, aliases, links, index), refreshes lint and scores the retrieval questions. |
+| Monthly, from the hourly job | `tools/vault_archive.py create` | Seals the vault and its history with `age` into the backup folder, newest six kept. |
 | Weekly | `resurface`, `thinking`, `reconcile`, `lint` | Brings due decisions back, asks a reflective question, checks belief drift and repairs the compiled layer. |
 
 ## The connection loop

@@ -245,6 +245,39 @@ its own kind of outage.
 
 ---
 
+### `tools/hooks/claude_guard.py`
+
+**Definition.** The vault's standing rules, enforced on every Claude Code tool call.
+
+**Description.** `.claude/settings.json` wires three subcommands. Each reads the hook
+JSON on stdin.
+
+- `pre` runs before every Write, Edit, MultiEdit, NotebookEdit and Bash call:
+  - **denied:** an em or en dash in new text, a file name, a command or a commit message;
+  - **denied:** a real secret shape (private key, GitHub, Google, OpenAI, Slack or AWS
+    token, JWT, bot token, TR IBAN), using the same patterns as the export leak scan;
+  - **denied:** a dated briefing written anywhere except `Daily Briefings/`;
+  - **ask first:** a write into a human area (the drafts folders are exempt);
+  - **ask first:** a deletion outside the temp folders, or a git command that rewrites
+    history.
+- `post` sends a `.wiki` page back to the model when its frontmatter lacks `lang` or
+  `summary_en`.
+- `session` loads CONTEXT.md and PROJECTS-ACTIVE.md into every new session.
+
+A dash that is already in a file does not block an edit next to it; only new ones count.
+Each call takes about 25 ms.
+
+**Philosophy.** A rule written in a prompt is a preference. An agent that can do the
+wrong thing eventually will, in a context nobody predicted, and the dash rule proved it:
+the model kept writing dashes through heredocs after being told not to. So the rules
+became checks. The guard is silent when a call passes. It fails open: bad input or a bug
+in the checker exits 0, so only the check itself can block and never the machinery around
+it. It makes no judgement calls. Style, privacy tiers and filing need judgement and stay
+in the prompts and in the editor lint. Human areas get a question, not a refusal, because
+the rule is "ask first", not "never".
+
+---
+
 ## 1. Gather: capture
 
 ### `.agents/scripts/telegram_capture.py`
@@ -276,6 +309,35 @@ seen-id file and a since-timestamp.
 failure is logged and, where possible, reported back into the thread, for the same
 reason as above: a capture channel that drops things quietly teaches you to stop
 trusting it, and then you stop capturing.
+
+### `tools/media_import.py`
+
+**Definition.** YouTube videos and podcast episodes in, as dated, timestamped transcripts.
+
+**Description.** A YouTube or Apple Podcasts link shared in Telegram or Buzz is only queued,
+and the capture answers at once. The `brainless-media` timer on the worker runs one job
+every 10 minutes:
+
+- **YouTube:** `yt-dlp` fetches the captions, uploaded ones before automatic ones, with no
+  video download. When a video has no captions, the audio goes through Whisper.
+- **Apple Podcasts:** the episode id in the link resolves through Apple's public lookup API
+  to the show's own MP3. `whisper-cli` then transcribes it on the machine, with the same
+  model as voice notes.
+
+A cleaning pass adds punctuation, paragraphs and speaker turns without cutting anything. It
+keeps a `[mm:ss]` marker every three minutes, plus YouTube's chapter headings. The result
+lands in `Inbox/Media/` with title, show, URL, date and duration, and the nightly compile
+picks it up. Buzz #inbox says when it is ready. Sharing the same link twice makes one job.
+A show link without an episode, or anything over four hours, is refused with a reason.
+`add <url>` queues a link by hand.
+
+**Philosophy.** An hour of talk leaves almost nothing a week later, and a transcript is the
+text the vault can use. Capture stays instant because transcription can take an hour. The
+audio never leaves the machine. The timestamps matter more than they look: a claim the
+wiki attributes to minute 34 can be checked in ten seconds, and one without a timestamp
+never gets checked.
+
+---
 
 ### `.agents/scripts/smart_processor.py`
 
@@ -378,11 +440,43 @@ timeout used to be 30 minutes, until a backlog was cut short three nights runnin
 
 **Definition.** The compiler. Human folders in, `.wiki/` out.
 
-**Description.** Five phases: summaries (one per source note), projects (a mirror per
-`notes.md`, tracking every permitted source file beneath it), articles (clusters of
-summaries), ideas (derived from beliefs and decisions) and the index, plus entity pages
-from the registry. Incremental by default, using source digests and modification times.
-Flags: `--full-rebuild`, `--dry-run`, `--only <phase>`.
+**Description.** The phases run in this order:
+
+1. summaries: one per source note.
+2. concept-assign: each summary gets the concepts it informs, from the registry in
+   `_Agent-Context/concepts.md`.
+3. concepts: each concept page is updated in place from the summaries it has not seen yet.
+4. projects: a mirror per `notes.md`, tracking every permitted source file beneath it.
+5. entities: pages built from the entity registry.
+6. link: a deterministic linker. It turns the first mention of a registered entity or an
+   active concept in summaries and filed queries into a link. It uses no model, creates no
+   page and rewrites no text. A bare first name that runs straight into another capitalised
+   word is someone else and gets no link.
+7. ideas: derived from beliefs and decisions.
+8. index.
+
+A project mirror that shares its name with an entity page is written as
+`<Name> (project).md` and links to the entity, so a `[[Name]]` link is never ambiguous.
+
+It is incremental by default, using source digests and modification times. The flags are
+`--full-rebuild`, `--dry-run` and `--only <phase>`. Two phases run only when named:
+
+- `concept-propose` suggests a starting set of concepts.
+- `concept-migrate` turned the old articles into concepts.
+
+**Concept pages.** A summary says what one source said. A concept page says what the vault
+knows about one idea, and each new source updates it instead of adding a page beside it.
+
+- **Disagreements.** When a source disagrees with the page, both positions are kept with
+  their sources and dates. An outdated claim is struck through and kept, never deleted.
+- **Confidence.** Every claim carries a label: primary, secondary, self-reported or
+  unverified.
+- **Validator.** The model rewrites the whole page, so a deterministic check in
+  `tools/concepts.py` refuses any rewrite that loses a struck claim or a cited source, uses
+  a dash, or shrinks the page. The old page stays in place.
+- **Proposals.** The compiler proposes new concepts in #thinking. A concept becomes active
+  only when I change its registry row to active. Concepts built on family or health sources
+  are marked personal: Buzz only counts them, and they are never exported.
 
 **Philosophy.** `.wiki/` is disposable. Anything in it can be regenerated, which is what
 lets the machine own a folder without anyone worrying about what it does there. Private
@@ -406,6 +500,136 @@ option is off unless you ask twice. Unresolved links are counted as demand, sinc
 page that twelve notes point to and nobody has written is a to-do list and not an
 error. Index links do not count as inbound, otherwise the generated index would hide
 every orphan.
+
+### `tools/wiki_metrics.py` and `tools/wiki_dedupe.py`
+
+**Definition.** Whether the wiki is still a graph, and which of its pages are probably one page.
+
+**Description.** `wiki_metrics` reads the same link graph as lint and computes:
+
+- the orphan rate (healthy under 5%, red over 15%);
+- links per page (healthy 3 to 8);
+- the share of pages in the largest connected component (healthy 80% or more);
+- the concept pages not compiled for 90 days;
+- the three bridge pages with the highest betweenness.
+
+`wiki_dedupe` proposes merges from four signals:
+
+- **alias:** two pages answer to the same name;
+- **title:** the titles nearly match;
+- **clash:** an entity and a project mirror share a file name, so `[[links]]` are ambiguous;
+- **inbound:** concept or idea pages are linked from the same sources.
+
+Both feed `.wiki/_lint-report.md`. The Sunday scorecard keeps 26 weeks of the graph numbers,
+and `health_check` turns them into a row in HEALTH.md.
+
+**Philosophy.** Using the vault day to day never shows that linking has stopped working.
+Ingestion keeps writing pages, and a growing share of them become unreachable. Only the
+direction of these numbers shows it. Merging stays a human decision, because two pages that
+look alike are often a general case and a specific one, and a merge cannot be undone by
+reading a diff.
+
+---
+
+### `tools/retrieval_eval.py`
+
+**Definition.** Whether asking the vault still finds the right page.
+
+**Description.** The questions live in `_Agent-Context/retrieval-golden.json`, which is
+private because it names real pages. There are about twenty, each written the way I would
+ask it, with the pages that answer it. The eval runs them through `wiki_search.search()`,
+the same entry point an agent uses, and reports three numbers: hit@1, hit@5 and MRR@10.
+
+- **Last run:** kept in `.agents/state/`, so a change names the questions that moved, not
+  just the average.
+- **Nightly:** the job runs the set after the compile and puts `hit5` in its run log.
+  `health_check` warns when hit@5 falls 15 points below its best of the fortnight.
+- **Floor:** `--min-hit5 N` exits non-zero below that score, for use as a gate.
+
+**Philosophy.** Search degrades without an error. A compile change reshapes the summaries,
+or a prune archives the page one question depended on, and every answer still reads
+fluently. A fixed set of questions scored the same way every night is the only thing that
+notices. The questions are written in my words, not the pages', because that gap is the
+whole job of search. When a miss is really a wrong expectation, the fix is to widen the
+expected pages. Rewording the question until it passes would defeat the test.
+
+---
+
+### `tools/run_log.py`
+
+**Definition.** One line per scheduled run, with what the run actually did.
+
+**Description.** `worker_job.sh` and `cron_wrapper.sh` run each job through
+`run_log.py exec -- ...`. The wrapper streams the job's output and returns its exit code
+unchanged. It also keeps the last `RUNLOG k=v` line the job printed and records the run in
+`.agents/state/runs.jsonl`.
+
+A 14-day rollup goes to `_Agent-Context/RUNS-<host>.md`, one file per machine so the two
+never race. `health_check` reads both files and warns in three cases:
+
+- a job's last run failed;
+- a job went quiet for 2.5 times its usual gap;
+- a capture path returned zero for days (nightly captures for 3 days, Spiky reports for 7).
+
+The nightly processor now exits 1 when the digest fails, and it reports the compiler's exit
+code instead of dropping it.
+
+**Philosophy.** An exit code only says a job did not crash. The failure that hides is the
+run that finishes and does nothing, night after night. Counting the work turns that into a
+row that is visible the next morning.
+
+---
+
+### `tools/chat_import.py`
+
+**Definition.** Chat history from Claude or ChatGPT, filtered on the way in.
+
+**Description.** It has three commands:
+
+- `triage` lists every conversation and writes nothing.
+- `import` writes one file per conversation to `raw/chats/<source>/`. It skips short and
+  personal conversations, redacts secret shapes, and re-running it changes nothing.
+- `promote` moves the conversations worth compiling to `Library/Chats/`. The compiler
+  summarises those around what I was working out and what I concluded, with the date.
+
+**Philosophy.** Chat logs record me thinking, which makes them valuable, and they are the
+most sensitive material I have. Redacting after ingest does not work, because by then the
+text has spread into summaries and links. So the decision about what lands is made before
+anything lands.
+
+---
+
+### `tools/output_guard.py` and `tools/graph_export.py`
+
+**Definition.** A check that stops the model's talk about itself from becoming a wiki
+page, and the link graph as a file Gephi opens ready to look at.
+
+**Description.** The guard looks at the start and end of a page for the model narrating its
+tools or delivery ("Write is disabled in this session, so I'll output…", "here is the
+compiled…", "please approve the write"). It also looks for a second frontmatter block
+nested in the body. Code blocks are skipped, so a template or a proposal can show
+frontmatter. It is applied in four places:
+
+- the compiler refuses to write such output, and the page it had stays;
+- the concept validator rejects it;
+- the nightly digest treats it as no digest;
+- lint lists the pages already on disk. With `--fix`, compiled pages are queued for
+  recompile; digests and filed queries need a hand edit.
+
+`graph_export.py` writes GEXF, or GraphML with `--format graphml`, into `logs/graph/`.
+Colours mark the page type and sizes follow link count. Each node carries its degree,
+betweenness, component size and an orphan flag, so Gephi can filter and rank without
+setup. `--no-summaries --main-only` gives the concept graph without the islands.
+
+**Philosophy.** A sentence like "Write is disabled" is harmless in a terminal. In a wiki it
+becomes the page's summary, its line in the index and what search matches. Ten pages
+carried one, one of them for a month, and nothing errored. A pattern check at the moment of
+writing costs nothing and catches the whole class. The export exists because the Obsidian
+graph view computes nothing: the bridges and the islands are numbers, and a picture made
+from those numbers is worth more than the default hairball. The file stays on this machine,
+because its labels are real names.
+
+---
 
 ### `tools/wiki_search.py`
 
@@ -728,13 +952,43 @@ result.
 must carry the health block at the top, so a broken pipe is the first thing I read in
 the morning and not something I discover three weeks later.
 
+### `tools/vault_archive.py`
+
+**Definition.** A monthly encrypted copy of the vault that sync cannot reach, with a
+restore test.
+
+**Description.**
+
+- **create:** makes one archive. It holds the working tree, private homes included, plus
+  a git bundle of the full history. The archive is streamed through `age` to a public key
+  and written to the backup folder, a Google Drive for desktop folder. No plaintext
+  archive ever touches disk, and the newest six archives are kept.
+- **verify:** the restore test. It decrypts an archive with the private key, unpacks it
+  to a temporary folder, and checks three things: every file in the manifest is there at
+  its size, the history clones, and the wiki's links resolve.
+- **Schedule:** the Mac's hourly job runs `create --if-older-days 30`, so an archive
+  happens once a month. HEALTH.md goes yellow after 35 days without an archive, or 120
+  days without a restore test, and red after 60 days.
+- **Config:** `backup_dir` and `backup_recipient` (the `age1...` public key) in PROFILE.md.
+
+**Philosophy.** Sync is not backup. The two machines and GitHub follow each other, so a
+bad automation run or a bad history rewrite reaches every copy within minutes. The risk is
+not a dead disk. It is noticing three weeks later. The machine that makes the backups holds
+only the public key, so a stolen laptop or a leaked Drive folder cannot open them; the
+private key lives in the password manager. That matters more than usual here, because the
+Drive is a work account and the vault holds family and health folders. A backup that was
+never restored is a hope, so restoring is part of the tool and the health check counts
+the days since the last one.
+
+---
+
 ### `tools/wiki_prune.py`
 
 **Definition.** Counts the pile, then drains it, with no model.
 
 **Description.** Sundays at 16:30 on the worker, before the research pass. `--count`
 writes `_Agent-Context/PILE-SCORECARD.md`: captures per graded decision, filed analyses
-per decision, Inbox files older than fourteen days, orphan wiki pages, concept articles
+per decision, Inbox files older than fourteen days, orphan wiki pages, concept pages
 that draw on more than one home, decisions and challenged beliefs in the window, pages
 archived. `--archive` lists what four mechanical rules would move to `.wiki/_archive/`
 and `--apply` moves it: an unlinked analysis after 30 days (research, decision and

@@ -185,8 +185,8 @@ def ensure_frontmatter(path: Path, dry_run: bool = False) -> list[str]:
     if "lang" in missing:
         if "digests/" in rel or "/ideas/" in rel or "/articles/" in rel or "/moc/" in rel:
             additions["lang"] = "en"
-        elif "summaries/" in rel:
-            # Summaries are written in the owner's output language (PROFILE.md).
+        elif "summaries/" in rel or "/concepts/" in rel:
+            # Summaries and concepts are written in the owner's output language (PROFILE.md).
             additions["lang"] = LANG
         else:
             additions["lang"] = "en"
@@ -243,9 +243,12 @@ def all_wiki_files():
 
     An archived page (tools/wiki_prune.py) is out of the graph on purpose: it
     must not count as an orphan and must not grant an inbound edge to anything.
+    Topic indexes (.wiki/_index/) are out for the same reason INDEX.md never
+    grants an inbound edge: they link to everything, and would hide every orphan.
     """
     return sorted(p for p in WIKI.rglob("*.md")
-                  if "_lint-report" not in p.name and ARCHIVE not in p.parents)
+                  if "_lint-report" not in p.name and ARCHIVE not in p.parents
+                  and "_index" not in p.relative_to(WIKI).parts)
 
 
 def _resolve(target, by_relpath, by_stem):
@@ -524,12 +527,63 @@ def main():
         lines.append(r)
     lines.append("")
 
+    # Pages that are the model talking about itself (tools/output_guard.py).
+    # With --fix, a compiled page gets a sources_hash that matches nothing, so the
+    # next compile rebuilds it; a digest or a filed query cannot be rebuilt, so it is listed.
+    import output_guard
+    junk = []
+    for p in files:
+        if "_commands" in p.parts or "_index" in p.parts:
+            continue
+        found = output_guard.problems(p.read_text(errors="replace"))
+        if found:
+            junk.append((p, found[0]))
+    requeued = []
+    if args.fix and not args.dry_run:
+        for p, _ in junk:
+            if p.relative_to(WIKI).parts[0] in ("summaries", "entities", "projects"):
+                # A hash that matches no source set: removing it would fall back
+                # to file dates, which a fresh write makes look current.
+                text = p.read_text()
+                if re.search(r"^sources_hash:", text, re.M):
+                    new = re.sub(r"^sources_hash:.*$", "sources_hash: 000000", text, count=1, flags=re.M)
+                else:
+                    new = re.sub(r"\A---\n", "---\nsources_hash: 000000\n", text, count=1)
+                if new != text:
+                    p.write_text(new)
+                    requeued.append(p)
+    lines += ["## Model output instead of content", ""]
+    if junk:
+        lines += [f"- `{p.relative_to(WIKI)}`: {why}" + (" (queued for recompile)" if p in requeued else "")
+                  for p, why in junk]
+        lines += ["", "Compiled pages are rebuilt after `lint_wiki.py --fix`; digests and filed queries "
+                      "need a hand edit.", ""]
+    else:
+        lines += ["None.", ""]
+
+    # Graph health and merge proposals: rates and candidates, never actions.
+    metrics, dupes = {}, []
+    try:
+        import wiki_metrics
+        import wiki_dedupe
+        metrics = wiki_metrics.compute()
+        lines += wiki_metrics.markdown(metrics)
+        dupes = wiki_dedupe.proposals()
+        lines += wiki_dedupe.markdown(dupes)
+    except Exception as e:  # the report must still be written
+        lines += [f"_graph health / dedupe skipped: {e}_", ""]
+
     out = WIKI / "_lint-report.md"
     out.write_text("\n".join(lines))
     print(f"[ok] {out.relative_to(VAULT)}")
     print(f"real_broken={len(real_broken)} placeholders_suppressed={placeholder_count} "
           f"external={len(external_refs)} orphans={len(orphans)} stale={len(stale)} "
           f"fm_issues={len(fm_issues)} fixed={len(fixed)}")
+    if metrics:
+        print(f"orphan_rate={metrics['orphan_rate']} avg_degree={metrics['avg_degree']} "
+              f"main_share={metrics['main_share']} components={metrics['components']} dupes={len(dupes)}")
+    print(f"RUNLOG broken={len(real_broken)} orphans={len(orphans)} fixed={len(fixed)} dupes={len(dupes)} "
+          f"junk={len(junk)}")
 
 
 if __name__ == "__main__":

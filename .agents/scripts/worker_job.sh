@@ -25,7 +25,9 @@ if ! python3 tools/net_wait.py --wait; then
 fi
 
 flock -w 300 "$LOCK" git pull --rebase --autostash --quiet || true
-python3 "$@"
+# run_log records the run with its counts (tools/run_log.py) and returns the
+# tool's own exit code, so OnFailure and the backup behave exactly as before.
+python3 tools/run_log.py exec -- python3 "$@"
 status=$?
 flock -w 300 "$LOCK" bash .agents/scripts/worker_backup.sh || true
 exit "$status"

@@ -37,5 +37,8 @@
   "readme": "# Arşivlenmiş wiki sayfaları\n\n`tools/wiki_prune.py`'nin mekanik kurallarla, her taşımanın gerekçesi yazılı olarak (bkz. `LOG.md`) buraya taşıdığı sayfalar. Bu klasördeki hiçbir şey indekslenmez, aranmaz, lint'lenmez; bir taşımanın geri alınabilmesi ve gerekçesinin okunabilmesi için tutulur.\n\nKurallar: 30 gündür kimsenin bağlamadığı dosyalanmış analiz (research, decide ve dialectic notları hiç eskimez); kaynağı derlenen köklerden çıkmış ve 60 gündür bağlanmamış özet; 60 gündür ne gelen ne giden linki olan ve hiçbir işin yeniden üretmeyeceği sayfa.\n\nBir sayfayı geri almak için: logdaki yola `git mv` ile geri koy ve satırı geri alındı diye işaretle.",
   "log_candidates": "arşiv adayı: {n} ({detail})",
   "log_applied": "{n} taşındı, {skipped} atlandı (hedef zaten vardı)",
-  "log_scorecard": "sayaç yazıldı: {path} (inbox eski {inbox}, orphan {orphans}, karar başına analiz {qpd})"
+  "log_scorecard": "sayaç yazıldı: {path} (inbox eski {inbox}, orphan {orphans}, karar başına analiz {qpd})",
+  "graph_heading": "## Graf sağlığı, son {n} hafta",
+  "graph_intro": "Sağlıklı: orphan yüzde 5 altı, derece 3 ile 8 arası, ana bileşen yüzde 80 ve üstü (tools/wiki_metrics.py).",
+  "graph_header": "| Tarih | Sayfa | Orphan | Ort. derece | Ana bileşen | Bileşen | Bayat kavram | Köprüler |"
 }

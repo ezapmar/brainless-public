@@ -26,7 +26,7 @@ if [ -f "$LOG" ]; then
   fi
 fi
 
-python3 .agents/scripts/smart_processor.py >> "$LOG" 2>&1
+python3 tools/run_log.py exec -- python3 .agents/scripts/smart_processor.py >> "$LOG" 2>&1
 status=$?
 
 # Failure alerting: the processor exits non-zero when conversions fail. Surface
@@ -45,6 +45,10 @@ fi
 python3 .agents/scripts/crm_capture.py >> "$CRM_LOG" 2>&1
 bash .agents/scripts/buzz_crm_sync.sh >> "$CRM_LOG" 2>&1
 
+# Monthly encrypted archive to the Drive folder (no-op until 30 days have
+# passed; tools/vault_archive.py). Runs on the Mac, where Drive is mounted.
+python3 tools/run_log.py exec -- python3 tools/vault_archive.py create --if-older-days 30 >> logs/backup.log 2>&1
+
 # Hourly heartbeat: refresh _Agent-Context/HEALTH.md (cheap, no LLM calls).
 python3 tools/health_check.py >> logs/health_check.log 2>&1
 
@@ -57,10 +61,12 @@ python3 tools/health_check.py >> logs/health_check.log 2>&1
 # vault edits are never swept in. vault_backup.sh keeps ownership of the push
 # (its network-wait and rebase-recovery logic stays the single place for that).
 GEN_FILES=()
-for f in _Agent-Context/CRM.md _Agent-Context/HEALTH.md _Agent-Context/KILL-CRITERIA.md; do
+for f in _Agent-Context/CRM.md _Agent-Context/HEALTH.md _Agent-Context/KILL-CRITERIA.md _Agent-Context/RUNS-mac.md; do
   [ -f "$f" ] && GEN_FILES+=("$f")
 done
-if [ "${#GEN_FILES[@]}" -gt 0 ] && ! git diff --quiet -- "${GEN_FILES[@]}" 2>/dev/null; then
+# The run log is created on its first run; a pathspec commit needs it tracked.
+[ -f _Agent-Context/RUNS-mac.md ] && git add -- _Agent-Context/RUNS-mac.md 2>/dev/null
+if [ "${#GEN_FILES[@]}" -gt 0 ] && ! git diff --cached --quiet -- "${GEN_FILES[@]}" 2>/dev/null; then
   git commit --quiet -m "context refresh: $(date '+%F-%H%M')" -- "${GEN_FILES[@]}" 2>/dev/null || true
 fi
 

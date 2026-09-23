@@ -296,11 +296,23 @@ def main():
         # Heartbeat line: health_check.py watches this log's mtime to know
         # the job is alive even on days with nothing to process.
         print(f"{datetime.now()}: No capture files.")
+        # Counted, so a capture path that died shows up as days of zeros
+        # (tools/run_log.py, health_check dry-capture row).
+        print("RUNLOG captures=0 digest=0")
         return
 
     print(f"{datetime.now()}: Processing {len(notes)} files...")
     labels = classify_today(notes)
     summary = process_notes(notes, labels)
+    # A digest that is the model talking about its tools is not a digest
+    # (tools/output_guard.py): treat it as no digest, keep the captures.
+    try:
+        import output_guard
+        if summary and output_guard.is_bad(summary):
+            print(f"Digest refused: {'; '.join(output_guard.problems(summary))}")
+            summary = None
+    except ImportError:
+        pass
 
     if summary:
         date_str = datetime.now().strftime("%Y-%m-%d")
@@ -323,14 +335,17 @@ def main():
                 shutil.move(f, date_archive_dir)
             print(f"Archived {len(notes)} files.")
 
-            # After daily digest, run incremental wiki compile
+            # After daily digest, run incremental wiki compile. Its exit code
+            # used to be dropped here (check=False), so a night where most
+            # model calls failed still looked like a clean run.
+            compile_rc = -1
             try:
-                subprocess.run(
+                compile_rc = subprocess.run(
                     [sys.executable, "-u",
                      os.path.join(VAULT_ROOT, 'tools/compile_resources.py'),
                      f"--budget-seconds={COMPILE_BUDGET}"],
                     cwd=VAULT_ROOT, check=False, timeout=COMPILE_TIMEOUT,
-                )
+                ).returncode
             except Exception as e:
                 print(f"compile_resources error: {e}")
 
@@ -342,15 +357,33 @@ def main():
                 )
             except Exception as e:
                 print(f"lint_wiki report refresh skipped: {e}")
+            # Retrieval check after the compile: the same golden questions every
+            # night, so a compile change that hurts search shows up as a number.
+            hit5 = ""
+            try:
+                import retrieval_eval
+                res = retrieval_eval.evaluate()
+                if res["n"]:
+                    hit5 = f" hit5={res['hit5']}"
+            except Exception as e:
+                print(f"retrieval eval skipped: {e}")
+            print(f"RUNLOG captures={len(notes)} digest=1 compile_rc={compile_rc}{hit5}"
+                  + ("" if compile_rc == 0 else " status=partial"))
         except Exception as e:
             print(f"Error: {e}")
+            print(f"RUNLOG captures={len(notes)} digest=0 status=fail")
+            sys.exit(1)
     else:
         print("Failed to generate summary.")
+        print(f"RUNLOG captures={len(notes)} digest=0 status=fail")
         if shutil.which("osascript"):  # macOS-only notification
             import subprocess as _sp
             _sp.run(["osascript", "-e",
                      'display notification "Nightly processor: Claude returned no summary" with title "brainless"'],
                     check=False)
+        # A digest that did not happen is a failed run, not a quiet one: exit 1
+        # so OnFailure reaches #ops. The captures stay in place for tomorrow.
+        sys.exit(1)
 
 if __name__ == "__main__":
     main()

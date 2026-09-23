@@ -55,5 +55,17 @@
   "privacy_exposed": "NOT ignored: {paths}. A rename broke a .gitignore rule; fix before the next commit",
   "pile_label": "Pile (Inbox older than 14 days)",
   "pile_detail": "{inbox} files; the belief's criterion is near zero. Analyses per decision {qpd}, orphan pages {orphans}, counted {date}",
-  "pile_missing": "no scorecard yet; run tools/wiki_prune.py --count"
+  "pile_missing": "no scorecard yet; run tools/wiki_prune.py --count",
+  "graph_label": "Wiki graph",
+  "graph_detail": "orphans {orphans}, degree {degree}, main component {main} ({date})",
+  "runs_label": "Run log",
+  "runs_ok": "{jobs} jobs, none failed, quiet or dry",
+  "runs_failed": "{job} failed last run ({day} {time})",
+  "runs_quiet": "{job} silent for {days} days",
+  "runs_dry": "{job} {field}=0 for {days} days, capture path may be broken",
+  "runs_retrieval": "retrieval fell to hit@5 {now}% (best {best}% this fortnight), see tools/retrieval_eval.py",
+  "backup_label": "Backup",
+  "backup_none": "no encrypted archive yet (tools/vault_archive.py create)",
+  "backup_detail": "last archive {made} days ago, last restore test: {verified} days ago",
+  "backup_never": "never"
 }

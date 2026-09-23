@@ -37,5 +37,8 @@
   "readme": "# Archived wiki pages\n\nPages moved here by `tools/wiki_prune.py`, under mechanical rules with a stated reason for each move (see `LOG.md`). Nothing in this folder is indexed, searched or linted; it is kept so that a move can be undone and a reason can be read.\n\nThe rules: a filed analysis that nothing linked to for 30 days (research, decision and dialectic notes never age out); a summary whose source left the compiled roots, unlinked for 60 days; any page with no link in or out for 60 days that no job would rebuild.\n\nTo restore a page: `git mv` it back to the path in the log and mark the row restored.",
   "log_candidates": "archive candidates: {n} ({detail})",
   "log_applied": "moved {n}, skipped {skipped} (destination already existed)",
-  "log_scorecard": "scorecard written: {path} (inbox stale {inbox}, orphans {orphans}, analyses per decision {qpd})"
+  "log_scorecard": "scorecard written: {path} (inbox stale {inbox}, orphans {orphans}, analyses per decision {qpd})",
+  "graph_heading": "## Graph health, last {n} weeks",
+  "graph_intro": "Healthy: orphans under 5%, degree 3 to 8, main component 80% or more (tools/wiki_metrics.py).",
+  "graph_header": "| Date | Pages | Orphans | Avg degree | Main component | Components | Stale concepts | Bridges |"
 }

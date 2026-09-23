@@ -12,7 +12,7 @@ import json
 import shutil
 import subprocess
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 
 VAULT = os.environ.get("BRAINLESS_VAULT") or os.path.expanduser("~/projects/brainless")
 import sys
@@ -260,6 +260,133 @@ def check_pile():
                          orphans=data.get("orphans", "?"), date=data.get("date", "?")))
 
 
+def _pile_line():
+    try:
+        with open(os.path.join(VAULT, "_Agent-Context", "PILE-SCORECARD.md"), errors="replace") as fh:
+            m = re.search(r"<!-- pile: (\{.*?\}) -->", fh.read())
+        return json.loads(m.group(1)) if m else None
+    except (OSError, ValueError):
+        return None
+
+
+def check_graph():
+    """Graph health from the Sunday scorecard (tools/wiki_metrics.py). A rising
+    orphan rate means ingestion writes pages without connecting them, the exact
+    failure that turns a wiki back into a folder, and nothing else errors."""
+    data = _pile_line()
+    if not data or "orphan_rate" not in data:
+        return  # older scorecard; the row appears after the next Sunday count
+    import wiki_metrics
+    worst = "OK"
+    for _, status, _ in wiki_metrics.verdicts(data):
+        worst = max(worst, status, key=["OK", "WARN", "RED"].index)
+    add(t("health_check.graph_label"), worst, t(
+        "health_check.graph_detail", orphans=f"{data['orphan_rate']:.0%}", degree=data["avg_degree"],
+        main=f"{data['main_share']:.0%}", date=data.get("date", "?")))
+
+
+def _runs_text(host):
+    """RUNS-<host>.md: the worker's freshest copy is on origin, the Mac's is local."""
+    rel = f"_Agent-Context/RUNS-{host}.md"
+    if host != "mac":
+        try:
+            text = subprocess.run(["git", "show", f"origin/master:{rel}"], cwd=VAULT,
+                                  capture_output=True, text=True, timeout=30).stdout
+            if text.strip():
+                return text
+        except Exception:
+            pass
+    try:
+        with open(os.path.join(VAULT, rel), errors="replace") as fh:
+            return fh.read()
+    except OSError:
+        return ""
+
+
+# Capture paths that should produce something within these many days; zeros
+# for longer mean the path is broken, not that the owner was quiet.
+DRY_CAPTURE = {("nightly_processor", "captures"): 3, ("spiky_capture", "reports"): 7}
+
+
+def run_findings(roll, now=None):
+    """(status, text) findings from a run-log rollup (tools/run_log.py)."""
+    now = now or datetime.now()
+    today = now.strftime("%Y-%m-%d")
+    by_job = {}
+    for e in roll:
+        by_job.setdefault(e["job"], []).append(e)
+    out = []
+    for job, days in sorted(by_job.items()):
+        days.sort(key=lambda e: e["day"])
+        last = days[-1]
+        if last["status"] == "fail":
+            out.append(("WARN", t("health_check.runs_failed", job=job, day=last["day"], time=last["last"])))
+        # Expected gap from the job's own history: several runs a day, or one run every few days.
+        if len(days) >= 2:
+            span = (datetime.strptime(last["day"], "%Y-%m-%d")
+                    - datetime.strptime(days[0]["day"], "%Y-%m-%d")).days or 1
+            per_day = sum(e["runs"] for e in days) / max(span, 1)
+            gap_days = max(1.0, 1 / per_day) if per_day else span
+            quiet = (now - datetime.strptime(f"{last['day']} {last['last']}", "%Y-%m-%d %H:%M")).total_seconds() / 86400
+            if quiet > 2.5 * gap_days:
+                out.append(("WARN", t("health_check.runs_quiet", job=job, days=f"{quiet:.1f}")))
+        # Retrieval regression: hit@5 on the golden questions fell 15+ points
+        # below its best in the window (tools/retrieval_eval.py).
+        scores = [e["counts"]["hit5"] for e in days if isinstance(e["counts"].get("hit5"), int)]
+        if scores and max(scores) - scores[-1] >= 15:
+            out.append(("WARN", t("health_check.runs_retrieval", job=job, now=scores[-1], best=max(scores))))
+        for (j, key), limit in DRY_CAPTURE.items():
+            if j != job:
+                continue
+            recent = [e for e in days if e["day"] > (now - timedelta(days=limit)).strftime("%Y-%m-%d")]
+            covered = days[0]["day"] <= (now - timedelta(days=limit - 1)).strftime("%Y-%m-%d")
+            if covered and recent and all(e["counts"].get(key, 0) == 0 for e in recent):
+                out.append(("WARN", t("health_check.runs_dry", job=job, field=key, days=limit)))
+    return out
+
+
+def check_runs():
+    """Per-run log (tools/run_log.py): a job that failed last time, went quiet,
+    or ran every night with nothing to do. Exit codes miss the last two."""
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    from run_log import read_rollup
+    label = t("health_check.runs_label")
+    findings, jobs = [], 0
+    for host in ("mac", WORKER):
+        roll = read_rollup(_runs_text(host))
+        jobs += len({e["job"] for e in roll})
+        findings += [(s, f"{host}: {msg}") for s, msg in run_findings(roll)]
+    if not jobs:
+        return  # no run log yet on either machine
+    if findings:
+        add(label, "WARN", "; ".join(msg for _, msg in findings[:4])
+            + (f" (+{len(findings) - 4})" if len(findings) > 4 else ""))
+    else:
+        add(label, "OK", t("health_check.runs_ok", jobs=jobs))
+
+
+def check_backup():
+    """The monthly encrypted archive (tools/vault_archive.py) and its restore
+    test. Sync copies damage everywhere; only an archive that sync cannot reach,
+    and that has been restored once, protects against a bad automation run."""
+    path = os.path.join(VAULT, ".agents", "state", "backup.json")
+    try:
+        with open(path) as fh:
+            s = json.load(fh)
+    except (OSError, ValueError):
+        s = {}
+    label = t("health_check.backup_label")
+    if not s.get("created"):
+        add(label, "WARN", t("health_check.backup_none"))
+        return
+    now = datetime.now()
+    made = (now - datetime.fromisoformat(s["created"])).days
+    ver = (now - datetime.fromisoformat(s["verified"])).days if s.get("verified") else None
+    status = "RED" if made > 60 else "WARN" if made > 35 or ver is None or ver > 120 else "OK"
+    add(label, status, t("health_check.backup_detail", made=made,
+                         verified=t("health_check.backup_never") if ver is None else ver))
+
+
 def check_log_errors():
     """Recent error lines in the processor logs."""
     # nightly log lives on the worker now; the stale Mac file must not WARN.
@@ -386,6 +513,9 @@ def main():
     check_morning_briefing()
     check_kill_criteria()
     check_pile()
+    check_graph()
+    check_runs()
+    check_backup()
     check_llm_auth()
     check_buzz_delivery()
     check_crm()

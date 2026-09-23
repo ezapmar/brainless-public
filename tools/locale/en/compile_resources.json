@@ -10,6 +10,15 @@
   "entity_open_items_heading": "## Open Items",
   "entity_relations_heading": "## Relationships",
   "entity_sources_heading": "## Sources",
+  "concept_explanation_heading": "## Explanation",
+  "concept_position_heading": "## Current Position",
+  "concept_contested_heading": "## Contested",
+  "concept_superseded_heading": "## Superseded",
+  "concept_open_heading": "## Open Questions",
+  "concept_related_heading": "## Related",
+  "concept_ping_intro": "The compiler proposes {n} new concept(s):",
+  "concept_ping_personal": "{n} personal proposal(s), details in the vault only.",
+  "concept_ping_howto": "To accept one, change its status from proposed to active in _Agent-Context/concepts.md.",
   "private_name_parts": [
     "passport",
     "schengen"

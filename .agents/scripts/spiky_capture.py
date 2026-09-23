@@ -152,6 +152,7 @@ def process(uid, raw):
         fh.write(t("spiky_capture.note_header", title=title, when=when.strftime('%Y-%m-%d %H:%M'))
                  + f"{body}\n")
     log(f"Report written: {path}")
+    return True
 
 
 def main():
@@ -192,6 +193,7 @@ def main():
     uids = sorted(int(u) for u in (data[0].split() if data and data[0] else []))
     if not uids:
         M.logout()
+        print("RUNLOG reports=0")      # counted, so a dead mail path shows as days of zeros
         return
 
     if last is None and not args.backfill:
@@ -205,13 +207,16 @@ def main():
 
     floor = 0 if args.backfill else int(last or 0)
     new = [u for u in uids if u > floor] if not args.backfill else uids
+    written = errors = 0
     for uid in new:
         typ, msgdata = M.uid("fetch", str(uid), "(RFC822)")
         if typ == "OK" and msgdata and msgdata[0]:
             try:
-                process(uid, msgdata[0][1])
+                written += bool(process(uid, msgdata[0][1]))
             except Exception as e:
+                errors += 1
                 log(f"uid {uid} error: {e}")
+    print(f"RUNLOG reports={written} errors={errors}")
     if not args.backfill:
         # Backfill works with All Mail UIDs; leave the INBOX baseline alone.
         top = max(uids[-1], int(last or 0))

@@ -32,6 +32,28 @@ Before grepping by hand for broad queries, call `python3 tools/wiki_search.py "<
 - Date format: `YYYY-MM-DD`.
 - Frontmatter: match the template in `_Templates/` for the relevant note type.
 
+## Answer contract
+When answering from the vault, every claim cites the page it came from as `[[page]]`. For "what do I know about X" questions, open `.wiki/concepts/` first. Anything the model knows that the vault does not contain goes under a separate heading, "Outside the vault" ("Vault dışı"). Every answer ends with two lines: `Read: [[...]]` and `Not covered: ...`. If the vault has nothing, say so in one sentence and do not fill the gap from general knowledge. The reason: a blended answer is fluent and untraceable, and the gap line is often the more useful half, because it says exactly what to read next.
+
+## Merging duplicates
+`tools/lint_wiki.py` lists merge proposals in `.wiki/_lint-report.md` (from `tools/wiki_dedupe.py`). It never merges. When the owner approves one:
+1. Pick the survivor by its canonical name, not by which page is longer.
+2. Keep every distinct claim with its source. Overlapping claims collapse into one.
+3. Add the dead page's title to the survivor's aliases.
+4. Point every inbound link at the survivor.
+5. Log it in `.wiki/_archive/LOG.md` with both names.
+
+Run merges as a pass of their own, on a clean git state, and never during an ingest. For a "clash" proposal (an entity and a project mirror with the same name), rename one of the two instead of merging them.
+
+## Enforced by hooks
+`.claude/settings.json` runs `tools/hooks/claude_guard.py` on every tool call. It denies em and en dashes (in files, file names, commands and commit messages), secrets and misplaced briefings. It asks before a write into a human area or any deletion. It sends back a `.wiki` page that lacks `lang` or `summary_en`, and it loads CONTEXT.md and PROJECTS-ACTIVE.md at session start. When a hook refuses, fix the output rather than working around the hook.
+
+## Contradictions and supersession
+When a source disagrees with what a wiki page says, record both positions with their sources and dates, and say what would settle it. Never overwrite, and never pick the newer source because it is newer: recency is not evidence. When a claim is simply out of date, strike it through and keep it: `~~old claim~~ superseded YYYY-MM: why ([[source]])`. The reason: the history of what was believed and why is what this vault has that a search engine does not, and a page that silently adopts the latest claim loses it without anything erroring. Claims on concept pages carry a confidence label: primary, secondary, self-reported, unverified. Self-reported numbers never lose that label. `tools/concepts.py` enforces the keep-both and keep-struck parts on every compile.
+
+## Concept pages
+`.wiki/concepts/` holds one page per idea, updated in place by the compiler from the registry `_Agent-Context/concepts.md`. For "what do I know about X" questions, open the concept page first, then its sources. A concept page answers; a summary is evidence.
+
 ## No hallucinated files
 If a note, path, or line you want to cite doesn't actually exist in the vault, say so. Do not invent file names that "should" exist. "I couldn't find X" is a valid and valuable answer.
 

@@ -5,7 +5,8 @@ compile_resources.py: human-tree → .wiki compiler.
 Walks the human-owned homes and compiles .wiki/ artifacts via Claude CLI:
 - Library/, Inbox/, Thinking/Daily/, Personal/, the company area (PROFILE.md) → .wiki/summaries/<slug>.md
 - Work/<P>/notes.md, Personal/<P>/notes.md → .wiki/projects/{work,personal}/<P>.md
-- Clusters summaries → .wiki/articles/<concept>.md
+- Assigns summaries to concepts (_Agent-Context/concepts.md) and updates
+  .wiki/concepts/<slug>.md in place (see tools/concepts.py)
 - Auto-derives .wiki/ideas/ from Thinking/Beliefs + Thinking/Decisions
 - Regenerates .wiki/INDEX.md
 
@@ -18,10 +19,13 @@ Usage:
   python3 tools/compile_resources.py                  # incremental
   python3 tools/compile_resources.py --full-rebuild   # rebuild all
   python3 tools/compile_resources.py --dry-run        # show plan
-  python3 tools/compile_resources.py --only summaries # phase: summaries|articles|projects|ideas|index
+  python3 tools/compile_resources.py --only summaries # phase: summaries|concept-assign|concepts|projects|entities|ideas|index
+  python3 tools/compile_resources.py --only concept-propose  # one-shot: propose a starting concept set
+  python3 tools/compile_resources.py --only concept-migrate  # one-off: articles -> concepts
 """
 import argparse
 import hashlib
+import json
 import os
 import re
 import subprocess
@@ -37,7 +41,10 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from llm import run_prompt
 from owner_profile import LANG, lang_name, output_lang_directive, CROSS_LINK_RULE  # noqa: E402
 from owner_profile import COMPANY_AREA, GENERIC_PRIVATE_SEGMENTS, PRIVATE_SEGMENTS as PROFILE_PRIVATE_SEGMENTS  # noqa: E402
+from owner_profile import PRIVATE_NAME_PARTS as PROFILE_PRIVATE_NAME_PARTS  # noqa: E402
 from i18n import t, t_list  # noqa: E402
+import concepts as C  # noqa: E402
+import output_guard  # noqa: E402
 
 # Per-source prompt cap; smaller-context providers can shrink it (Phase 0 T5).
 MAX_CHARS = int(os.environ.get("BRAINLESS_LLM_MAX_CHARS", "30000"))
@@ -66,7 +73,8 @@ def _nfc(s: str) -> str:
 PRIVATE_SEGMENTS = {_nfc(s) for s in (*GENERIC_PRIVATE_SEGMENTS, *PROFILE_PRIVATE_SEGMENTS)}
 PRIVATE_SUFFIXES = (" - Health",)            # "<name> - Health" folders
 # Sensitive name fragments: the current language's list merged with English (locale data).
-PRIVATE_NAME_PARTS = tuple(_nfc(p).casefold() for p in t_list("compile_resources.private_name_parts"))
+PRIVATE_NAME_PARTS = tuple(_nfc(p).casefold() for p in
+                           (*t_list("compile_resources.private_name_parts"), *PROFILE_PRIVATE_NAME_PARTS))
 # Full sub-path matches (sensitive areas whose segment names are too generic on their own).
 PRIVATE_PATH_PARTS = tuple(_nfc(p).casefold() for p in
                            (COMPANY_AREA.split("/")[-1] + "/Finance/Resources",))
@@ -96,6 +104,7 @@ def slugify(s: str) -> str:
 
 _CLAUDE_CALLS = 0
 _CLAUDE_FAILURES = 0
+_COUNTS = {}   # per-phase work done this run, for the RUNLOG line (tools/run_log.py)
 
 # Wall-clock budget. The phases run in a fixed order and make serial LLM calls
 # of up to 300s each, so a backlog at the front ate the whole night: the nightly
@@ -123,20 +132,26 @@ def out_of_time(phase: str, *, need: int = 0) -> bool:
 
 # Untrusted content (source file bodies) enters the compile prompts, so tool use
 # must be off. If it is not, the model can drift into agentic mode and get stuck
-# (this was the cause of the 150s+ timeouts on rich Work sources like Acme/Nordhaven),
+# (this was the cause of the 150s+ timeouts on rich Work sources),
 # and the settings allowlist would grant code execution / file writes (class C2).
 _DANGEROUS_TOOLS = ["Bash", "Write", "Edit", "MultiEdit", "NotebookEdit",
                     "WebFetch", "WebSearch", "Task"]
 
 
-def call_claude(prompt: str, timeout: int = 300) -> str | None:
+def call_claude(prompt: str, timeout: int = 300, *, concept: bool = False,
+                aliases: bool = False) -> str | None:
     """All compile prompts go through tools/llm.py (Phase 0 T3): same tool-deny
     list, same llm_status breadcrumb, and BRAINLESS_LLM_PROVIDER can swap the
     backend for an OpenAI-compatible endpoint without touching this file."""
     global _CLAUDE_CALLS, _CLAUDE_FAILURES
     _CLAUDE_CALLS += 1
     try:
-        result = run_prompt(prompt.replace("\x00", ""), timeout=timeout, lane="compile")
+        if aliases:
+            result = run_prompt(prompt.replace("\x00", ""), timeout=timeout, lane="compile-aliases")
+        elif concept:
+            result = run_prompt(prompt.replace("\x00", ""), timeout=timeout, lane="compile-concept")
+        else:
+            result = run_prompt(prompt.replace("\x00", ""), timeout=timeout, lane="compile")
     except Exception as exc:  # never let one source kill the batch
         print(f"[llm err] {exc}", file=sys.stderr)
         result = None
@@ -184,7 +199,7 @@ def sources_digest(paths, *, scope="") -> str:
     Why a hash instead of mtime: in a two-machine git setup, `git pull/reset/checkout`
     sets the file mtime to the moment of the OPERATION, not of the content. Result:
     after a sync the generated file always looks "fresh" and is NEVER recompiled again
-    (2026-08-28: the Acme and Nordhaven dossiers stayed frozen at the 24 August seed
+    (2026-08-28: two company dossiers stayed frozen at the 24 August seed
     for this reason). A hash is independent of machine and sync.
     """
     h = hashlib.sha256()
@@ -233,13 +248,20 @@ def stored_zk(dst: Path) -> str | None:
     return m.group(1) if m else None
 
 
-def write_compiled(dst: Path, body: str, sources, *, scope="") -> None:
+def write_compiled(dst: Path, body: str, sources, *, scope="") -> bool:
     """Write the compiled output with a sources_hash stamp (atomic: tmp first, then replace).
 
     We stamp it ourselves, not the model, so the hash is trustworthy. The atomic
-    write keeps a half-finished call from corrupting the file.
+    write keeps a half-finished call from corrupting the file. Output that is the
+    model talking about its tools, or a page wrapped around a copy of itself
+    (tools/output_guard.py), is refused: the existing page stays, unstamped
+    output never lands, and the next run tries again. False when refused.
     """
     text = clean_markdown_output(body).rstrip("\n") + "\n"
+    bad = output_guard.problems(text)
+    if bad:
+        print(f"[reject] {dst.relative_to(VAULT)}: {'; '.join(bad)}", file=sys.stderr)
+        return False
     digest = sources_digest(sources, scope=scope)
     if text.startswith("---\n"):
         end = text.find("\n---", 4)
@@ -249,6 +271,7 @@ def write_compiled(dst: Path, body: str, sources, *, scope="") -> None:
     tmp = dst.with_suffix(dst.suffix + ".tmp")
     tmp.write_text(text)
     tmp.replace(dst)
+    return True
 
 
 def needs_rebuild(src: Path, dst: Path, full: bool) -> bool:
@@ -271,6 +294,16 @@ def iter_sources(roots):
 
 
 # ─── Phase: summaries ───────────────────────────────────────────
+# Promoted chat logs (tools/chat_import.py) record the owner thinking, so the
+# useful extraction is rarely the assistant's answer.
+CHAT_RULE = """
+THIS SOURCE IS ONE OF THE OWNER'S OWN PAST AI CONVERSATIONS. Build the summary
+around what the owner was trying to work out and what they concluded, not
+around the assistant's explanations. Note where the owner changed position and
+what changed it. Keep the conversation date on every conclusion: the owner's
+view may have moved since.
+"""
+
 def summarize_file(src: Path, dry: bool, full: bool) -> bool:
     rel = src.relative_to(VAULT)
     slug = slugify(str(rel).replace("/", "_").rsplit(".", 1)[0])
@@ -285,10 +318,11 @@ def summarize_file(src: Path, dry: bool, full: bool) -> bool:
     except Exception as e:
         print(f"[skip] {rel}: {e}")
         return False
+    chat_rule = CHAT_RULE if str(rel).startswith("Library/Chats/") else ""
     prompt = f"""You are compiling a personal knowledge wiki.
 
 {CROSS_LINK_RULE}
-
+{chat_rule}
 SOURCE FILE: {rel}
 SOURCE CONTENT:
 ---
@@ -314,7 +348,7 @@ status: seed
 - bullet
 
 {LINKS_HEADING}
-<!-- Leave empty. Article backlinks are injected automatically by the articles phase.
+<!-- Leave empty. Concept backlinks are injected automatically by the concepts phase.
      If you must reference another note, use its PLAIN title only, e.g. [[Calm is contagious]].
      NEVER use a path like [[.wiki/articles/...]] or [[wiki/...]]: those do not resolve in Obsidian. -->
 
@@ -327,7 +361,8 @@ status: seed
     if not out:
         print(f"[FAIL] summary {src.relative_to(VAULT)}: not produced", file=sys.stderr)
         return False
-    write_compiled(dst, out, [src])
+    if not write_compiled(dst, out, [src]):
+        return False
     print(f"[ok] {dst.relative_to(VAULT)}")
     return True
 
@@ -339,10 +374,27 @@ def phase_summaries(dry: bool, full: bool):
             break
         if summarize_file(src, dry, full):
             n += 1
+    _COUNTS["summaries"] = n
     print(f"phase summaries: {n} file(s)")
 
 
 # ─── Phase: projects mirror ─────────────────────────────────────
+def _project_dst(cat: str, name: str, dry: bool = False) -> tuple[Path, str | None]:
+    """A mirror that shares its name with an entity page is named '<Name> (project)'
+    and links to the entity: two files with one stem make every [[Name]] link
+    ambiguous (wiki_dedupe 'clash'), and the dossier is the page a link means.
+    An existing bare-name mirror is renamed so its hash, and the work, survive."""
+    dst = WIKI / "projects" / cat / f"{name}.md"
+    if name not in {n for n, _, _ in parse_entity_registry()}:
+        return dst, None
+    new = dst.with_name(f"{name} (project).md")
+    if dst.exists() and not new.exists() and not dry:
+        r = subprocess.run(["git", "-C", str(VAULT), "mv", str(dst), str(new)], capture_output=True)
+        if r.returncode != 0:
+            dst.replace(new)
+    return new, name
+
+
 def phase_projects(dry: bool, full: bool):
     # A "project" is an immediate subfolder of Work/ or Personal/ that already
     # contains a notes.md. We never auto-create notes.md, so non-project homes
@@ -362,7 +414,9 @@ def phase_projects(dry: bool, full: bool):
             if not dry and out_of_time("projects"):
                 break
             sources = sorted(iter_sources([proj_dir]))
-            dst = WIKI / "projects" / cat / f"{proj_dir.name}.md"
+            dst, entity = _project_dst(cat, proj_dir.name, dry)
+            if entity and not dry:
+                _inject_link(dst, entity)
             # Version the dependency policy so old notes-only mirrors are also
             # rebuilt when their other inputs are now excluded for privacy.
             scope = "project-files-v1"
@@ -410,7 +464,10 @@ status: seed
             if not out:
                 print(f"[FAIL] project {proj_dir.name}: not produced", file=sys.stderr)
                 continue
-            write_compiled(dst, out, sources, scope=scope)
+            if not write_compiled(dst, out, sources, scope=scope):
+                continue
+            if entity:
+                _inject_link(dst, entity)       # a rewrite drops injected links
             print(f"[ok] {dst.relative_to(VAULT)}")
             n += 1
     print(f"phase projects: {n} mirror(s)")
@@ -418,13 +475,17 @@ status: seed
 
 def _inject_backlink(summary_stem: str, article_slug: str):
     """Add a resolvable backlink to an article into a member summary's links section."""
-    sp = WIKI / "summaries" / f"{summary_stem}.md"
+    _inject_link(WIKI / "summaries" / f"{summary_stem}.md", article_slug)
+
+
+def _inject_link(sp: Path, target: str) -> bool:
+    """Add `- [[target]]` under the page's links heading. True when added."""
     if not sp.exists():
-        return
+        return False
     txt = sp.read_text()
-    link = f"- [[{article_slug}]]"
+    link = f"- [[{target}]]"
     if link in txt:
-        return
+        return False
     # Accept the heading in the current language or in English (existing vaults).
     heading = next((h for h in t_list("compile_resources.links_heading") if h in txt), None)
     if heading:
@@ -432,81 +493,393 @@ def _inject_backlink(summary_stem: str, article_slug: str):
     else:
         txt = txt.rstrip() + f"\n\n{LINKS_HEADING}\n{link}\n"
     sp.write_text(txt)
+    return True
 
 
-# ─── Phase: articles (concept clustering) ───────────────────────
-def phase_articles(dry: bool, full: bool):
-    summaries_dir = WIKI / "summaries"
-    if not summaries_dir.exists():
-        print("phase articles: no summaries yet")
+# ─── Phase: concepts (pages that update in place) ───────────────
+# See tools/concepts.py for why this layer replaced the articles phase.
+CONCEPT_REGISTRY = VAULT / "_Agent-Context" / "concepts.md"
+CONCEPTS_DIR = WIKI / "concepts"
+CONCEPT_ARCHIVE = WIKI / "_archive" / "articles"
+CONCEPT_ASSIGN_BATCH = 80       # summaries per assignment call (summary_en lines only)
+CONCEPT_MAX_PER_RUN = 6         # concept pages updated per run, most stale first
+CONCEPT_MAX_DELTA = 8           # new summaries folded into one page per call
+CONCEPT_SOURCE_CHARS = 4000     # per summary, inside the update prompt
+
+
+def concept_rows():
+    return C.parse_registry(C.read_page(CONCEPT_REGISTRY))
+
+
+def _active_rev(rows) -> str:
+    """Fingerprint of the active concept set. A summary stamped with an older
+    one is assigned again, so a concept the owner activates collects the
+    summaries that were filed before it existed. Proposals do not change it,
+    or every batch that proposes would trigger a full reassignment."""
+    active = sorted(r["slug"] for r in rows if r["status"] == "active")
+    return hashlib.sha256("\n".join(active).encode()).hexdigest()[:8]
+
+
+def summary_catalogue():
+    """In-scope summaries as dicts: stem, path, source, summary_en, hash, concepts, rev."""
+    out = []
+    d = WIKI / "summaries"
+    if not d.exists():
+        return out
+    for p in sorted(d.glob("*.md")):
+        text = C.read_page(p)
+        fm, _ = C.split_frontmatter(text)
+        source = C.fm_value(fm, "source") or ""
+        if not C.in_scope(source, COMPANY_AREA):
+            continue
+        out.append({
+            "stem": p.stem, "path": p, "source": source,
+            "summary_en": (C.fm_value(fm, "summary_en") or "")[:400],
+            "hash": C.fm_value(fm, "sources_hash") or "",
+            "concepts": C.read_concepts_key(text),
+            "rev": C.fm_value(fm, "concepts_rev") or "",
+        })
+    return out
+
+
+def _stamp_concepts(path: Path, slugs, rev: str):
+    text = C.read_page(path)
+    text = C.set_fm_key(text, "concepts", json.dumps(sorted(set(slugs)), ensure_ascii=False))
+    text = C.set_fm_key(text, "concepts_rev", rev)
+    tmp = path.with_suffix(".md.tmp")
+    tmp.write_text(text)
+    tmp.replace(path)
+
+
+def _append_proposals(props, catalogue):
+    """Add new proposals to the registry as `proposed` rows. Returns the rows added."""
+    by_stem = {s["stem"]: s for s in catalogue}
+    rows = []
+    for p in props:
+        personal = any(C.is_personal(by_stem[m]["source"]) for m in p["members"] if m in by_stem)
+        rows.append({"slug": p["slug"], "title": p["title"], "aliases": p["aliases"],
+                     "status": "proposed", "sensitivity": "personal" if personal else "",
+                     "scope": p["scope"]})
+    if rows:
+        text = C.read_page(CONCEPT_REGISTRY).rstrip("\n")
+        text += "\n" + "\n".join(C.registry_row(r) for r in rows) + "\n"
+        CONCEPT_REGISTRY.write_text(text)
+    return rows
+
+
+def _ping_proposals(rows):
+    """One Buzz line when the compiler proposes concepts. Personal ones are only
+    counted: their titles alone can say too much about family or health."""
+    if not rows:
         return
-    index = []
-    for s in sorted(summaries_dir.glob("*.md")):
-        try:
-            head = s.read_text()[:600]
-            index.append(f"### {s.stem}\n{head}\n")
-        except Exception:
-            pass
-    if not index:
+    public = [r["title"] for r in rows if r["sensitivity"] != "personal"]
+    personal = len(rows) - len(public)
+    lines = [t("compile_resources.concept_ping_intro").format(n=len(rows))]
+    lines += [f"- {title}" for title in public]
+    if personal:
+        lines.append(t("compile_resources.concept_ping_personal").format(n=personal))
+    lines.append(t("compile_resources.concept_ping_howto"))
+    key = "concept-proposals:" + hashlib.sha256(
+        "\n".join(sorted(r["slug"] for r in rows)).encode()).hexdigest()[:16]
+    try:
+        from buzz_delivery import send
+        send("thinking", "\n".join(lines), key=key)
+        print(f"[buzz] {len(rows)} concept proposal(s) announced")
+    except Exception as e:  # a failed ping must never cost the compile
+        print(f"[buzz] concept proposal ping failed: {e}", file=sys.stderr)
+
+
+def _assign_prompt(rows, batch, *, propose_only=False):
+    reg = "\n".join(f"- {r['slug']}: {r['title']}"
+                    + (f" (aka {', '.join(r['aliases'])})" if r["aliases"] else "")
+                    + (f". {r['scope']}" if r["scope"] else "")
+                    for r in rows if r["status"] != "retired") or "(none yet)"
+    items = "\n".join(f"- {s['stem']} [{s['source']}]: {s['summary_en']}" for s in batch)
+    task = ("Propose concepts only; leave assign empty." if propose_only else
+            "Assign each summary to the existing concepts it genuinely informs (0 to 3). "
+            "Most summaries inform none; an empty list is the normal answer.")
+    return f"""You maintain the concept layer of a personal knowledge wiki. A concept is one
+idea, method or recurring question that several sources inform, named so that it
+can be explained without referring back to any single source.
+
+EXISTING CONCEPTS:
+{reg}
+
+SUMMARIES (stem [source]: gist):
+{items}
+
+{task}
+Propose a NEW concept only when at least two of these summaries share an idea
+that no existing concept covers. Do not propose people, companies, meetings,
+deals or one-off events; those are entities or projects, not concepts. Titles
+are singular and in the language the owner writes in; slugs are kebab-case ASCII.
+
+Output ONLY JSON:
+{{"assign": {{"<stem>": ["<slug>", ...]}},
+ "proposals": [{{"slug": "...", "title": "...", "aliases": ["..."], "scope": "<one line>", "members": ["<stem>", ...]}}]}}
+"""
+
+
+def phase_concept_assign(dry: bool, full: bool, *, propose_only: bool = False):
+    rows = concept_rows()
+    rev = _active_rev(rows)
+    slugs = {r["slug"] for r in rows if r["status"] != "retired"}
+    catalogue = summary_catalogue()
+    todo = catalogue if (full or propose_only) else \
+        [s for s in catalogue if s["concepts"] is None or s["rev"] != rev]
+    label = "concept-propose" if propose_only else "concept-assign"
+    if not todo:
+        print(f"phase {label}: nothing to assign")
         return
     if dry:
-        print(f"[dry] cluster {len(index)} summaries into wiki/articles/")
+        print(f"[dry] {label}: {len(todo)} summaries in {-(-len(todo) // CONCEPT_ASSIGN_BATCH)} call(s)")
         return
-    if out_of_time("articles", need=300):
-        return
-    prompt = f"""You have {len(index)} summary files in .wiki/summaries/. Cluster them into 8-20 concept articles.
+    added, assigned = [], 0
+    for i in range(0, len(todo), CONCEPT_ASSIGN_BATCH):
+        if out_of_time(label, need=240):
+            break
+        batch = todo[i:i + CONCEPT_ASSIGN_BATCH]
+        stems = {s["stem"] for s in batch}
+        out = call_claude(_assign_prompt(concept_rows(), batch, propose_only=propose_only),
+                          timeout=300, concept=True)
+        assign, props = C.parse_assignment(out or "", stems, slugs)
+        if not assign:
+            print(f"[FAIL] {label}: batch {i // CONCEPT_ASSIGN_BATCH + 1} unparsable, left for next run",
+                  file=sys.stderr)
+            continue
+        fresh = C.new_proposals(props, concept_rows())
+        added += _append_proposals(fresh, catalogue)
+        for p in fresh:                  # a proposal's evidence is assigned to it right away
+            slugs.add(p["slug"])
+            for m in p["members"]:
+                assign[m] = sorted(set(assign.get(m, [])) | {p["slug"]})
+        if propose_only:
+            continue
+        for s in batch:
+            _stamp_concepts(s["path"], assign.get(s["stem"], []), rev)
+            assigned += bool(assign.get(s["stem"]))
+    _ping_proposals(added)
+    print(f"phase {label}: {len(todo)} summaries seen, {assigned} assigned, "
+          f"{len(added)} concept(s) proposed")
+
+
+def phase_concept_propose(dry: bool, full: bool):
+    """One-shot: read every in-scope gist and propose a starting set of concepts."""
+    phase_concept_assign(dry, full, propose_only=True)
+
+
+def _date_key(source: str) -> str:
+    """Oldest source first, so a later source updates what an earlier one said
+    rather than every old source arriving as a contradiction to the newest."""
+    m = re.search(r"(20\d\d)[-.](\d\d)(?:[-.](\d\d))?", source)
+    return "".join(g or "00" for g in m.groups()) if m else "99999999"
+
+
+def _concept_prompt(row, old, members, prior, personal):
+    blob = ""
+    for s in members:
+        body = C.read_page(s["path"])[:CONCEPT_SOURCE_CHARS]
+        blob += f"\n--- [[{s['stem']}]] (source: {s['source']}) ---\n{body}\n"
+    existing = old or "(no page yet: write the first version from these sources)"
+    prior_block = (f"\nPRIOR ARTICLE (context from the retired articles layer; may be outdated, "
+                   f"cite only what the sources support):\n{prior[:6000]}\n" if prior else "")
+    aliases = json.dumps(row["aliases"], ensure_ascii=False)
+    return f"""You maintain one concept page in a personal knowledge wiki: '{row['title']}'.
+Scope: {row['scope'] or '(none given)'}
+
+The page explains one idea and gets better as sources arrive. It is not a list
+of what each source said. Fold the NEW SOURCES into the EXISTING PAGE.
 
 {CROSS_LINK_RULE}
 
-SUMMARIES:
-{chr(10).join(index)[:60000]}
+RULES (each exists because breaking it destroys what the page is for):
+- Integrate, do not append summaries. Update the explanation and claims so the page reads as one account.
+- Never overwrite a disagreement. When a new source disagrees with a claim on the page, keep both under
+  "{t('compile_resources.concept_contested_heading').lstrip('# ')}", each attributed ([[source]]) and dated,
+  and say what would settle it. The history of what was believed and why is the asset.
+- Never resolve a contradiction by picking the newer source. Recency is not evidence.
+- When a source shows an old claim is out of date (a changed fact, not a disagreement), move it to
+  "{t('compile_resources.concept_superseded_heading').lstrip('# ')}" as: ~~old claim~~ superseded YYYY-MM: why ([[source]]).
+  Never delete a claim, and keep every existing ~~struck~~ line exactly as it is.
+- Keep every [[link]] already on the page.
+- Every claim cites its source as [[summary-stem]] with a date when one is known, and one confidence
+  label: {' | '.join(C.CONFIDENCE)}. Self-reported numbers keep that label forever.
+- Only record a relationship the source states. Do not infer.
+- Link the first mention of any entity or concept with [[wikilink]].
+- Use ONLY the sources and the existing page. Nothing from general knowledge.
+- Do NOT use em dashes or en dashes.
+- {output_lang_directive()}
+{prior_block}
+EXISTING PAGE:
+{existing}
 
-Output a JSON object: {{"articles": [{{"slug": "kebab-case", "title": "Title", "members": ["summary-stem-1", ...], "outline": "<short outline>"}}, ...]}}.
-Output ONLY valid JSON, no preamble.
-"""
-    out = call_claude(prompt, timeout=300)
-    if not out:
-        return
-    import json
-    try:
-        m = re.search(r"\{.*\}", out, re.S)
-        data = json.loads(m.group(0)) if m else json.loads(out)
-    except Exception as e:
-        print(f"[articles] parse fail: {e}")
-        return
-    written = 0
-    for art in data.get("articles", []):
-        slug = art["slug"]
-        members = art.get("members", [])
-        # Skip empty-member articles: an article with no summaries behind it is
-        # an orphan that just creates broken navigation.
-        if not members:
-            continue
-        dst = WIKI / "articles" / f"{slug}.md"
-        # Member links use the summary's basename so Obsidian resolves them.
-        members_md = "\n".join(f"- [[{m}]]" for m in members)
-        body = f"""---
+NEW SOURCES:
+{blob[:40000]}
+
+Return ONLY the full updated page in this shape:
+
+---
 lang: {LANG}
-summary_en: {art.get('title','')}
+summary_en: <2-3 sentence English gist of the idea>
+type: concept
+aliases: {aliases}
 compiled_at: {datetime.now().isoformat(timespec='seconds')}
 status: seed
 ---
-# {art.get('title', slug)}
+# {row['title']}
 
-## Outline
-{art.get('outline','')}
-
-## Members
-{members_md}
+{t("compile_resources.concept_explanation_heading")}
+{t("compile_resources.concept_position_heading")}
+{t("compile_resources.concept_contested_heading")}
+{t("compile_resources.concept_superseded_heading")}
+{t("compile_resources.concept_open_heading")}
+{t("compile_resources.concept_related_heading")}
+{t("compile_resources.cross_effects_heading")}
 """
-        dst.write_text(body)
-        written += 1
-        print(f"[ok] {dst.relative_to(VAULT)}")
-        # Bidirectional graph: inject a backlink to this article into each member
-        # summary, so links resolve both ways (the connective tissue of the wiki).
-        for m in members:
-            _inject_backlink(m, slug)
-    print(f"phase articles: {written} article(s)")
+
+
+def _finish_concept(out, row, members_map, personal):
+    text = C.strip_dashes(clean_markdown_output(out)).rstrip("\n") + "\n"
+    if not text.startswith("---\n"):
+        # A sentence of preamble before the page ("Here is the updated page:")
+        # cost a whole concept its night on 2026-09-22. Drop it when a real
+        # frontmatter block follows; otherwise the validator refuses the page.
+        m = re.search(r"(?m)^---\n(?=[a-z_]+:)", text)
+        if not m:
+            return text
+        text = text[m.start():]
+    for key, value in (("type", "concept"),
+                       ("aliases", json.dumps(row["aliases"], ensure_ascii=False)),
+                       ("members", C.members_value(members_map))):
+        text = C.set_fm_key(text, key, value)
+    if personal:
+        text = C.set_fm_key(text, "sensitivity", "personal")
+    return text
+
+
+def phase_concepts(dry: bool, full: bool):
+    rows = [r for r in concept_rows() if r["status"] == "active"]
+    catalogue = summary_catalogue()
+    work = []
+    for row in rows:
+        members = [s for s in catalogue if row["slug"] in (s["concepts"] or [])]
+        dst = CONCEPTS_DIR / f"{row['slug']}.md"
+        old = C.read_page(dst)
+        integrated = {} if full else C.read_members(old)
+        todo = C.delta({s["stem"]: s["hash"] for s in members}, integrated)
+        if not todo:
+            continue
+        fm, _ = C.split_frontmatter(old)
+        work.append((C.fm_value(fm, "compiled_at") or "", row, members, todo, dst, old, integrated))
+    work.sort(key=lambda w: w[0])            # never compiled, then oldest compile first
+    n = 0
+    for _, row, members, todo, dst, old, integrated in work[:CONCEPT_MAX_PER_RUN]:
+        by_stem = {s["stem"]: s for s in members}
+        batch = sorted((by_stem[s] for s in todo), key=lambda s: _date_key(s["source"]))
+        batch = batch[:CONCEPT_MAX_DELTA]
+        if dry:
+            print(f"[dry] concept {row['slug']} <- {len(batch)} of {len(todo)} new summaries")
+            n += 1
+            continue
+        if out_of_time("concepts", need=300):
+            break
+        if full:
+            old = ""
+        personal = row["sensitivity"] == "personal" or any(C.is_personal(s["source"]) for s in members)
+        prior = "" if old else C.read_page(CONCEPT_ARCHIVE / f"{row['slug']}.article.md")
+        text = None
+        for attempt in (batch, batch[:max(1, len(batch) // 2)]):
+            out = call_claude(_concept_prompt(row, old, attempt, prior, personal), concept=True)
+            if not out:
+                continue
+            stamped = dict(integrated, **{s["stem"]: s["hash"] for s in attempt})
+            candidate = _finish_concept(out, row, stamped, personal)
+            problems = C.validate_update(old, candidate)
+            if not problems:
+                text, batch = candidate, attempt
+                break
+            print(f"[reject] concept {row['slug']}: {'; '.join(problems)}", file=sys.stderr)
+            if len(attempt) == 1:
+                break
+        if text is None:
+            print(f"[FAIL] concept {row['slug']}: not produced, existing page kept", file=sys.stderr)
+            continue
+        dst.parent.mkdir(parents=True, exist_ok=True)
+        tmp = dst.with_suffix(".md.tmp")
+        tmp.write_text(text)
+        tmp.replace(dst)
+        # Backlinks make the page reachable from every source behind it.
+        for s in batch:
+            _inject_backlink(s["stem"], row["slug"])
+        print(f"[ok] {dst.relative_to(VAULT)} (+{len(batch)}, {len(todo) - len(batch)} left)")
+        n += 1
+    left = len(work) - n
+    _COUNTS["concepts"] = n
+    print(f"phase concepts: {n} page(s) updated" + (f", {left} waiting" if left > 0 else ""))
+
+
+def migrate_articles(dry: bool):
+    """One-off: the articles become active concepts under the same slugs, so the
+    [[slug]] backlinks already in summaries keep resolving. Their member lists
+    seed the assignment; the article itself is archived as prior context."""
+    src_dir = WIKI / "articles"
+    if not src_dir.exists():
+        print("migrate: no .wiki/articles")
+        return
+    rows = concept_rows()
+    known = {r["slug"] for r in rows}
+    catalogue = {s["stem"]: s for s in summary_catalogue()}
+    new_rows, seeds = [], {}
+    for p in sorted(src_dir.glob("*.md")):
+        text = C.read_page(p)
+        fm, body = C.split_frontmatter(text)
+        m = re.search(r"^# (.+)$", body, re.M)
+        title = m.group(1).strip() if m else p.stem
+        members = re.findall(r"^- \[\[([^\]|]+)\]\]", body.split("## Members", 1)[-1], re.M)
+        for stem in members:
+            if stem in catalogue:
+                seeds.setdefault(stem, set()).add(p.stem)
+        if p.stem not in known:
+            new_rows.append({"slug": p.stem, "title": title, "aliases": [], "status": "active",
+                             "sensitivity": "", "scope": (C.fm_value(fm, "summary_en") or "")[:160]
+                             .replace("|", "/")})
+        print(f"[migrate] {p.stem}: {len(members)} member(s), "
+              f"{sum(1 for s in members if s in catalogue)} in scope")
+    if dry:
+        return
+    if new_rows:
+        text = C.read_page(CONCEPT_REGISTRY).rstrip("\n")
+        CONCEPT_REGISTRY.write_text(text + "\n" + "\n".join(C.registry_row(r) for r in new_rows) + "\n")
+    rev = _active_rev(concept_rows())
+    for stem, slugs in seeds.items():
+        s = catalogue[stem]
+        _stamp_concepts(s["path"], set(s["concepts"] or []) | slugs, rev)
+    CONCEPT_ARCHIVE.mkdir(parents=True, exist_ok=True)
+    log = WIKI / "_archive" / "LOG.md"
+    stamp = datetime.now().strftime("%Y-%m-%d")
+    lines = []
+    for p in sorted(src_dir.glob("*.md")):
+        dst = CONCEPT_ARCHIVE / f"{p.stem}.article.md"
+        subprocess.run(["git", "-C", str(VAULT), "mv", str(p), str(dst)], check=False)
+        if p.exists():                  # not tracked: a plain move keeps it anyway
+            p.replace(dst)
+        lines.append(f"| {stamp} | concept-migrate | {p.relative_to(VAULT)} | "
+                     f"{dst.relative_to(VAULT)} | article became concept [[{p.stem}]] |")
+    if lines and log.exists():
+        text = log.read_text()
+        head, sep, rest = text.partition("|---")
+        if sep:
+            first_nl = rest.find("\n")
+            text = head + sep + rest[:first_nl + 1] + "\n".join(lines) + "\n" + rest[first_nl + 1:]
+        else:
+            text = text.rstrip("\n") + "\n" + "\n".join(lines) + "\n"
+        log.write_text(text)
+    try:
+        src_dir.rmdir()
+    except OSError:
+        pass
+    print(f"migrate: {len(new_rows)} registry row(s), {len(seeds)} summary seed(s), "
+          f"{len(lines)} article(s) archived")
 
 
 # ─── Phase: ideas (auto-derived) ────────────────────────────────
@@ -573,39 +946,89 @@ status: seed
 
 
 # ─── Phase: index ───────────────────────────────────────────────
+# The index is what an agent reads first: one line per page says whether the
+# page is worth opening, so a question costs three cheap reads instead of a
+# full-text sweep (Second Brain OS, "index.md and log.md"). Small sections sit
+# in INDEX.md itself; the long ones (summaries by home, digests, filed queries)
+# get a topic index of their own in .wiki/_index/, one level down and no more,
+# because summaries of summaries drift from what they describe.
+INDEX_DIR = WIKI / "_index"
+INDEX_INLINE = ("concepts", "entities", "projects/work", "projects/personal", "ideas", "moc")
+INDEX_LABELS = {"concepts": "Concepts", "entities": "Entities", "projects/work": "Projects, work",
+                "projects/personal": "Projects, personal", "ideas": "Ideas", "moc": "Maps of Content"}
+INDEX_DESC_CHARS = 150
+
+
+def index_line(p: Path) -> str:
+    """'- [[stem]]: first sentence of summary_en (aka aliases)'."""
+    fm, _ = C.split_frontmatter(C.read_page(p))
+    desc = C.fm_value(fm, "summary_en") or ""
+    desc = C.strip_dashes(re.split(r"(?<=[.!?])\s", desc.strip(), maxsplit=1)[0])
+    if len(desc) > INDEX_DESC_CHARS:
+        desc = desc[:INDEX_DESC_CHARS].rsplit(" ", 1)[0] + "..."
+    aliases = []
+    raw = C.fm_value(fm, "aliases") or ""
+    if raw.startswith("["):
+        try:
+            aliases = [str(a) for a in json.loads(raw)]
+        except ValueError:
+            aliases = []
+    aka = f" (aka {', '.join(aliases[:4])})" if aliases else ""
+    return f"- [[{p.stem}]]: {desc}{aka}" if desc else f"- [[{p.stem}]]{aka}"
+
+
+def _topic_of(p: Path) -> str:
+    """Topic index a long-tail page belongs to."""
+    rel = p.relative_to(WIKI).parts
+    if rel[0] == "digests":
+        return "Filed queries" if len(rel) > 2 and rel[1] == "queries" else "Daily digests"
+    fm, _ = C.split_frontmatter(C.read_page(p))
+    src = (C.fm_value(fm, "source") or "").strip("/")
+    depth = len(COMPANY_AREA.split("/")) + 1 if src.startswith(COMPANY_AREA + "/") else 2
+    parts = src.split("/")[:depth]
+    if parts and parts[-1].endswith(".md"):
+        parts = parts[:-1]
+    return "Summaries, " + ("/".join(parts) or "other")
+
+
 def phase_index(dry: bool, full: bool):
     if dry:
-        print("[dry] regenerate wiki/INDEX.md")
+        print("[dry] regenerate wiki/INDEX.md and wiki/_index/")
         return
+    stamp = datetime.now().isoformat(timespec='seconds')
+    head = f"lang: {LANG}\ncompiled_at: {stamp}\n"
     sections = []
-    for sub, label in [("articles", "Articles"), ("entities", "Entities"),
-                       ("projects/work", "Projects · Work"),
-                       ("projects/personal", "Projects · Personal"),
-                       ("ideas", "Ideas"), ("moc", "Maps of Content"),
-                       ("digests", "Digests"), ("summaries", "Summaries")]:
+    for sub in INDEX_INLINE:
         d = WIKI / sub
-        if not d.exists():
-            continue
-        items = sorted(d.rglob("*.md"))
-        if not items:
-            continue
-        sections.append(f"## {label}\n")
-        for p in items:
-            # Basename wikilink so Obsidian resolves it (slugs are unique).
-            sections.append(f"- [[{p.stem}]]")
-        sections.append("")
-    body = f"""---
-lang: {LANG}
-summary_en: Auto-generated index of the LLM-owned wiki.
-compiled_at: {datetime.now().isoformat(timespec='seconds')}
----
-# Wiki INDEX
-
-_Auto-generated by tools/compile_resources.py. Do not edit by hand._
-
-""" + "\n".join(sections)
+        items = sorted(d.glob("*.md")) if d.exists() else []
+        if items:
+            sections += [f"## {INDEX_LABELS[sub]}", ""] + [index_line(p) for p in items] + [""]
+    topics = {}
+    for sub in ("summaries", "digests"):
+        d = WIKI / sub
+        for p in sorted(d.rglob("*.md")) if d.exists() else []:
+            topics.setdefault(_topic_of(p), []).append(p)
+    INDEX_DIR.mkdir(parents=True, exist_ok=True)
+    wanted = set()
+    sections += ["## Topic indexes", ""]
+    for topic, pages in sorted(topics.items()):
+        stem = "index-" + C.slugify(topic.replace("/", " "))
+        wanted.add(f"{stem}.md")
+        lines = [f"---\n{head}summary_en: Topic index for {topic}, one line per page.\n---",
+                 f"# {topic}", "", "_Auto-generated by tools/compile_resources.py. Back to [[INDEX]]._", ""]
+        order = reversed(pages) if topic in ("Daily digests", "Filed queries") else pages
+        lines += [index_line(p) for p in order]
+        (INDEX_DIR / f"{stem}.md").write_text("\n".join(lines) + "\n")
+        sections.append(f"- [[{stem}]]: {topic} ({len(pages)} pages)")
+    for old in INDEX_DIR.glob("*.md"):          # a topic that emptied out
+        if old.name not in wanted:
+            old.unlink()
+    body = (f"---\n{head}summary_en: Auto-generated index of the LLM-owned wiki, one line per page.\n---\n"
+            "# Wiki INDEX\n\n_Auto-generated by tools/compile_resources.py. Do not edit by hand. "
+            "Read this first, open the pages that fit, follow links from there._\n\n"
+            + "\n".join(sections) + "\n")
     (WIKI / "INDEX.md").write_text(body)
-    print("[ok] wiki/INDEX.md")
+    print(f"[ok] wiki/INDEX.md + {len(wanted)} topic index(es)")
 
 
 # ─── Phase: entities (auto-maintained dossiers) ─────────────────
@@ -777,20 +1200,230 @@ status: seed
             # file for a "current" one. The existing file is NOT touched.
             print(f"[FAIL] entity {name}: not produced, existing file kept", file=sys.stderr)
             continue
-        write_compiled(dst, out, sources)
+        if not write_compiled(dst, out, sources):
+            continue
         print(f"[ok] {dst.relative_to(VAULT)}")
         n += 1
     print(f"phase entities: {n} dossier")
 
 
+# ─── Phase: aliases ──────────────────────────────────────────────
+# Search matches words, and the owner asks in words the page does not use:
+# "moving office" for a project called Workspace, "ISO 27001" for a security page. The guide's
+# first fix for that is aliases, before any embedding index. They live in
+# _Agent-Context/aliases.md, one row per page, editable by hand; the model only
+# fills rows for pages that have none, and every run stamps the rows into the
+# pages' frontmatter (a recompile drops them, the next run puts them back).
+ALIAS_FILE = VAULT / "_Agent-Context" / "aliases.md"
+ALIAS_FOLDERS = ("entities", "projects", "concepts", "ideas")
+ALIAS_BATCH = 30
+ALIAS_HEADER = """# Aliases
+
+Other names for wiki pages: the words someone would use to ask about the page
+without using its title. `tools/compile_resources.py` (phase aliases) proposes a
+row for every new entity, project, concept and idea page, and stamps the rows
+into each page's `aliases:` frontmatter, which is what search and Obsidian
+links match. Edit freely: a row you change is never regenerated. Delete a row
+to have it proposed again.
+
+Format: `page stem | alias one, alias two, ...`
+
+## Rows
+"""
+
+
+def alias_pages():
+    return [p for f in ALIAS_FOLDERS if (WIKI / f).exists() for p in sorted((WIKI / f).rglob("*.md"))]
+
+
+def parse_alias_rows(text: str) -> dict[str, list[str]]:
+    rows = {}
+    for line in text.split("## Rows", 1)[-1].splitlines():
+        if "|" not in line or line.lstrip().startswith(("#", "Format")):
+            continue
+        stem, _, names = line.partition("|")
+        if stem.strip():
+            rows[stem.strip()] = [n.strip() for n in names.split(",") if n.strip()]
+    return rows
+
+
+def _registry_aliases() -> dict[str, list[str]]:
+    out = {name: aliases for name, _, aliases in parse_entity_registry()}
+    for row in concept_rows():
+        out.setdefault(row["slug"], []).extend([row["title"], *row["aliases"]])
+    return out
+
+
+def _alias_prompt(batch):
+    items = "\n".join(f"- {p.stem} [{p.parent.name}]: {(C.fm_value(C.split_frontmatter(C.read_page(p))[0], 'summary_en') or '')[:300]}"
+                      for p in batch)
+    return f"""For each wiki page below, give 3 to 5 aliases: the other names and short
+phrases the owner would use when asking about it without using its title.
+The owner writes Turkish and English; give both where natural. Include common
+misspellings of names and the plain-language description of the thing
+(for a project called "Workspace": "ofis taşınması", "office move").
+Do NOT use generic words ("proje", "toplantı", "strategy"), and do NOT use the
+name of a different person, company or project.
+Do NOT put personal data in an alias: no birth dates, ages, ID or registration
+numbers, phone numbers, addresses, salaries or amounts. An alias is a name.
+Do NOT use em dashes or en dashes.
+
+PAGES (stem [folder]: gist):
+{items}
+
+Output ONLY JSON: {{"<stem>": ["alias", ...], ...}}
+"""
+
+
+# Aliases land in frontmatter, the index and search, so personal data in one
+# spreads everywhere. The prompt forbids it; this is the boundary behind the
+# prompt (the first run proposed a birth date as an alias for a person).
+_ALIAS_DATA = re.compile(r"\d{1,2}[./-]\d{1,2}[./-]\d{2,4}|\d{5,}|\+?\d[\d ]{8,}\d|[₺$€£]\s?\d|\d\s?(?:tl|try|gbp|usd|eur)\b",
+                         re.IGNORECASE)
+
+
+def clean_alias(a: str) -> str | None:
+    a = C.strip_dashes(str(a)).replace("|", "/").strip()
+    # Standard names are names ("ISO 27001", "BS 7858"), not data.
+    probe = re.sub(r"\b(?:ISO|IEC|BS|EN|SOC)\s?[\d:/-]+", "", a, flags=re.IGNORECASE)
+    if not a or len(a) > 60 or _ALIAS_DATA.search(probe):
+        return None
+    return a
+
+
+def phase_aliases(dry: bool, full: bool):
+    pages = alias_pages()
+    rows = parse_alias_rows(C.read_page(ALIAS_FILE))
+    todo = [p for p in pages if full or p.stem not in rows]
+    if dry:
+        print(f"[dry] aliases: {len(todo)} page(s) to propose, {len(pages)} to stamp")
+        return
+    added = 0
+    for i in range(0, len(todo), ALIAS_BATCH):
+        if out_of_time("aliases", need=180):
+            break
+        batch = todo[i:i + ALIAS_BATCH]
+        data = C.parse_json_object(call_claude(_alias_prompt(batch), timeout=240, aliases=True) or "")
+        if not data:
+            print(f"[FAIL] aliases: batch {i // ALIAS_BATCH + 1} unparsable", file=sys.stderr)
+            continue
+        for p in batch:
+            got = data.get(p.stem)
+            if isinstance(got, list):
+                rows[p.stem] = [a for a in map(clean_alias, got) if a][:5]
+                added += 1
+    if added:
+        body = ALIAS_HEADER + "".join(f"{stem} | {', '.join(names)}\n" for stem, names in sorted(rows.items()))
+        ALIAS_FILE.write_text(body)
+    reg = _registry_aliases()
+    stamped = 0
+    for p in pages:
+        names = []
+        # Rows are hand-editable, so the data filter applies to them too.
+        for n in [*map(clean_alias, rows.get(p.stem, [])), *reg.get(p.stem, [])]:
+            if n and n.casefold() != p.stem.casefold() and n not in names:
+                names.append(n)
+        if not names:
+            continue
+        text = C.read_page(p)
+        value = json.dumps(names, ensure_ascii=False)
+        fm, _ = C.split_frontmatter(text)
+        if fm and C.fm_value(fm, "aliases") != value:
+            p.write_text(C.set_fm_key(text, "aliases", value))
+            stamped += 1
+    _COUNTS["aliases"] = added
+    print(f"phase aliases: {added} proposed, {stamped} page(s) stamped")
+
+
+# ─── Phase: link (deterministic linker, no model) ───────────────
+# The guide's "linker" role: first mentions of a known entity or active concept
+# become links, so a summary joins the graph through what it is about. Summaries
+# are written with an empty links section and used to connect only when an
+# article or concept linked back, which left 454 pages with no working link.
+# It adds links and nothing else: no page is created, no text is rewritten.
+LINK_PAGES = ("summaries", "digests/queries")
+LINK_MAX_PER_PAGE = 8
+_WORD = "0-9A-Za-zÇĞİÖŞÜçğıöşü_"
+
+
+def link_targets():
+    """[(page stem, compiled regex)] for entities with a page and active concepts."""
+    out = []
+    for name, _, aliases in parse_entity_registry():
+        if (WIKI / "entities" / f"{name}.md").exists():
+            out.append((name, [name, *aliases]))
+    for row in concept_rows():
+        if row["status"] == "active" and (CONCEPTS_DIR / f"{row['slug']}.md").exists():
+            out.append((row["slug"], [row["title"], *row["aliases"]]))
+    compiled = []
+    for stem, names in out:
+        # Short names ("ACME" stays, "Ozan" stays) need an exact word; under
+        # three letters is noise.
+        alts = sorted({_nfc(n) for n in names if len(n) >= 3}, key=len, reverse=True)
+        if alts:
+            rx = re.compile(rf"(?<![{_WORD}])(?:{'|'.join(re.escape(a) for a in alts)})(?![{_WORD}])",
+                            re.IGNORECASE)
+            compiled.append((stem, rx, {a.casefold() for a in alts}))
+    return compiled
+
+
+_NEXT_NAME = re.compile(r"\s+([A-ZÇĞİÖŞÜ][a-zçğıöşü]+)")
+
+
+def mentions(rx, names, body: str) -> bool:
+    """A real mention, not the first half of someone else's full name: "Deniz"
+    is an alias of one person, and "Deniz Kaya" is another person."""
+    for m in rx.finditer(body):
+        nxt = _NEXT_NAME.match(body, m.end())
+        if nxt and f"{m.group(0)} {nxt.group(1)}".casefold() not in names \
+                and not any(n.startswith(f"{m.group(0)} {nxt.group(1)}".casefold()) for n in names):
+            continue
+        return True
+    return False
+
+
+def phase_link(dry: bool, full: bool):
+    targets = link_targets()
+    pages = [p for sub in LINK_PAGES if (WIKI / sub).exists() for p in sorted((WIKI / sub).glob("*.md"))]
+    added = touched = 0
+    for p in pages:
+        _, body = C.split_frontmatter(C.read_page(p))
+        body = _nfc(body)
+        hits = [stem for stem, rx, names in targets if stem != p.stem and mentions(rx, names, body)
+                and f"[[{stem}]]" not in body and f"[[{stem}|" not in body][:LINK_MAX_PER_PAGE]
+        if not hits:
+            continue
+        if dry:
+            added += len(hits)
+            touched += 1
+            continue
+        n = sum(_inject_link(p, stem) for stem in hits)
+        added += n
+        touched += bool(n)
+    _COUNTS["links"] = added
+    print(f"phase link: {added} link(s) on {touched} page(s)" + (" [dry]" if dry else ""))
+
+
 # ─── Main ───────────────────────────────────────────────────────
+# Concepts run right after summaries and before the heavier dossiers, with a
+# per-run cap, so they are never starved the way the articles phase was.
 PHASES = {
     "summaries": phase_summaries,
+    "concept-assign": phase_concept_assign,
+    "concepts": phase_concepts,
     "projects": phase_projects,
     "entities": phase_entities,
-    "articles": phase_articles,
+    "aliases": phase_aliases,
+    "link": phase_link,
     "ideas": phase_ideas,
     "index": phase_index,
+}
+
+
+# Run only when asked for by name: a one-shot proposal pass and the articles migration.
+ON_DEMAND = {
+    "concept-propose": phase_concept_propose,
+    "concept-migrate": lambda dry, full: migrate_articles(dry),
 }
 
 
@@ -798,7 +1431,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--full-rebuild", action="store_true")
     ap.add_argument("--dry-run", action="store_true")
-    ap.add_argument("--only", choices=list(PHASES.keys()))
+    ap.add_argument("--only", choices=list(PHASES.keys()) + list(ON_DEMAND.keys()))
     ap.add_argument("--budget-seconds", type=int,
                     default=int(os.environ.get("BRAINLESS_COMPILE_BUDGET", "0")),
                     help="wall-clock budget in seconds; 0 = unlimited. The run "
@@ -813,13 +1446,15 @@ def main():
     phases = [args.only] if args.only else list(PHASES.keys())
     for ph in phases:
         print(f"\n=== phase: {ph} ===")
-        PHASES[ph](args.dry_run, args.full_rebuild)
+        {**PHASES, **ON_DEMAND}[ph](args.dry_run, args.full_rebuild)
 
     if not args.dry_run:
         if _BUDGET_NOTED:
             print(f"\n=== budget spent in: {', '.join(sorted(_BUDGET_NOTED))}; "
                   f"run again to drain the rest ===")
         print(f"\n=== claude: {_CLAUDE_CALLS} call(s), {_CLAUDE_FAILURES} failure(s) ===")
+        print("RUNLOG " + " ".join(f"{k}={v}" for k, v in
+                                   {**_COUNTS, "calls": _CLAUDE_CALLS, "failures": _CLAUDE_FAILURES}.items()))
         # Loud signal: a silent compile-to-empty is exactly what hid the broken
         # pipeline for weeks. Alarm if calls were made but most/all failed.
         if _CLAUDE_CALLS and _CLAUDE_FAILURES >= max(1, _CLAUDE_CALLS // 2):

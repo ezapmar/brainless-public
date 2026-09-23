@@ -53,11 +53,21 @@ in `Inbox/`, `Inbox/Links/` and `Thinking/Daily/` as Markdown, and nothing is ju
 the way in. Judging a thought at capture time is how good ones die in a car park. The
 [capture flow guide](capture-flow.md) maps every entrance and every scheduled job.
 
+Two doors are slower than the rest, so they queue.
+
+- **YouTube and podcast links:** a shared YouTube or Apple Podcasts episode link comes back
+  a few minutes later as a transcript in `Inbox/Media/`. It carries a `[mm:ss]` marker
+  every three minutes and speaker turns, and it is transcribed on the machine when there
+  are no captions (`tools/media_import.py`).
+- **Chat history:** a Claude or ChatGPT export is triaged first, imported without the
+  throwaway and personal conversations, and only the few worth compiling are promoted
+  (`tools/chat_import.py`).
+
 #### Let the machine read so you do not have to
 
 A pile of captures is only useful if somebody reads it, and I was never going to be that
-somebody. So a compiler turns every note into a summary, clusters summaries into
-articles, mirrors project status and writes a daily digest into `.wiki/`. Documents keep
+somebody. So a compiler turns every note into a summary, folds summaries into concept
+pages that update in place, mirrors project status and writes a daily digest into `.wiki/`. Documents keep
 their originals and their raw Markdown conversions. The high-value ones also get a
 Summary and a Fiche de Lecture, and a missing or empty output is retried instead of
 quietly accepted.
@@ -70,8 +80,41 @@ later reader can always tell evidence from thinking. That choice is what makes g
 BM25 enough instead of an index server, makes every change a git diff, and means the
 vault outlives every tool in this repository. Graph view follows the explicit
 `[[wikilinks]]`, and Smart Connections shows related notes that do not have a written
-edge yet. You own the notes. The machine owns `.wiki/` and can rebuild it from scratch
-whenever it likes, which means nobody has to spend a Sunday curating a knowledge graph.
+edge yet. You own the notes. The machine owns `.wiki/`, which means nobody has to spend a
+Sunday curating a knowledge graph.
+
+#### Pages that remember
+
+A summary says what one source said. A **concept page** says what the vault knows about
+one idea, and every new source updates it instead of piling up beside it.
+
+- **Disagreements are kept.** When a new source disagrees, both positions stay on the page
+  with their sources and dates, plus what would settle it. A claim that went out of date
+  is struck through with the reason, never deleted.
+- **Claims carry confidence.** Every claim is labelled primary, secondary, self-reported or
+  unverified.
+- **A validator guards every rewrite.** The model rewrites the whole page each time, so a
+  deterministic check refuses any version that drops a struck claim or a cited source.
+- **New concepts wait for a yes.** The compiler proposes them, and I say yes or no in
+  `_Agent-Context/concepts.md`.
+
+The same compile does the dull, useful work around those pages:
+
+- **The linker** turns the first mention of a known person, company or concept into a
+  link, without a model.
+- **The index** gives every page one line, so an agent reads it before opening anything.
+- **Aliases** catch the words I actually use, and search folds Turkish letters, so "maas"
+  finds "maaş".
+- **Duplicates** are proposed for a merge, never merged.
+- **Model chatter** ("Write is disabled, so I'll output…") is refused before it becomes a
+  page.
+
+Two numbers keep this honest. The graph gets measured every week: the share of pages
+nothing links to, links per page, how much of the vault hangs together, and which pages
+bridge two clusters. And twenty-two questions with known answers are asked every night.
+When the share of right answers in the top five drops, the health report says so before a
+bad answer does. For a picture, `brainless graph` writes the whole graph as a file Gephi
+opens, coloured by page type.
 
 The method underneath is **Zettelkasten**: one concept per note, a permanent `zk:`
 address that survives every rename, links rather than folders as the structure, and an
@@ -293,6 +336,21 @@ Privacy follows from the same separation.
 - This public repo is produced from my private vault by `tools/export_public.py`, a
   whitelist copy plus a leak scan that refuses to pass on identity numbers, keys, tokens
   or a name. If you fork this for your own vault, use the same script.
+
+The rules are checks, not requests.
+
+- **Hooks:** Claude Code hooks in `.claude/settings.json` run on every tool call.
+  - A write into a human folder asks first, and so does a deletion.
+  - A secret, a bank number or a misplaced briefing is refused.
+  - A wiki page without its language and English summary goes straight back.
+  - The session starts with the context files already loaded.
+- **Run log:** every scheduled run leaves one line with what it actually did. A job that
+  fails, goes quiet, or runs every night with nothing to do shows up in the health
+  report the next morning.
+- **Backups:** sync is not backup, so once a month the whole vault, history included, is
+  sealed with `age` to a key the machine cannot open and put in a folder that sync does
+  not reach. A restore test proves it comes back, and the health report counts the days
+  since both.
 
 ---
 ## Addons

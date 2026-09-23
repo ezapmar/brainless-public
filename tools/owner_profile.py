@@ -72,6 +72,14 @@ def _csv(env_key, fm_key, default=()):
     return tuple(x.strip() for x in raw.split(",") if x.strip()) or default
 
 LONGFORM_DIRS = _csv("BRAINLESS_LONGFORM_DIRS", "longform_dirs")
+# Path fragments that are private wherever they appear, for folders whose exact
+# name changes (an HR export named "Report-<date>-<hash>" is a new name
+# every time). Matched case-insensitively as substrings by the compiler's
+# privacy guard and asserted untracked by tools/tests/test_gitignore_guards.py.
+PRIVATE_NAME_PARTS = _csv("BRAINLESS_PRIVATE_NAME_PARTS", "private_name_parts")
+# Path fragments that mark a concept personal (family members' names, for instance).
+# They live in PROFILE.md, not in code, because code is exported and names are not.
+PERSONAL_MARKERS = _csv("BRAINLESS_PERSONAL_MARKERS", "personal_markers")
 CORPUS_DIRS = _csv("BRAINLESS_CORPUS_DIRS", "corpus_dirs")
 
 

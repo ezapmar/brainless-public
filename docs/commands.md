@@ -56,10 +56,10 @@ Three rules apply to all of them, from `.wiki/_commands/_shared-rules.md`:
 
 | Command | What it does |
 |---|---|
-| `compile [--dry-run\|--full-rebuild\|--only <phase>]` | Build `.wiki/` from your notes: summaries, articles, project mirrors, index |
+| `compile [--dry-run\|--full-rebuild\|--only <phase>]` | Build `.wiki/` from your notes: summaries, concept pages, project mirrors, index |
 | `search "<query>" [--k N] [--json]` | Search the compiled wiki |
 | `dialectic "<thesis>" [--run noon\|evening\|night] [--buzz] [--parallel]` | Six personas argue it. Local by default, `--buzz` sends it through the live agents on the relay; one persona at a time by default, `--parallel` mentions all six at once; `--scorecard` prints the rolling 30 day scorecard |
-| `lint [--fix] [--fix-links] [--dry-run]` | Wiki integrity checks and repairs |
+| `lint [--fix] [--fix-links] [--dry-run]` | Wiki integrity checks and repairs, graph health, merge proposals, pages where the model talked about itself (`--fix` queues them for recompile) |
 | `calibrate` | Decisions due for grading, decisions missing a prediction or a review date |
 | `today [--build\|--send]` | Preview, save or send the three-item Today queue; `--action <id> ...` answers an item |
 | `closeout [--dry-run]` | Evening close-out: proposes one seed, one decision, one contradiction |
@@ -67,6 +67,11 @@ Three rules apply to all of them, from `.wiki/_commands/_shared-rules.md`:
 | `dashboard` | Rebuild the projects view from every `notes.md` |
 | `health` | Refresh and print `_Agent-Context/HEALTH.md` |
 | `file <command> "<title>" < note.md` | File a result into `.wiki/digests/queries/` so the wiki compounds |
+| `media add <url> \| run \| list` | Queue a YouTube or Apple Podcasts episode link, work the transcript queue, show it |
+| `backup create \| verify --identity <key> \| status` | Monthly `age`-encrypted archive of the vault and its history, the restore test, the dates of both |
+| `graph [--no-summaries] [--main-only] [--format graphml]` | The link graph as a file Gephi opens, coloured by page type, into `logs/graph/` |
+| `eval [--min-hit5 N]` | Ask the golden questions in `_Agent-Context/retrieval-golden.json` and score the search |
+| `chats triage\|import\|promote <file>` | Bring a Claude or ChatGPT export in: list, import filtered, promote the keepers |
 | `export --out <dir> [--update]` | Produce the public engine tree from a private vault, then leak-scan it |
 | `update` | `git pull` and refresh dependencies |
 | `vault` | Print the vault path |

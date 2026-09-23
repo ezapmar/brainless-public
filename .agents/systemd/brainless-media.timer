@@ -1,0 +1,10 @@
+[Unit]
+Description=brainless: transcribe queued YouTube and podcast links timer
+
+[Timer]
+OnBootSec=5min
+OnUnitInactiveSec=10min
+Persistent=true
+
+[Install]
+WantedBy=timers.target

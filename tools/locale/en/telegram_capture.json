@@ -13,5 +13,7 @@
   "reply_saved": "Saved to vault: {title}",
   "reply_transcribe_failed": "Audio received but it could not be transcribed. Likely cause: the 20 MB download limit or a whisper error. The recording did not reach the vault.",
   "reply_no_speech": "Audio received but no speech was detected (silence or a whisper artefact). The recording did not reach the vault.",
-  "reply_unsupported": "This message type cannot be processed ({kinds}), it did not reach the vault. You can send a voice note, an audio file, a photo or text."
+  "reply_unsupported": "This message type cannot be processed ({kinds}), it did not reach the vault. You can send a voice note, an audio file, a photo or text.",
+  "media_queued": "Transcript queued; you will get a message when it is ready",
+  "media_known": "This link is already queued or transcribed"
 }

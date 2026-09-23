@@ -87,6 +87,7 @@ WINDOW_DAYS = 30
 TASK_STALE_DAYS = 60
 SEED_LONELY_DAYS = 30
 SCORECARD_ROWS = 20
+GRAPH_ROWS = 26          # weeks of graph-health history (tools/wiki_metrics.py)
 RULES = ("query", "summary", "orphan", "spiky")
 
 _DATE = re.compile(r"(20\d\d-\d\d-\d\d)")
@@ -378,15 +379,16 @@ def count(now):
     graph = link_graph(files)
     orphans = orphan_pages(files, graph)
 
-    # Bridges, in Burt's sense: a concept article that draws its members from
+    # Bridges, in Burt's sense: a concept page that draws its members from
     # two or more homes is a broker between clusters; one that only restates a
     # single home's notes is not, however many links it carries. The count is
-    # made on articles because that is where the compiler joins sources.
+    # made on concepts (articles before 2026-09-22) because that is where the
+    # compiler joins sources.
     fms = {p: parse_fm(read(p)) for p in files}
-    articles = WIKI / "articles"
+    hubs = {WIKI / "concepts", WIKI / "articles"}
     homes_of = {}
     for a, b in graph["edges"]:
-        if a.parent != articles:
+        if a.parent not in hubs:
             continue
         cb = cluster_of(fms.get(b, {}), b)
         if cb:
@@ -445,6 +447,15 @@ def count(now):
 
     spiky_ready = sum(1 for _ in rule_spiky(now))
 
+    # Graph health (orphan rate, degree, components, bridges): the direction
+    # over weeks says whether ingestion still links, which daily use never shows.
+    try:
+        import wiki_metrics
+        graph_health = wiki_metrics.compute(now)
+    except Exception as e:
+        print(f"graph health skipped: {e}", file=sys.stderr)
+        graph_health = {}
+
     return {
         "date": now.strftime("%Y-%m-%d"),
         "captures_30": captures_30,
@@ -464,6 +475,8 @@ def count(now):
         "seeds_lonely": lonely,
         "spiky_ready": spiky_ready,
         "wiki_pages": len(files),
+        **{k: graph_health[k] for k in ("orphan_rate", "avg_degree", "main_share", "components",
+                                        "stale_concepts", "bridges") if k in graph_health},
     }
 
 
@@ -484,6 +497,21 @@ def previous_rows(md_text):
         if re.match(r"^\|\s*20\d\d-\d\d-\d\d\s*\|", ln) and ln.count("|") >= 10:
             rows.append(ln.strip())
     return rows
+
+
+def graph_rows(md_text):
+    """Graph-health history rows: dated, eight columns (nine pipes), so they never
+    mix with the run table above them."""
+    return [ln.strip() for ln in md_text.splitlines()
+            if re.match(r"^\|\s*20\d\d-\d\d-\d\d\s*\|", ln) and ln.count("|") == 9]
+
+
+def graph_line(c):
+    if "orphan_rate" not in c:
+        return None
+    bridges = ", ".join(f"[[{b}]]" for b in c.get("bridges", [])) or "-"
+    return (f"| {c['date']} | {c['wiki_pages']} | {c['orphan_rate']:.0%} | {c['avg_degree']} | "
+            f"{c['main_share']:.0%} | {c['components']} | {c['stale_concepts']} | {bridges} |")
 
 
 def scorecard_markdown(c, moves=None):
@@ -531,6 +559,12 @@ def scorecard_markdown(c, moves=None):
         else:
             lines.append(t("wiki_prune.candidates_none"))
         lines.append("")
+    g_now = graph_line(c)
+    g_hist = [r for r in graph_rows(read(SCORECARD_MD)) if not r.startswith(f"| {c['date']} ")]
+    g_hist = (([g_now] if g_now else []) + g_hist)[:GRAPH_ROWS]
+    if g_hist:
+        lines += [t("wiki_prune.graph_heading", n=GRAPH_ROWS), "", t("wiki_prune.graph_intro"), "",
+                  t("wiki_prune.graph_header"), "|---|---|---|---|---|---|---|---|"] + g_hist + [""]
     lines += [t("wiki_prune.runs_heading", n=SCORECARD_ROWS), "",
               t("wiki_prune.runs_header", days=INBOX_STALE_DAYS),
               "|---|---|---|---|---|---|---|---|---|"] + history
@@ -554,6 +588,7 @@ def main():
     now = datetime.now()
 
     moves = None
+    applied = 0
     if args.archive:
         moves = candidates(now, args.only)
         by_rule = Counter(m.rule for m in moves)
@@ -563,6 +598,7 @@ def main():
             print(f"  {m.rule:<8} {rel(m.src)}  ->  {rel(m.dst)}   ({m.reason})")
         if args.apply and moves:
             rows, skipped = apply(moves, now)
+            applied = len(rows)
             log(t("wiki_prune.log_applied", n=len(rows), skipped=len(skipped)))
             moves = None  # they are gone; the scorecard lists nothing stale
 
@@ -571,6 +607,7 @@ def main():
         write_scorecard(c, moves)
         log(t("wiki_prune.log_scorecard", path=rel(SCORECARD_MD), inbox=c["inbox_stale"],
               orphans=c["orphans"], qpd=_ratio(c["queries"], c["decisions"])))
+    print(f"RUNLOG candidates={len(moves or [])} archived={applied}")
 
 
 if __name__ == "__main__":

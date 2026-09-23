@@ -35,6 +35,7 @@ Daily Briefings/*
 Thinking/**/*.md
 .wiki/summaries/*
 .wiki/articles/*
+.wiki/concepts/*
 .wiki/ideas/*
 .wiki/digests/*
 .wiki/projects/*

@@ -53,10 +53,19 @@ link, a PDF, a meeting transcript, a line typed on the phone. It all becomes a n
 same folder. Nothing is tagged, filed or judged on the way in. Judging a thought at
 capture time is how good ones die in a car park.
 
+A YouTube video or a podcast episode comes back as a transcript with the time every few
+minutes, transcribed on my own machine, so an hour of talk is no longer gone by Friday.
+Years of chat history can come in too, filtered first, because most of it is lookups and
+the rest is the most private thing I own.
+
 **Then the machine reads it so I do not have to.** A pile of captures is only useful if
-somebody reads it, and I was never going to be that somebody. Every note is summarised,
-grouped with its relatives and linked. That layer is rebuilt from scratch whenever the
-machine likes, so nobody has to spend a Sunday curating a knowledge graph.
+somebody reads it, and I was never going to be that somebody. Every note is summarised
+and linked to the people, companies and ideas it mentions. An idea that keeps coming back
+gets a page of its own, and every new source improves that page instead of piling up
+beside it. When two sources disagree, the page keeps both, with dates. A claim that went
+out of date is struck through, not deleted, because what I used to believe and why is the
+part a search engine cannot give me. Nobody has to spend a Sunday curating a knowledge
+graph.
 
 **The connections get made for me.** A note from last year turns up beside the thing I am
 looking at today because they share a subject, not because I remembered to link them. I
@@ -67,8 +76,11 @@ attached to.
 ### 2. Think deeper and clearer
 
 **Ask what you already know.** Before anything hard, one search answers "what have I
-already written about this", including the parts I had forgotten writing. Before a
-meeting, a short brief. Overnight, a digest of the day.
+already written about this", including the parts I had forgotten writing. Every answer
+cites the page it came from and ends with what the vault does not cover. Before a
+meeting, a short brief. Overnight, a digest of the day. And every night the same
+twenty-odd questions with known answers are asked again, so I learn that search got
+worse from a number, not from a bad answer on a bad day.
 
 **Then let it argue.** Six personas, each built out of a book on thinking, test a thesis
 in two rounds. In the first, each one works alone, blind to the others, and votes yes, no
@@ -164,6 +176,12 @@ apply.
   question to the model you chose, and pointing it at a model on your own computer keeps
   even that at home.
 - Folders you mark private, like health or identity papers, are never read by the model.
+- The rules are checks, not requests. A write into your own folders asks you first. A
+  deletion asks. A secret or a bank number never lands in a file. A page where the model
+  talked about itself instead of your source is refused.
+- Once a month the whole vault, history included, is sealed with a key the machine cannot
+  open and put somewhere sync does not reach. A restore test proves it comes back. Sync is
+  not backup: a bad night copies itself everywhere in minutes.
 - The engine and the notes are separate, so you can share one and keep the other. This
   public repo contains no notes at all.
 
@@ -198,6 +216,8 @@ you are wrong by a script at 21:20.
 - Not a chat app, although it is getting conversational. The notes are still the record.
   The threads are how the record gets made.
 - Not a knowledge graph you maintain. The graph is built for you, not curated by you.
+  It does get measured: how many pages nothing links to, how many hang together, which
+  pages hold two clusters together. The numbers go into the health report every week.
 - Not a decision maker. It never picks. Duke would call that resulting in advance.
 - Not finished. I built it for one person, then made it installable in a day. Expect
   rough edges, and tell me where they are.
@@ -236,7 +256,7 @@ Add `--yes` to skip the questions.
 
 **Optional inputs.** Step 3 covers documents: markitdown is installed with its PDF, DOCX,
 XLSX and PPTX extras, so a dropped file becomes Markdown with nothing more to install.
-The other two doors need something extra on the machine that runs the capture:
+The other doors need something extra on the machine that runs the capture:
 
 - **Voice** needs `ffmpeg` and [whisper.cpp](https://github.com/ggml-org/whisper.cpp)
   with a model file (this vault runs `large-v3-turbo`). Transcription stays on the
@@ -246,7 +266,13 @@ The other two doors need something extra on the machine that runs the capture:
   (`capture-photo` in `tools/llm.py`), so a backend without vision means no OCR. A local
   OCR option is on the list in [Local Inference](https://github.com/ezapmar/brainless-public/wiki/Local-Inference).
 
-Neither is required to start: text, links, documents and the whole compile loop work
+- **YouTube and podcasts** need [yt-dlp](https://github.com/yt-dlp/yt-dlp) for captions,
+  plus the same `ffmpeg` and whisper.cpp for episodes without them. Share an episode link,
+  not a show link.
+- **Backups** need [age](https://github.com/FiloSottile/age). Put the public key in
+  `PROFILE.md` and keep the private one in your password manager.
+
+None is required to start: text, links, documents and the whole compile loop work
 without them. How each door is wired is in [Capture Flow](https://github.com/ezapmar/brainless-public/wiki/Capture-Flow).
 
 To run the script with options instead of piping it:
@@ -280,6 +306,11 @@ digest     nightly digest of Thinking/Daily, archives the raw captures
 dashboard  rebuild the projects view from every notes.md
 health     refresh and print _Agent-Context/HEALTH.md
 file       file a result into .wiki/digests/queries/ so the wiki compounds
+media      queue YouTube and podcast links, work the transcript queue
+backup     monthly encrypted archive, restore test, status
+graph      the link graph as a Gephi file
+eval       ask the golden questions and score the search
+chats      bring Claude or ChatGPT history in, filtered
 export     produce the public engine tree from a private vault
 update     git pull and refresh dependencies
 vault      print the vault path

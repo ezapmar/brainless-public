@@ -48,6 +48,8 @@ SHIP_FILES = [
     "VERSION",
     "_Agent-Context/AGENT-RULES.md",
     "_Agent-Context/TRUNK-BASED-DEVELOPMENT.md",
+    # Project hooks (tools/hooks/claude_guard.py): the vault rules as checks, not prompts.
+    ".claude/settings.json",
 ]
 EXCLUDE = [
     "tools/__pycache__",
@@ -65,7 +67,7 @@ EXCLUDE = [
 SKELETON = [
     "Work", "Personal", "Library", "Inbox", "raw", "Archive", "Daily Briefings",
     "Thinking/Daily", "Thinking/Ideas", "Thinking/Beliefs", "Thinking/Decisions",
-    ".wiki/summaries", ".wiki/articles", ".wiki/ideas", ".wiki/digests/queries",
+    ".wiki/summaries", ".wiki/concepts", ".wiki/ideas", ".wiki/digests/queries",
     ".wiki/projects", ".wiki/moc", ".wiki/entities", "logs", ".agents/state",
 ]
 # Private data files replaced by stubs.
@@ -129,6 +131,7 @@ Daily Briefings/*
 Thinking/**/*.md
 .wiki/summaries/*
 .wiki/articles/*
+.wiki/concepts/*
 .wiki/ideas/*
 .wiki/digests/*
 .wiki/projects/*

@@ -161,6 +161,17 @@ def handle_link(raw_text, url_match, stamp=None):
     url = url_match.group(0).rstrip(").,>]")
     comment = URL_RE.sub("", raw_text).strip()
     log(f"Link received: {url}")
+    # YouTube and Apple Podcasts links become transcripts, not page notes. The
+    # capture only queues: transcription can take an hour and must not block
+    # this worker (tools/media_import.py, brainless-media timer).
+    try:
+        import media_import
+        if media_import.classify(url):
+            jid, new = media_import.enqueue(url, comment, source="capture")
+            log(f"Media link queued: {jid} (new={new})")
+            return t("telegram_capture.media_queued" if new else "telegram_capture.media_known")
+    except Exception as e:
+        log(f"media queue failed, falling back to a page note: {e}")
     try:
         page = fetch_page_text(url)
     except Exception as e:
