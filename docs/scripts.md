@@ -262,7 +262,7 @@ JSON on stdin.
     history.
 - `post` sends a `.wiki` page back to the model when its frontmatter lacks `lang` or
   `summary_en`.
-- `session` loads CONTEXT.md and PROJECTS-ACTIVE.md into every new session.
+- `session` loads CONTEXT.md, PROJECTS-ACTIVE.md and LEARNINGS.md into every new session.
 
 A dash that is already in a file does not block an edit next to it; only new ones count.
 Each call takes about 25 ms.

@@ -179,6 +179,10 @@ apply.
 - The rules are checks, not requests. A write into your own folders asks you first. A
   deletion asks. A secret or a bank number never lands in a file. A page where the model
   talked about itself instead of your source is refused.
+- What you teach one agent, every agent knows. Your standing preferences and the lessons
+  from correcting an agent live in one file in the vault, `_Agent-Context/LEARNINGS.md`,
+  not in one tool's memory, so the chat agents, the nightly jobs and whatever you use next
+  all read the same list.
 - Once a month the whole vault, history included, is sealed with a key the machine cannot
   open and put somewhere sync does not reach. A restore test proves it comes back. Sync is
   not backup: a bad night copies itself everywhere in minutes.

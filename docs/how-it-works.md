@@ -339,11 +339,15 @@ Privacy follows from the same separation.
 
 The rules are checks, not requests.
 
+- **Lessons:** your standing preferences and the lessons from correcting an agent live in
+  `_Agent-Context/LEARNINGS.md`, each with the rule, why, and how to apply it. They sit in
+  the vault, not in one tool's memory. The session hook loads the file, and the Buzz agents
+  and the reply worker read it, so a correction given once reaches every agent.
 - **Hooks:** Claude Code hooks in `.claude/settings.json` run on every tool call.
   - A write into a human folder asks first, and so does a deletion.
   - A secret, a bank number or a misplaced briefing is refused.
   - A wiki page without its language and English summary goes straight back.
-  - The session starts with the context files already loaded.
+  - The session starts with the context files and `LEARNINGS.md` already loaded.
 - **Run log:** every scheduled run leaves one line with what it actually did. A job that
   fails, goes quiet, or runs every night with nothing to do shows up in the health
   report the next morning.

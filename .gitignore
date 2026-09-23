@@ -47,6 +47,7 @@ _Agent-Context/*.md
 !_Agent-Context/AGENT-RULES.md
 !_Agent-Context/TRUNK-BASED-DEVELOPMENT.md
 !_Agent-Context/PROFILE.md
+!_Agent-Context/LEARNINGS.md
 !**/.gitkeep
 logs/*
 .agents/state/*

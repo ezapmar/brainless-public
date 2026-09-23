@@ -3,6 +3,14 @@
 All notable changes to the public brainless engine. Dates are the day of the public
 push. The private vault this is exported from has its own history.
 
+## 0.4.1 (2026-09-23)
+
+- `_Agent-Context/LEARNINGS.md`: the owner's standing preferences and the lessons from
+  correcting an agent, each with the rule, why, and how to apply it. They live in the vault,
+  not in one tool's memory. The SessionStart hook loads the file, and the writing and
+  narratives agents and the Buzz reply worker read it. `AGENT-RULES.md` Rule 1 names it.
+  The public export ships a stub with one example entry.
+
 ## 0.4.0 (2026-09-23)
 
 - **Concept pages.** A summary says what one source said; a concept page says what the

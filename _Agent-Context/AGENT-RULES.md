@@ -5,7 +5,7 @@ Section names and briefing text below are given in English; in a live vault they
 ## Core Rules (Claude Code)
 
 ### Rule 1: Read Before You Speak
-Always load `CONTEXT.md` and `PROJECTS-ACTIVE.md` before responding to any vault-related query. Your suggestions should be grounded in the owner's actual context, not generic advice.
+Always load `CONTEXT.md` and `PROJECTS-ACTIVE.md` before responding to any vault-related query, and `LEARNINGS.md` when it exists: the owner's standing preferences and the lessons from past corrections, shared by every agent. Your suggestions should be grounded in the owner's actual context, not generic advice.
 
 ### Rule 2: Never Write to the Vault Without Permission
 You may suggest edits, draft notes, and propose links. You do NOT modify vault files unless the owner explicitly instructs you to. The vault is human-authored truth.

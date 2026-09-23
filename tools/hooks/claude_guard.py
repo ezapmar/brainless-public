@@ -10,7 +10,7 @@ in a context nobody predicted, so these checks run on every tool call instead.
 Usage (wired in .claude/settings.json; reads the hook JSON on stdin):
   claude_guard.py pre       PreToolUse: dash, human area, secret, briefing, deletion
   claude_guard.py post      PostToolUse: .wiki frontmatter
-  claude_guard.py session   SessionStart: inject CONTEXT.md and PROJECTS-ACTIVE.md
+  claude_guard.py session   SessionStart: inject CONTEXT.md, PROJECTS-ACTIVE.md, LEARNINGS.md
 
 Three rules keep the hooks worth having:
 - Silent on pass. A hook that talks when nothing is wrong trains everyone to
@@ -198,7 +198,7 @@ def post(payload: dict):
 
 def session(payload: dict):
     blocks = []
-    for name in ("CONTEXT.md", "PROJECTS-ACTIVE.md"):
+    for name in ("CONTEXT.md", "PROJECTS-ACTIVE.md", "LEARNINGS.md"):
         p = VAULT / "_Agent-Context" / name
         try:
             blocks.append(f"<file path=\"_Agent-Context/{name}\">\n{p.read_text()}\n</file>")
