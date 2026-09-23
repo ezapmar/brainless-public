@@ -1185,8 +1185,9 @@ and the `pacman -Syu` stay with a human.
 
 **Description.** A whitelist copy of named directories and files into a fresh
 directory, with private data files replaced by stubs and the empty machine folders
-the tools expect. The content folders are left to `install.sh`. It then scans the result for identity numbers, keys, tokens, private
-e-mail addresses and the owner's name, and exits non-zero on any finding. Without
+the tools expect. The content folders are left to `install.sh`. It then scans the
+result for identity numbers, keys, tokens, private e-mail addresses and the owner's
+name, and exits non-zero on any finding. Without
 `--out` it is a dry run. `--update` refreshes an existing checkout and keeps its git
 history, and `--scan-only` is what the public CI runs on every push.
 
