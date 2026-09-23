@@ -279,6 +279,28 @@ The other doors need something extra on the machine that runs the capture:
 None is required to start: text, links, documents and the whole compile loop work
 without them. How each door is wired is in [Capture Flow](https://github.com/ezapmar/brainless-public/wiki/Capture-Flow).
 
+**Search by meaning (optional).** `brainless search` ranks by words out of the box. For
+the questions that share no words with the page (a synonym, the other language, a thing
+described without its name), add the embedding index once:
+
+```bash
+cd ~/brainless && .venv/bin/python -m pip install -r requirements-search.txt
+.venv/bin/python tools/semantic_index.py build
+```
+
+The model, about 2 GB, downloads once and runs on the CPU; no note leaves the machine.
+Search turns hybrid by itself when the index exists, the nightly compile keeps it
+current, and link suggestions and dreaming read it. Without it everything still works on
+words alone. See [Scripts Reference](https://github.com/ezapmar/brainless-public/wiki/Scripts-Reference).
+
+**Other agents (optional).** `tools/mcp_server.py` serves the compiled wiki read-only to
+any MCP client: search, one page, the index. It never serves a page git ignores. To give
+every Claude Code session on the machine your vault:
+
+```bash
+claude mcp add --scope user brainless-wiki -- ~/brainless/.venv/bin/python ~/brainless/tools/mcp_server.py
+```
+
 To run the script with options instead of piping it:
 
 ```bash
