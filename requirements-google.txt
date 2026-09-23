@@ -1,0 +1,6 @@
+# Optional addon: Google Tasks and Calendar (.agents/scripts/gtasks_sync.py,
+# meeting_brief.py). The core install does not need these.
+#   .venv/bin/python -m pip install -r requirements-google.txt
+google-api-python-client
+google-auth-httplib2
+google-auth-oauthlib

@@ -41,7 +41,7 @@ SHIP_FILES = [
     "README.public.md",
     "install.sh",
     "bin/brainless",
-    "requirements.txt",
+    "requirements-google.txt",
     "requirements-core.txt",
     "requirements-search.txt",
     ".env.example",

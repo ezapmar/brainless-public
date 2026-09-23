@@ -14,7 +14,7 @@ Directions:
   added by hand on Google -> dropped as a line into the matching section
 
 Credentials: tools/tasks-sync/token.json + .credentials.json (gitignored).
-Dependencies: google-api-python-client, google-auth-oauthlib (run with the venv).
+Dependencies: requirements-google.txt (pip install -r it into the venv).
 """
 import os
 import re

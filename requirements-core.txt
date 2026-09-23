@@ -4,5 +4,5 @@
 markitdown[pdf,docx,xlsx,pptx]==0.1.7
 
 # Everything else in the core is standard library. Addons (Google Tasks, Calendar) are
-# in requirements.txt. The LLM backend is the claude CLI (Node) or any OpenAI-compatible
+# in requirements-google.txt. The LLM backend is the claude CLI (Node) or any OpenAI-compatible
 # endpoint; see .env.example.
