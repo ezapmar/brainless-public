@@ -238,6 +238,10 @@ def ensure_frontmatter(path: Path, dry_run: bool = False) -> list[str]:
 ARCHIVE = WIKI / "_archive"
 
 
+# Generated reports in .wiki/ name pages; they are not pages themselves.
+REPORTS = {"_lint-report.md", "_link-suggestions.md"}
+
+
 def all_wiki_files():
     """Every wiki page except the lint report and the archive.
 
@@ -247,7 +251,7 @@ def all_wiki_files():
     grants an inbound edge: they link to everything, and would hide every orphan.
     """
     return sorted(p for p in WIKI.rglob("*.md")
-                  if "_lint-report" not in p.name and ARCHIVE not in p.parents
+                  if p.name not in REPORTS and ARCHIVE not in p.parents
                   and "_index" not in p.relative_to(WIKI).parts)
 
 

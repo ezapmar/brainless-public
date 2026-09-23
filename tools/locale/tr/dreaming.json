@@ -1,0 +1,19 @@
+{
+  "apply_words": ["evet", "uygula", "tamam", "ok"],
+  "reject_words": ["hayır", "hayir", "red", "reddet"],
+  "skip_words": ["atla", "geç", "gec", "sonra"],
+  "link_title": "🔗 Bağlantı önerisi",
+  "merge_title": "🪞 Kopya önerisi (birleştirme)",
+  "evidence": "Kanıt",
+  "reason": "Neden",
+  "adds_link": "Onaylarsan iki sayfanın Bağlantılar bölümüne eklenecek satırlar:",
+  "adds_merge": "Onaylarsan ikisi birbirine bağlanır ve birleştirme listene yazılır. Hiçbir dosya silinmez; birleştirmeyi sen yaparsın.",
+  "footer": "Bu mesaja yanıt ver: evet / hayır / atla",
+  "applied_link": "✅ Bağlandı: {a} ↔ {b}. Kayıt: _Agent-Context/links.md",
+  "applied_merge": "✅ Birleştirme listesine yazıldı ve iki sayfa bağlandı: {a} ↔ {b}",
+  "rejected": "Tamam, bu çift bir daha sorulmayacak.",
+  "skipped": "Atlandı; 30 gün sonra yeniden sorulabilir.",
+  "unknown": "Anlamadım. Bu öneriye yanıt: evet / hayır / atla",
+  "already": "Bu öneri zaten karara bağlandı: {decision}.",
+  "stopped": "🛑 Dreaming durdu: son 14 günde {n} önerinin yalnızca %{rate}'i onaylandı (eşik %30). Yeniden başlatmak için .agents/state/dreaming.json içindeki \"stopped\" alanını sil."
+}

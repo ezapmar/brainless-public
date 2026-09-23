@@ -77,7 +77,8 @@ anything else touches it: documents through markitdown called as a library, audi
 through whisper on the machine, photographs read into text. A converted source keeps
 two files, the mechanical `_raw.md` conversion and an authored note beside it, so a
 later reader can always tell evidence from thinking. That choice is what makes grep and
-BM25 enough instead of an index server, makes every change a git diff, and means the
+BM25 enough instead of an index server (a local embedding index, rebuilt from the
+Markdown, adds meaning when words fail), makes every change a git diff, and means the
 vault outlives every tool in this repository. Graph view follows the explicit
 `[[wikilinks]]`, and Smart Connections shows related notes that do not have a written
 edge yet. You own the notes. The machine owns `.wiki/`, which means nobody has to spend a
@@ -111,7 +112,7 @@ The same compile does the dull, useful work around those pages:
 
 Two numbers keep this honest. The graph gets measured every week: the share of pages
 nothing links to, links per page, how much of the vault hangs together, and which pages
-bridge two clusters. And twenty-two questions with known answers are asked every night.
+bridge two clusters. And thirty-four questions with known answers are asked every night.
 When the share of right answers in the top five drops, the health report says so before a
 bad answer does. For a picture, `brainless graph` writes the whole graph as a file Gephi
 opens, coloured by page type.
@@ -444,7 +445,9 @@ Both machines run the same `claude` CLI, no API key. One rule keeps two writers 
 fighting: one owner per file, append-only for anything both touch. We learned it the hard
 way. On 4 September both machines wrote the same briefing file and every push failed for
 51 hours. Two computers, one file and no adults in the room. Git operations on the worker
-are now serialised with `flock` against a 30 minute backup timer, and
+are now serialised with `flock` against a 30 minute backup timer. Every job ends in the
+same backup step; when the run log is the only change, it waits for the next half hour
+instead of making a commit of its own (a two-minute poller once made 330 a day), and
 `_Agent-Context/TRUNK-BASED-DEVELOPMENT.md` has the full convention.
 
 ### The loop, on the clock
@@ -457,7 +460,8 @@ verbatim by `.agents/systemd/install.sh`:
 | 12:30 and 21:20 | `tools/dialectic.py` | six personas argue the day's new notes (isolated round one, quoted round two), moderator posts the scorecard and synthesis to `#dialectic` and files them; on a silent day the evening run argues one vault topic instead |
 | 02:00 | `tools/dialectic.py --run night` | the local-model experiment: the six personas answer through the worker's own model, one at a time, while the moderator and a judge lane stay on the cloud and grade each reply; a replay of the day's first topic, scored nowhere, with a five-night kill rule (see [local inference](local-inference.md#the-night-window-experiment)) |
 | 21:00 | `closeout` | propose one seed idea, one decision worth writing down, one contradiction with your beliefs |
-| 23:00 | `nightly` | write the digest, archive the raw capture, compile `.wiki/`, lint |
+| 23:00 | `nightly` | write the digest, archive the raw capture |
+| 23:20 | `compile` | compile `.wiki/`, lint report, search index, retrieval score; every night, captures or not |
 | Mon 05:00, Fri 21:00 | `dashboard` | rebuild the active-projects view from every `notes.md` |
 | Mon 06:30 | `resurface` | bring decisions due for grading back to the top |
 | Mon 06:50 | `writing-index` | rebuild the writing map (`_Agent-Context/WRITING.md`), one-line summary to `#writing` |
@@ -558,9 +562,9 @@ BUZZ_ACP_RESPOND_TO_ALLOWLIST=__MODERATOR_PUBKEY__
 BUZZ_ACP_CHANNELS=__CHANNEL_UUID__
 ```
 
-**6. The Mac side, launchd.** `install.sh --schedule` writes three agents into
-`~/Library/LaunchAgents`: an hourly compile (`StartInterval 3600`), the nightly processor
-at 23:00, and the weekly lint on Sunday at 22:00. Same jobs as the worker's systemd timers,
+**6. The Mac side, launchd.** `install.sh --schedule` writes four agents into
+`~/Library/LaunchAgents`: the hourly job (`StartInterval 3600`), the nightly processor
+at 23:00, the nightly compile at 23:20, and the weekly lint on Sunday at 22:00. Same jobs as the worker's systemd timers,
 in Apple's format.
 
 ### A day, concretely

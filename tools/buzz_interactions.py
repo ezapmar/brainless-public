@@ -12,6 +12,7 @@ from buzz_delivery import Outbox, ROUTES, HARNESS_CHANNELS, VAULT, event_id, mes
 from i18n import t
 from today_buzz import parents, handle as today_handle, send_queue
 import thinking_buzz
+import dreaming
 
 
 def answer_text(msg):
@@ -131,6 +132,8 @@ def poll_channel(box, name, identity, owner):
             claimed = today_handle(msg, cid, owner, text=text, box=box) if name == 'tasks' else False
             if name == 'thinking':
                 claimed = thinking_buzz.handle(msg, cid, owner, text=text, box=box)
+            if name == 'dreaming':
+                claimed = dreaming.handle(msg, cid, owner, text=text, box=box)
             if not claimed:
                 read_only_answer(msg, cid, identity, box, text)
             with box.db() as db:

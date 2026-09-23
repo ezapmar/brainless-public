@@ -478,14 +478,16 @@ def _inject_backlink(summary_stem: str, article_slug: str):
     _inject_link(WIKI / "summaries" / f"{summary_stem}.md", article_slug)
 
 
-def _inject_link(sp: Path, target: str) -> bool:
-    """Add `- [[target]]` under the page's links heading. True when added."""
+def _inject_link(sp: Path, target: str, note: str = "") -> bool:
+    """Add `- [[target]]` under the page's links heading, with `: note` after
+    it when given (an approved dreaming link carries its one-sentence reason).
+    True when added."""
     if not sp.exists():
         return False
     txt = sp.read_text()
-    link = f"- [[{target}]]"
-    if link in txt:
+    if f"- [[{target}]]" in txt:
         return False
+    link = f"- [[{target}]]" + (f": {note}" if note else "")
     # Accept the heading in the current language or in English (existing vaults).
     heading = next((h for h in t_list("compile_resources.links_heading") if h in txt), None)
     if heading:
@@ -1400,8 +1402,39 @@ def phase_link(dry: bool, full: bool):
         n = sum(_inject_link(p, stem) for stem in hits)
         added += n
         touched += bool(n)
-    _COUNTS["links"] = added
-    print(f"phase link: {added} link(s) on {touched} page(s)" + (" [dry]" if dry else ""))
+    approved = 0 if dry else apply_link_registry()
+    _COUNTS["links"] = added + approved
+    print(f"phase link: {added} link(s) on {touched} page(s), {approved} from the registry"
+          + (" [dry]" if dry else ""))
+
+
+# Links the owner approved in Buzz #dreaming (tools/dreaming.py) live in a
+# registry, not only in the pages: a summary is rewritten whole when its source
+# changes, and the link would go with it. Every compile puts them back.
+LINK_REGISTRY = VAULT / "_Agent-Context" / "links.md"
+_REG_ROW = re.compile(r"^\|\s*(?P<a>[^|]+?)\s*\|\s*(?P<b>[^|]+?)\s*\|\s*(?P<d>[a-z-]+)\s*\|"
+                      r"\s*(?P<reason>[^|]*?)\s*\|\s*(?P<date>[0-9-]+)\s*\|\s*$")
+
+
+def link_registry(path: Path = LINK_REGISTRY) -> list[dict]:
+    """Rows of the registry: a, b (vault-relative paths), decision, reason, date."""
+    try:
+        text = path.read_text()
+    except OSError:
+        return []
+    return [m.groupdict() for m in map(_REG_ROW.match, text.splitlines()) if m and m["a"] != "a"]
+
+
+def apply_link_registry(rows=None) -> int:
+    """Both directions of every approved link or merge, where missing. A merge
+    is linked too until the owner merges: the two pages should know of each other."""
+    added = 0
+    for row in link_registry() if rows is None else rows:
+        if row["d"] not in ("link", "merge"):
+            continue
+        for x, y in ((row["a"], row["b"]), (row["b"], row["a"])):
+            added += _inject_link(VAULT / x, Path(y).stem, row["reason"])
+    return added
 
 
 # ─── Main ───────────────────────────────────────────────────────

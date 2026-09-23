@@ -1,0 +1,14 @@
+[Unit]
+Description=brainless: nightly wiki compile, lint report, search index and retrieval check
+After=network-online.target
+OnFailure=brainless-notify-failure@%n.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=%h/projects/brainless
+Nice=10
+# The compile has its own 90-minute backstop (tools/nightly_compile.py); this
+# only has to outlast it plus the index and retrieval steps.
+TimeoutStartSec=2h
+# git lock lives in worker_job.sh, wrapping only pull+backup (not the tool run).
+ExecStart=/bin/bash %h/projects/brainless/.agents/scripts/worker_job.sh tools/nightly_compile.py

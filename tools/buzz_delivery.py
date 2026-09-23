@@ -16,7 +16,7 @@ import time
 VAULT = Path(os.environ.get('BRAINLESS_VAULT') or Path(__file__).resolve().parents[1])
 ROUTES = {'ops': 'watchdog', 'tasks': 'tasks', 'radar': 'radar', 'content': 'content',
           'daily': 'briefing', 'inbox': 'inbox', 'thinking': 'thinking', 'crm': 'crm',
-          'writing': 'writing', 'narratives': 'narratives'}
+          'writing': 'writing', 'narratives': 'narratives', 'dreaming': 'dreaming'}
 # Channels where a live buzz-acp agent answers the owner (install_agent_channel.sh).
 # Scripts may post there through the outbox, but the polling reply worker must
 # not answer in them, or every owner message would get two replies.

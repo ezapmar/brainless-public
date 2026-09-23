@@ -1,0 +1,5 @@
+# Optional addon: semantic search (tools/semantic_index.py). Local ONNX models,
+# no torch, no API: vault text never leaves the machine. The embedding model
+# (~2 GB) downloads once into ~/.cache/fastembed on the first build.
+# Without this, tools/wiki_search.py runs BM25 alone.
+fastembed==0.8.1

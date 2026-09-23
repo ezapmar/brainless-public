@@ -12,7 +12,12 @@
   "err_audio_download": "ses dosyası indirilemedi",
   "err_transcript_empty": "transkript boş döndü",
   "err_image_download": "görsel indirilemedi",
-  "err_no_content": "işlenebilir içerik yok (metin, ses ya da görsel bekleniyor)",
+  "err_no_content": "işlenebilir içerik yok (metin, ses, görsel ya da belge bekleniyor)",
   "reply_saved": "Not düştü: {title}\n{rel}",
-  "reply_failed": "Bu mesaj işlenemedi: {exc}. Vault'a düşmedi."
+  "reply_failed": "Bu mesaj işlenemedi: {exc}. Vault'a düşmedi.",
+  "document_note_title": "Belge",
+  "document_origin": "{name} dosyasından dönüştürüldü, Buzz #{channel} kanalına {stamp} tarihinde gönderildi. Orijinal vault'ta tutulmuyor.",
+  "err_document_download": "belge indirilemedi",
+  "err_document_empty": "belgede metin katmanı yok (taranmış PDF olabilir), hiçbir şey kaydedilmedi",
+  "err_document_private": "dosya adı gizli listede ({part}), dönüştürülmedi. Mac'te tut"
 }

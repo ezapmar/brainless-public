@@ -345,6 +345,28 @@ def run_findings(roll, now=None):
     return out
 
 
+def check_worker_reach():
+    """Mac-side reachability of the worker (tools/worker_reach.py, hourly).
+    Absent state means this machine has no worker target configured."""
+    path = os.path.join(VAULT, ".agents/state/worker_reach.json")
+    if not os.path.exists(path):
+        return
+    label = f"{WORKER} reach"
+    try:
+        s = json.loads(open(path).read())
+    except (OSError, ValueError):
+        add(label, "RED", "Unreadable reachability state")
+        return
+    age = time.time() - s.get("checked_at", 0)
+    fails = s.get("fails", 0)
+    if age > 3 * 3600:
+        add(label, "WARN", f"last check {ago(age)}; the hourly job may have stopped")
+    elif fails:
+        add(label, "RED" if fails >= 2 else "WARN", f"{fails} failed check(s): {s.get('reason', '')}")
+    else:
+        add(label, "OK", f"reachable, checked {ago(age)}")
+
+
 def check_runs():
     """Per-run log (tools/run_log.py): a job that failed last time, went quiet,
     or ran every night with nothing to do. Exit codes miss the last two."""
@@ -509,6 +531,7 @@ def main():
     # Night jobs and telegram moved to the worker on 2026-08-26; they leave no
     # Mac log trace. The aggregate pulse is below, the detail is in the Linux watchdog.
     check_worker()
+    check_worker_reach()
     check_dialectic()
     check_morning_briefing()
     check_kill_criteria()

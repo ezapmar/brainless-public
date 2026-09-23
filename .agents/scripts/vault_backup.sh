@@ -31,6 +31,21 @@ if [ -d .git/rebase-merge ] || [ -d .git/rebase-apply ]; then
   echo "$(date '+%Y-%m-%d %H:%M:%S') half-finished rebase aborted"
 fi
 
+# After the push, on every exit path: refresh the semantic index with the pages
+# the worker compiled today, then the link suggestions. Only changed pages are
+# embedded. It runs last so it can never delay or fail the push, and the trap
+# keeps the script's exit code. launchd's PATH finds Apple's python3, which has
+# no fastembed; prefer Homebrew's. Without the search addon it does nothing.
+refresh_index() {
+  local py
+  py=$(command -v /opt/homebrew/bin/python3 || command -v python3) || return 0
+  "$py" tools/semantic_index.py build >/dev/null 2>&1 \
+    && "$py" tools/link_suggest.py 2>/dev/null | grep RUNLOG \
+    && echo "$(date '+%Y-%m-%d %H:%M:%S') semantic index and link suggestions refreshed" \
+    || echo "$(date '+%Y-%m-%d %H:%M:%S') semantic index refresh skipped"
+}
+trap refresh_index EXIT
+
 if wait_for_github; then
   # Fetch the captures the worker pushed (since 2026-08-26 the Telegram
   # listener runs on the always-on Linux machine).

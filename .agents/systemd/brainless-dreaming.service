@@ -1,0 +1,14 @@
+[Unit]
+Description=brainless: dreaming, nightly link and merge proposals to Buzz #dreaming
+After=network-online.target
+OnFailure=brainless-notify-failure@%n.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=%h/projects/brainless
+# The judge stays on the default (cloud) provider. On 24 hand-labelled pairs
+# (2026-09-23) Claude was right on 20 and never said "link" wrongly; the local
+# Qwen3-4B was right on 17 but said "link" to 5 of 8 look-alike pairs (team
+# siblings, CRM stubs) and never found a duplicate, at ~5 min a call.
+# Every candidate here is a look-alike, so that is the case that matters.
+ExecStart=/bin/bash %h/projects/brainless/.agents/scripts/worker_job.sh tools/dreaming.py

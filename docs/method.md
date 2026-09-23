@@ -110,7 +110,8 @@ This is not a formatting preference. It buys five things that a proprietary stor
 not:
 
 1. **Grep and BM25 work.** `tools/wiki_search.py` is ripgrep plus a ranking function. No
-   index server, no embedding refresh, no vendor.
+   index server, no vendor. The optional embedding index is a local file rebuilt from the
+   Markdown; delete it and search falls back to BM25, and nothing is lost.
 2. **Git works.** Every change to every note is a diff with a date and an author. Two
    machines can write to the same vault under a documented sync protocol
    ([TRUNK-BASED-DEVELOPMENT.md](../_Agent-Context/TRUNK-BASED-DEVELOPMENT.md)).

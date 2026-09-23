@@ -6,6 +6,13 @@ posted by the owner, turns voice notes (local whisper), images (Claude vision),
 links and plain text into vault notes under Thinking/Daily, then replies in the
 thread with the note title and path. The Buzz identity "Inbox" does the talking.
 
+Documents (PDF, Word, Excel, PowerPoint, EPUB) are converted with markitdown
+into Inbox/Documents/<stamp>-<name>.md. The original is read from a temp dir
+and never written to the vault: office files are gitignored, and the Mac holds
+the originals it cares about. A file whose name or caption matches a private
+name part (PROFILE private_name_parts plus the locale list) is refused, not
+converted, so an employee list cannot reach git through the phone.
+
 Only messages from allowed authors are processed (owner by default; extra hex
 pubkeys can be listed one per line in ~/.config/brainless/buzz/capture_authors).
 State: .agents/state/buzz_capture_seen (processed event ids) and
@@ -26,8 +33,8 @@ from datetime import datetime
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 import telegram_capture as tc  # noqa: E402  (reuses whisper, prompts, paths)
-from owner_profile import LANG  # noqa: E402
-from i18n import t  # noqa: E402
+from owner_profile import LANG, PRIVATE_NAME_PARTS  # noqa: E402
+from i18n import t, t_list  # noqa: E402
 
 VAULT = tc.VAULT
 BUZZ_DIR = os.path.expanduser("~/.config/brainless/buzz")
@@ -57,8 +64,19 @@ CHANNEL_NAME = "inbox"
 IDENTITY = "inbox"
 AUDIO_EXT = {".m4a", ".mp3", ".ogg", ".oga", ".opus", ".wav", ".webm", ".mp4", ".aac", ".flac", ".caf"}
 IMAGE_EXT = {".jpg", ".jpeg", ".png", ".heic", ".heif", ".webp", ".gif", ".tif", ".tiff"}
+DOC_EXT = {".pdf", ".docx", ".xlsx", ".pptx", ".epub"}
+DOC_MIME = {
+    "application/pdf": ".pdf",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document": ".docx",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": ".xlsx",
+    "application/vnd.openxmlformats-officedocument.presentationml.presentation": ".pptx",
+    "application/epub+zip": ".epub",
+}
+DOC_DIR = os.path.join("Inbox", "Documents")
 MEDIA_RE = re.compile(r"https?://[^\s)\]]+/media/[A-Za-z0-9._-]+")
 MD_IMAGE_RE = re.compile(r"!\[[^\]]*\]\([^)]*\)")
+# A generic file arrives as `[filename](media url)` in the body.
+MD_MEDIA_LINK_RE = re.compile(r"\[[^\]]*\]\(https?://[^)\s]+/media/[^)\s]+\)")
 
 log = tc.log
 
@@ -127,34 +145,94 @@ def save_since(ts):
 
 
 def media_from_message(msg):
-    """-> list of (url, mime) from imeta tags plus bare /media/ URLs in content."""
+    """-> list of (url, mime, filename) from imeta tags plus bare /media/ URLs in content."""
     found = []
     for tag in msg.get("tags") or []:
         if not tag or tag[0] != "imeta":
             continue
-        url = mime = None
+        url = mime = name = None
         for item in tag[1:]:
             k, _, v = item.partition(" ")
             if k == "url":
                 url = v.strip()
             elif k == "m":
                 mime = v.strip()
+            elif k == "filename":
+                name = v.strip()
         if url:
-            found.append((url, mime))
-    known = {u for u, _ in found}
+            found.append((url, mime, name))
+    known = {u for u, _, _ in found}
     for url in MEDIA_RE.findall(msg.get("content") or ""):
         if url not in known:
-            found.append((url, None))
+            found.append((url, None, None))
     return found
 
 
-def classify(url, mime):
+def classify(url, mime, name=None):
     ext = os.path.splitext(url.split("?")[0])[1].lower()
-    if (mime or "").startswith("audio/") or (mime or "").startswith("video/") or ext in AUDIO_EXT:
+    name_ext = os.path.splitext(name or "")[1].lower()
+    mime = (mime or "").split(";")[0].strip().lower()
+    if mime.startswith("audio/") or mime.startswith("video/") or ext in AUDIO_EXT:
         return "audio", ext or ".m4a"
-    if (mime or "").startswith("image/") or ext in IMAGE_EXT:
+    if mime.startswith("image/") or ext in IMAGE_EXT:
         return "image", ext or ".jpg"
+    if mime in DOC_MIME:
+        return "document", DOC_MIME[mime]
+    for e in (ext, name_ext):
+        if e in DOC_EXT:
+            return "document", e
     return "other", ext
+
+
+def private_hit(*texts):
+    """First private name part found in the given texts, else None."""
+    parts = [p.casefold() for p in (*PRIVATE_NAME_PARTS, *t_list("compile_resources.private_name_parts")) if p]
+    hay = " ".join(x for x in texts if x).casefold()
+    return next((p for p in parts if p in hay), None)
+
+
+def doc_slug(name):
+    stem = os.path.splitext(os.path.basename(name or ""))[0]
+    return re.sub(r"[^\w]+", "-", stem).strip("-_")[:60] or "document"
+
+
+def convert_document(src):
+    """-> markdown text via tools/markitdown_native (imported lazily: the Mac-less
+    capture path must still run when markitdown is missing, just not for documents)."""
+    sys.path.insert(0, os.path.join(VAULT, "tools"))
+    from markitdown_native import convert_to_file
+    out = src + ".md"
+    convert_to_file(src, out)
+    with open(out, encoding="utf-8") as fh:
+        return fh.read()
+
+
+def handle_document(url, mime, name, caption, stamp):
+    """Convert one document into Inbox/Documents; the original stays in a temp dir."""
+    hit = private_hit(name, caption)
+    if hit:
+        raise RuntimeError(t("buzz_capture.err_document_private", part=hit))
+    ext = classify(url, mime, name)[1]
+    with tempfile.TemporaryDirectory() as tmp:
+        raw = os.path.join(tmp, f"doc{ext}")
+        if not download(url, raw):
+            raise RuntimeError(t("buzz_capture.err_document_download"))
+        log(f"Document received ({ext}), converting...")
+        body = convert_document(raw).strip()
+    if not body:
+        raise RuntimeError(t("buzz_capture.err_document_empty"))
+    title = (caption.splitlines()[0].strip() if caption else "") or os.path.splitext(name or "")[0] or t("buzz_capture.document_note_title")
+    out_dir = os.path.join(VAULT, DOC_DIR)
+    os.makedirs(out_dir, exist_ok=True)
+    path = os.path.join(out_dir, f"{stamp}-{doc_slug(name or title)}.md")
+    origin = t("buzz_capture.document_origin", name=name or ext, channel=CHANNEL_NAME, stamp=stamp)
+    with open(path, "w", encoding="utf-8") as fh:
+        fh.write(f"# {title}\n\n> {origin}\n\n")
+        if caption:
+            fh.write(caption + "\n\n")
+        fh.write(body + "\n")
+    log(f"Document written: {path}")
+    return title, path
 
 
 def download(url, dest):
@@ -188,11 +266,12 @@ def handle(msg):
     """-> (title, path) or raises."""
     stamp = datetime.now().strftime("%Y-%m-%d-%H%M%S")
     content = (msg.get("content") or "").strip()
-    caption = MD_IMAGE_RE.sub("", MEDIA_RE.sub("", content)).strip()
+    caption = MD_IMAGE_RE.sub("", MEDIA_RE.sub("", MD_MEDIA_LINK_RE.sub("", content))).strip()
     media = media_from_message(msg)
 
-    audio = [(u, m) for u, m in media if classify(u, m)[0] == "audio"]
-    images = [(u, m) for u, m in media if classify(u, m)[0] == "image"]
+    audio = [(u, m) for u, m, n in media if classify(u, m, n)[0] == "audio"]
+    docs = [(u, m, n) for u, m, n in media if classify(u, m, n)[0] == "document"]
+    images = [(u, m) for u, m, n in media if classify(u, m, n)[0] == "image"]
 
     if audio:
         url, mime = audio[0]
@@ -210,6 +289,9 @@ def handle(msg):
         note = tc.make_note(text, t("buzz_capture.source_voice_prompt")) or f"# {t('buzz_capture.quick_note_title')}\n\n{text}"
         path = write_note(note, stamp, t("buzz_capture.source_voice"))
         return note.splitlines()[0].lstrip("# ").strip(), path
+
+    if docs:
+        return handle_document(*docs[0], caption, stamp)
 
     if images:
         url, mime = images[0]

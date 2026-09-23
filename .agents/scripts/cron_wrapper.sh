@@ -49,6 +49,10 @@ bash .agents/scripts/buzz_crm_sync.sh >> "$CRM_LOG" 2>&1
 # passed; tools/vault_archive.py). Runs on the Mac, where Drive is mounted.
 python3 tools/run_log.py exec -- python3 tools/vault_archive.py create --if-older-days 30 >> logs/backup.log 2>&1
 
+# Can the Mac still reach the worker? Local notification after two failed
+# hours (tools/worker_reach.py). Runs before health_check so HEALTH.md shows it.
+python3 tools/run_log.py exec -- python3 tools/worker_reach.py >> logs/worker_reach.log 2>&1
+
 # Hourly heartbeat: refresh _Agent-Context/HEALTH.md (cheap, no LLM calls).
 python3 tools/health_check.py >> logs/health_check.log 2>&1
 

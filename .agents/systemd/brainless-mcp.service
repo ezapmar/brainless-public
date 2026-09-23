@@ -1,0 +1,16 @@
+[Unit]
+Description=brainless read-only wiki MCP server (Tailscale only)
+OnFailure=brainless-notify-failure@%n.service
+
+# Long-running, so install.sh copies it but does not start it (it enables timers only).
+# Start once by hand:  systemctl --user enable --now brainless-mcp.service
+# Binds to this machine's Tailscale IPv4 alone; the bearer token is created on
+# first start in ~/.config/brainless/mcp_token (mode 600).
+[Service]
+Type=simple
+ExecStart=/bin/sh -c 'exec python3 %h/projects/brainless/tools/mcp_server.py --http "$(tailscale ip -4 | head -1):8765"'
+Restart=on-failure
+RestartSec=30
+
+[Install]
+WantedBy=default.target

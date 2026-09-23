@@ -42,6 +42,7 @@ SHIP_FILES = [
     "bin/brainless",
     "requirements.txt",
     "requirements-core.txt",
+    "requirements-search.txt",
     ".env.example",
     "LICENSE",
     "CHANGELOG.md",

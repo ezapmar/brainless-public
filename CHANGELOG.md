@@ -3,6 +3,47 @@
 All notable changes to the public brainless engine. Dates are the day of the public
 push. The private vault this is exported from has its own history.
 
+## 0.5.0 (2026-09-23)
+
+Search by meaning, and a wiki that proposes its own links.
+
+- **Hybrid search.** `wiki_search.py` fuses BM25 with local embeddings
+  (`tools/semantic_index.py`, multilingual-e5-large through fastembed, on the CPU; no vault
+  text reaches an API). On the 34 golden questions MRR rose from 74 to 87 and hit@1 from 62%
+  to 79%, better on every kind of question. An optional addon: `pip install -r
+  requirements-search.txt`, then `python3 tools/semantic_index.py build`. Without it, search
+  is BM25 as before. A smaller model and a reranker were measured and rejected.
+- **Passage-level sources.** Every result carries the passage that matched, the line of the
+  match and the last `[mm:ss]` marker before it, so an answer cites `path:line`. The snippet
+  now folds Turkish letters on both sides; a Turkish query no longer shows the frontmatter.
+- **Retrieval eval by kind.** The golden set grew from 22 to 34 questions, each tagged name,
+  paraphrase, crosslang or claim, and the eval scores each kind apart and records the mode.
+- **Read-only MCP server.** `tools/mcp_server.py` gives any MCP client `search`, `read_page`
+  and `index`. Standard library only. Over stdio, or over HTTP bound to one address with a
+  bearer token (`brainless-mcp.service` for the worker). It never serves a page git ignores,
+  and a hard-coded deny list backs that up. It cannot write.
+- **Link suggestions.** `tools/link_suggest.py` proposes links between pages that mean the
+  same thing but do not link: mutual nearest neighbours in the top 1% of pairs. Homes for
+  orphan pages first, then new links, then near-identical pages for the dedupe procedure.
+  Report only, gitignored and out of the graph.
+- **Dreaming.** `tools/dreaming.py` runs at 04:00 on the worker. A model judges each
+  suggested pair (link, duplicate or none, with one sentence why) and posts up to five a
+  night to Buzz `#dreaming`. The owner answers yes, no or skip. Approved links live in
+  `_Agent-Context/links.md`, and the compiler replays them on every compile, so a rewritten
+  summary keeps them. Duplicates become merge rows; nothing is deleted. A kill rule stops it
+  when under 30% of proposals are approved. Setup: `.agents/buzz/install_dreaming_channel.sh`.
+- **Documents to the inbox.** A PDF or office file posted to Buzz `#inbox` is converted
+  with markitdown on the worker into `Inbox/Documents`; the original never reaches git.
+- **Worker reach.** `tools/worker_reach.py` tells the Mac when it loses the worker
+  (Tailscale down, ssh failing, or no worker commit for hours), with a local notification
+  and a HEALTH.md row. The worker commits its run log twice an hour, not every run.
+- **The wiki compiles every night.** The compile, lint report, search index, link
+  suggestions and retrieval check moved out of the nightly digest into their own job
+  (`tools/nightly_compile.py`, `brainless-compile.timer` at 23:20). They used to run only
+  on nights with captures, so a quiet day left edits uncompiled and the index stale.
+- The installer steps past systemd units already linked in place. The Mac's nightly sync
+  refreshes the search index and the link suggestions.
+
 ## 0.4.1 (2026-09-23)
 
 - `_Agent-Context/LEARNINGS.md`: the owner's standing preferences and the lessons from

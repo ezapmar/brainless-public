@@ -9,9 +9,12 @@ pages, scored the same way every night.
 
 The golden set lives in _Agent-Context/retrieval-golden.json (private: it names
 real pages). Each item: {"q": question as the owner would ask it, "expect":
-[page stems, any one counts], "why": what the question tests}. A question is
-written in the owner's words, not the page's, because that is the gap search
-has to cross.
+[page stems, any one counts], "why": what the question tests, "kind": name |
+paraphrase | crosslang | claim}. The kind splits the score, because a search
+change usually helps one kind and costs another, and the average hides that.
+A question is written in the owner's words, not the page's, because that is
+the gap search has to cross. Never quote a golden question in a vault page:
+the page then outranks the answer and the eval measures the quote.
 
 Scores: hit@1, hit@5 (an expected page in the top 5), MRR@10. The previous run
 is kept in .agents/state/retrieval_eval.json so a change names the questions
@@ -29,7 +32,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from wiki_search import VAULT, search  # noqa: E402
+from wiki_search import VAULT, mode, search  # noqa: E402
 
 GOLDEN = VAULT / "_Agent-Context" / "retrieval-golden.json"
 LAST = VAULT / ".agents" / "state" / "retrieval_eval.json"
@@ -59,14 +62,20 @@ def evaluate(items: list[dict] | None = None, k: int = K) -> dict:
     for it in items:
         stems = [Path(d["path"]).stem for _, d in search(it["q"], k=k)]
         r = rank_of(it["expect"], stems)
-        rows.append({"q": it["q"], "rank": r, "top": stems[:3], "expect": it["expect"]})
+        rows.append({"q": it["q"], "rank": r, "top": stems[:3], "expect": it["expect"],
+                     "kind": it.get("kind", "other")})
+    kinds = {}
+    for kind in sorted({r["kind"] for r in rows}):
+        kinds[kind] = scores([r for r in rows if r["kind"] == kind])
+    return {"n": len(rows), "mode": mode(), **scores(rows), "kinds": kinds, "rows": rows}
+
+
+def scores(rows: list[dict]) -> dict:
     n = len(rows) or 1
     return {
-        "n": len(rows),
         "hit1": round(100 * sum(1 for r in rows if r["rank"] == 1) / n),
         "hit5": round(100 * sum(1 for r in rows if r["rank"] and r["rank"] <= 5) / n),
         "mrr": round(100 * sum(1 / r["rank"] for r in rows if r["rank"]) / n),
-        "rows": rows,
     }
 
 
@@ -101,9 +110,12 @@ def main(argv=None) -> int:
     if args.json:
         print(json.dumps({**res, "changes": moved}, ensure_ascii=False))
     else:
-        print(f"{res['n']} questions: hit@1 {res['hit1']}%, hit@5 {res['hit5']}%, MRR@{K} {res['mrr']}")
+        print(f"{res['n']} questions ({res['mode']}): hit@1 {res['hit1']}%, hit@5 {res['hit5']}%, MRR@{K} {res['mrr']}")
         if prev:
-            print(f"last run: hit@1 {prev.get('hit1')}%, hit@5 {prev.get('hit5')}%, MRR {prev.get('mrr')}")
+            print(f"last run ({prev.get('mode', 'bm25')}): hit@1 {prev.get('hit1')}%, hit@5 {prev.get('hit5')}%, MRR {prev.get('mrr')}")
+        for kind, sc in res["kinds"].items():
+            cnt = sum(1 for r in res["rows"] if r["kind"] == kind)
+            print(f"  {kind:<10} {cnt:>2}q  hit@1 {sc['hit1']:>3}%  hit@5 {sc['hit5']:>3}%  MRR {sc['mrr']:>3}")
         misses = [r for r in res["rows"] if not r["rank"] or r["rank"] > 5]
         if misses:
             print("\nNot in the top 5:")
@@ -112,7 +124,7 @@ def main(argv=None) -> int:
         if moved:
             print("\nChanged since last run:")
             print("\n".join(f"  {m}" for m in moved))
-    print(f"RUNLOG hit1={res['hit1']} hit5={res['hit5']} mrr={res['mrr']}")
+    print(f"RUNLOG mode={res['mode']} hit1={res['hit1']} hit5={res['hit5']} mrr={res['mrr']}")
     if args.min_hit5 is not None and res["hit5"] < args.min_hit5:
         return 1
     return 0

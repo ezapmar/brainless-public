@@ -13,9 +13,25 @@ git pull --rebase --autostash --quiet || true
 # Buzz Layer 1: post the morning briefing to #daily once per day (best effort).
 [ -x .agents/scripts/buzz_briefing_sync.sh ] && bash .agents/scripts/buzz_briefing_sync.sh || true
 
-if [ -n "$(git status --porcelain)" ]; then
-  git add -A
-  git commit --quiet -m "vault backup: $(date '+%Y-%m-%d %H:%M:%S') ($WORKER)" || true
+# Batching: every timer job runs this, and run_log.py rewrites RUNS-<host>.md on
+# each run, so a 2-minute poller alone made ~330 commits a day (23/09/2026).
+# When the run log is the only change, commit it at most every QUIET_MIN
+# minutes; any other change commits at once and carries the run log along.
+QUIET_MIN="${BRAINLESS_BACKUP_QUIET_MIN:-30}"
+changes="$(git status --porcelain)"
+if [ -n "$changes" ]; then
+  commit=1
+  if ! printf '%s\n' "$changes" | cut -c4- | grep -qvE '^_Agent-Context/RUNS-[^/]+\.md$'; then
+    last="$(git log -1 --format=%ct -- '_Agent-Context/RUNS-*.md' 2>/dev/null)"
+    [ -n "$last" ] && [ $(( $(date +%s) - last )) -lt $(( QUIET_MIN * 60 )) ] && commit=0
+  fi
+  if [ "$commit" = 1 ]; then
+    git add -A
+    git commit --quiet -m "vault backup: $(date '+%Y-%m-%d %H:%M:%S') ($WORKER)" || true
+  fi
 fi
 
-git push --quiet origin master || true
+# Push only when there is something to push (a tool may also have committed).
+if [ "$(git rev-list --count origin/master..HEAD 2>/dev/null || echo 1)" != 0 ]; then
+  git push --quiet origin master || true
+fi

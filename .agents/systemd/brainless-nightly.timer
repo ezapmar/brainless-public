@@ -1,5 +1,5 @@
 [Unit]
-Description=brainless: nightly digest, archive captures, compile and lint timer
+Description=brainless: nightly digest and archive captures timer
 
 [Timer]
 OnCalendar=*-*-* 23:00:00

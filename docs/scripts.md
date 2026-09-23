@@ -303,7 +303,11 @@ See [Buzz interactions](buzz-interactions.md).
 authors (the owner by default, more in `~/.config/brainless/buzz/capture_authors`),
 handles voice, images, links and text exactly like the Telegram twin, writes to
 `Thinking/Daily/`, and replies in the thread with the note title and path. State is a
-seen-id file and a since-timestamp.
+seen-id file and a since-timestamp. It also takes documents, which Telegram does not:
+a PDF, DOCX, XLSX, PPTX or EPUB attachment (recognised by MIME type, URL or the imeta
+`filename`) is converted with `markitdown_native` into `Inbox/Documents/`, and only the
+Markdown reaches git. A name or caption matching a private name part is refused
+before the download.
 
 **Philosophy.** Two channels, one behaviour. It never raises to the caller. Every
 failure is logged and, where possible, reported back into the thread, for the same
@@ -426,15 +430,30 @@ baseline.
 
 **Description.** Reads everything in `Thinking/Daily/`, asks the LLM for a digest with
 action items, writes `.wiki/digests/<date>.md`, appends the action items to the task
-ledger in its row format, moves the raw captures to `Archive/Daily-Captures/<date>/`,
-then runs the compiler and the linter. The compile timeout is 90 minutes and
-configurable through `BRAINLESS_COMPILE_TIMEOUT`.
+ledger in its row format and moves the raw captures to `Archive/Daily-Captures/<date>/`.
+The compile no longer runs here; see `tools/nightly_compile.py`.
 
 **Philosophy.** Captures are archived only after the digest is safely on disk; a failed
 digest leaves the day where it was and raises a notification. On an empty day the job
 still prints a heartbeat line, because the health check judges liveness by the log's
-age, and a job that is quiet and a job that is dead look identical otherwise. The
-timeout used to be 30 minutes, until a backlog was cut short three nights running.
+age, and a job that is quiet and a job that is dead look identical otherwise.
+
+### `tools/nightly_compile.py`
+
+**Definition.** The 23:20 job that keeps `.wiki/` current, every night.
+
+**Description.** Runs `compile_resources.py` inside its own budget, refreshes the lint
+report, rebuilds the semantic index and the link suggestions, and scores the retrieval
+questions. The run log gets `compile_rc` and `hit5`; a non-zero compile marks the run
+partial. The compile timeout is 90 minutes (`BRAINLESS_COMPILE_TIMEOUT`), the budget ten
+minutes less (`BRAINLESS_COMPILE_BUDGET`). On the worker it is `brainless-compile.timer`;
+on a Mac, `install.sh --schedule` adds a launchd agent at the same time.
+
+**Philosophy.** The compile used to sit at the end of the digest job, so it ran only on
+nights with captures and a good summary. A quiet day, or a failed digest, left the week's
+edits in `Work/` and `Library/` out of the wiki, and search went stale with them. Edits
+and captures are different doors; neither should wait for the other. The timeout used to
+be 30 minutes, until a backlog was cut short three nights running.
 
 ### `tools/compile_resources.py`
 
@@ -529,6 +548,56 @@ direction of these numbers shows it. Merging stays a human decision, because two
 look alike are often a general case and a specific one, and a merge cannot be undone by
 reading a diff.
 
+### `tools/link_suggest.py`
+
+**Definition.** Pages that mean the same thing but do not link.
+
+**Description.** It reads the semantic index and the lint link graph, and writes
+`.wiki/_link-suggestions.md` (gitignored, out of the graph). A pair is proposed when each
+page is among the other's five nearest and the similarity is in the top 1% of all pairs.
+Three sections: homes for orphan pages, new links between connected pages, and
+near-identical pairs (raw twins, one meeting captured twice) for the dedupe procedure.
+Pairs that cross source folders come first. The nightly job rebuilds it after the index.
+`--json` gives the full lists.
+
+**Philosophy.** The linker ties pages through names, and four in ten pages still had no
+link at all (2026-09-23). A Spiky meeting and a partnership note about one integration
+often share no name. Meaning is the missing signal. The tool proposes and never writes: a
+wrong link is cheap to refuse and expensive to find later. The cutoff is a percentile, not a
+fixed score, because every model scores on its own scale.
+
+
+### `tools/dreaming.py`
+
+**Definition.** A nightly pass that turns link suggestions into proposals I approve on Buzz.
+
+**Description.** At 04:00 on the worker it takes the top candidates from
+`link_suggest.py`, minus every pair already decided. A model reads both pages' opening
+passages and answers `link`, `duplicate` or `none`, with one sentence why. Each `link` and
+at most one `duplicate` a night become a preview in `#dreaming`: both paths, the reason,
+the evidence as `path:line`, and the exact line each page would gain. I reply `evet`,
+`hayır` or `atla`.
+
+- **Approved link:** a row in `_Agent-Context/links.md`, and `- [[other]]: reason` under
+  both pages' links heading. The compiler's link phase rewrites every approved row on each
+  compile, so a recompiled summary keeps its links.
+- **Approved duplicate:** a `merge` row and a link both ways. Nothing is deleted; the merge
+  is mine to do.
+- **Rejected:** recorded, never asked again. A `none` from the judge is remembered for 60 days.
+- **Bounds:** five proposals a night, one duplicate, 2N judge calls, no new proposals while
+  ten wait, expiry after 14 days.
+- **Kill rule:** under 30% approved across ten or more decisions in 14 days, and it stops
+  and says so in `#dreaming`.
+
+Setup on the worker: `bash .agents/buzz/install_dreaming_channel.sh`, then
+`bash .agents/systemd/install.sh`. `--dry-run` judges and prints without asking.
+
+**Philosophy.** Nearness is a candidate, not a reason: two people on one team sit close
+because their pages share a template. So a model reads the pair, and I decide. A link
+typed into a summary would vanish at its next recompile, which is why approvals live in a
+registry the compiler replays. Asking five times a night is a budget of attention, and the
+kill rule is there because a proposer I keep saying no to is worse than none.
+
 ---
 
 ### `tools/retrieval_eval.py`
@@ -536,8 +605,9 @@ reading a diff.
 **Definition.** Whether asking the vault still finds the right page.
 
 **Description.** The questions live in `_Agent-Context/retrieval-golden.json`, which is
-private because it names real pages. There are about twenty, each written the way I would
-ask it, with the pages that answer it. The eval runs them through `wiki_search.search()`,
+private because it names real pages. There are 34, each written the way I would ask it,
+with the pages that answer it and a kind (name, paraphrase, crosslang, claim) that splits
+the score, because a search change usually helps one kind and costs another. The eval runs them through `wiki_search.search()`,
 the same entry point an agent uses, and reports three numbers: hit@1, hit@5 and MRR@10.
 
 - **Last run:** kept in `.agents/state/`, so a change names the questions that moved, not
@@ -550,7 +620,8 @@ the same entry point an agent uses, and reports three numbers: hit@1, hit@5 and 
 or a prune archives the page one question depended on, and every answer still reads
 fluently. A fixed set of questions scored the same way every night is the only thing that
 notices. The questions are written in my words, not the pages', because that gap is the
-whole job of search. When a miss is really a wrong expectation, the fix is to widen the
+whole job of search. A vault page must never quote a golden question: the page then
+outranks the answer and the eval measures the quote. When a miss is really a wrong expectation, the fix is to widen the
 expected pages. Rewording the question until it passes would defeat the test.
 
 ---
@@ -633,14 +704,64 @@ because its labels are real names.
 
 ### `tools/wiki_search.py`
 
-**Definition.** Search over `.wiki/`: ripgrep for candidates, a small BM25 to rank them.
+**Definition.** Search over `.wiki/`: BM25 on the words, fused with local embeddings on
+the meaning when the search addon is installed.
 
 **Description.** `python3 tools/wiki_search.py "query" --k 10 --json`. `--root` points
 it at another folder. Slash commands and agents call it before they read the index.
 
-**Philosophy.** No embeddings, no vector database, no service to keep alive. For a
-personal vault, ripgrep and 125 lines are fast enough and have nothing to break. It is
-also the only vault command the read-only personas are allowed to run.
+- **Hybrid (default with an index):** BM25 and `semantic_index.py` each rank every page;
+  reciprocal rank fusion merges the two lists. About 1.3 seconds a query, model load
+  included.
+- **BM25 (default without one):** the original ripgrep and BM25, nothing to install.
+- **Passage-level sources:** every result carries the passage that matched (the one the
+  embedding chose, else the one holding most query words), the line of the match and the
+  last `[mm:ss]` marker before it. An agent cites `path:line`, and a claim can be checked
+  at its source in one jump. The ranking does not change.
+- **`BRAINLESS_SEARCH=bm25|hybrid|rerank`** forces a mode. `rerank` adds a local
+  cross-encoder over the fused top 30; it measured worse and slower, so it stays opt-in.
+
+**Philosophy.** This used to say no embeddings, and BM25 alone was enough until the
+questions stopped sharing words with the pages. I ask in Turkish about an English book,
+say "medical cover" where the memo says "health insurance", describe a role without its
+name. On the 34 golden questions (2026-09-23) hybrid moved MRR from 74 to 87 and hit@1
+from 62% to 79%, and it beat BM25 on every kind of question. It stays an addon: the
+model runs locally, so no vault text reaches an API, and without it search falls back
+to BM25 rather than failing. It is also the only vault command the read-only personas
+are allowed to run.
+
+### `tools/semantic_index.py`
+
+**Definition.** The embedding index behind hybrid search.
+
+**Description.** `python3 tools/semantic_index.py build` embeds each wiki page as
+passages (title and `summary_en` lead the first) with `intfloat/multilingual-e5-large`
+through fastembed, on the CPU, and stores the vectors in `.agents/state/semantic/`.
+Only pages whose text changed are embedded again; the nightly job runs the build after
+the compile. The first build downloads a 2 GB model and takes about 20 minutes on an
+M4 Pro. Install with `pip install -r requirements-search.txt`.
+
+**Philosophy.** The model was chosen by the eval, not by reputation. A smaller
+multilingual model (paraphrase-mpnet) made search worse than BM25 alone, MRR 59, because
+it reads only the first 128 tokens of a passage. Every model change goes through
+`retrieval_eval.py` first.
+
+### `tools/mcp_server.py`
+
+**Definition.** The wiki, read-only, for any MCP client.
+
+**Description.** Three tools: `search` (the same `search()` the eval scores, with the
+matching passage and its line), `read_page` and `index`. Over stdio by default; `--http <tailscale-ip>:8765` serves Streamable HTTP
+with a bearer token from `~/.config/brainless/mcp_token`. On the worker,
+`brainless-mcp.service` runs it. It refuses to bind to all interfaces. A second
+machine on the tailnet connects with the token copied into its own config, for
+Claude Code:
+`claude mcp add --scope local --transport http brainless-wiki http://<tailscale-ip>:8765/mcp --header "Authorization: Bearer <token>"`.
+
+**Philosophy.** An agent outside the vault should ask it the way an agent inside does,
+through search and compiled pages. What git would not push, the server does not serve:
+every path is checked against `.gitignore` and a hard-coded deny list, so a child's pages,
+finance resources and the archive stay home. It has no write tool.
 
 ### `tools/file_query.py`
 
@@ -944,13 +1065,29 @@ promise in different words. One module, one definition, both writers.
 
 **Description.** Hourly, with no LLM. It checks git freshness, the age and errors of
 each job log, LLM authentication (through the breadcrumb), the CRM status line, the
-morning briefing, kill criteria, the worker and the dialectic. It fires a notification
+morning briefing, kill criteria, the worker, the Mac's reach to it and the dialectic. It fires a notification
 when a check crosses the two-day red line. `brainless health` runs it and prints the
 result.
 
 **Philosophy.** Automation fails silently by default. This one refuses to: briefings
 must carry the health block at the top, so a broken pipe is the first thing I read in
 the morning and not something I discover three weeks later.
+
+### `tools/worker_reach.py`
+
+**Definition.** Whether the Mac can still reach the worker, hourly.
+
+**Description.** Three checks, first failure reported: Tailscale runs on this Mac, the
+worker answers ssh within 8 seconds, and the worker has committed to origin in the last
+two hours. The target lives in `~/.config/brainless/worker_ssh` (Mac-local, never in
+git); without it the job does nothing. Two failed hours in a row raise one macOS
+notification, recovery raises one more, and `health_check` shows a "reach" row from
+`.agents/state/worker_reach.json`.
+
+**Philosophy.** On 22 and 23 September every ssh to the worker timed out and nothing
+said so. The cause was Tailscale stopped on the Mac. The worker's watchdog could not
+have told us: it speaks through Buzz, and Buzz lives on the same tailnet. An alarm that
+travels over the broken link is no alarm, so this one stays on the machine that notices.
 
 ### `tools/vault_archive.py`
 

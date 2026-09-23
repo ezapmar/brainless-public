@@ -144,6 +144,7 @@ EOF
     mkdir -p logs
     write_plist "$PREFIX.brainless.hourly" "<string>/bin/bash</string><string>$VAULT/.agents/scripts/cron_wrapper.sh</string>" "<key>StartInterval</key><integer>3600</integer>"
     write_plist "$PREFIX.brainless.nightly" "<string>$VAULT/.venv/bin/python</string><string>$VAULT/tools/nightly_processor.py</string>" "<key>StartCalendarInterval</key><dict><key>Hour</key><integer>23</integer><key>Minute</key><integer>0</integer></dict>"
+    write_plist "$PREFIX.brainless.compile" "<string>$VAULT/.venv/bin/python</string><string>$VAULT/tools/nightly_compile.py</string>" "<key>StartCalendarInterval</key><dict><key>Hour</key><integer>23</integer><key>Minute</key><integer>20</integer></dict>"
     write_plist "$PREFIX.brainless.lint" "<string>$VAULT/.venv/bin/python</string><string>$VAULT/tools/lint_wiki.py</string><string>--fix</string><string>--fix-links</string>" "<key>StartCalendarInterval</key><dict><key>Weekday</key><integer>0</integer><key>Hour</key><integer>22</integer><key>Minute</key><integer>0</integer></dict>"
   else
     bash .agents/systemd/install.sh

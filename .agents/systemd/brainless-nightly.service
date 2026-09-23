@@ -1,5 +1,5 @@
 [Unit]
-Description=brainless: nightly digest, archive captures, compile and lint
+Description=brainless: nightly digest and archive captures (compile: brainless-compile)
 After=network-online.target
 OnFailure=brainless-notify-failure@%n.service
 

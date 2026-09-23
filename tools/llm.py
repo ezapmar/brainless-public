@@ -132,6 +132,7 @@ LANES = {
     "dialectic-synthesis": "long   synthesis across the five personas",
     "dialectic-connect":   "long   connection scan across the wiki",
     "dialectic-judge":     "short  usable or not, one word per local persona reply, JSON out",
+    "dreaming-judge":      "short  link, duplicate or none for two wiki pages, one sentence, JSON out",
     "content":             "long   content engine draft",
     "writing-ideas":       "long   long-form pitch generation for the writing channel",
     "thinker-digest":      "long   digest of a thinker's corpus",

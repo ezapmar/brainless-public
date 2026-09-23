@@ -6,12 +6,17 @@
 # the capture line (telegram, buzz-capture, tasks, backup, watchdog, spiky, brief,
 # reminder, thinkers, radar, content, update), copied from the worker on 2026-09-19.
 # The loop below globs *.service and *.timer, so a new unit needs no edit here.
+# brainless-mcp.service is long-running: copied here, started once by hand
+# (systemctl --user enable --now brainless-mcp.service).
 # Template units (buzz-persona@.service) are copied here, but their instances
 # are started by .agents/buzz/install_personas.sh.
 set -eu
 cd "$(dirname "$0")"
 mkdir -p ~/.config/systemd/user
 for f in *.service *.timer; do
+  # A unit linked in with `systemctl --user link` is already this file; cp
+  # refuses to copy a file onto itself and set -e would stop the install.
+  [ "$f" -ef ~/.config/systemd/user/"$f" ] && continue
   cp -f "$f" ~/.config/systemd/user/"$f"
 done
 systemctl --user daemon-reload

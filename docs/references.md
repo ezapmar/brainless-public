@@ -379,10 +379,22 @@ Candidate generation for wiki search. No index server.
 **Stephen Robertson and Hugo Zaragoza, "The Probabilistic Relevance Framework: BM25 and
 Beyond" (2009).** *Foundations and Trends in Information Retrieval*, 3(4), 333-389.
 
-`tools/wiki_search.py` reranks ripgrep hits with a small BM25. The file calls it naive,
-and it is: a ranking function in the script, not a search service. No embeddings, no
-vector database. That refusal is a design choice, written in
-[docs/scripts.md](scripts.md).
+`tools/wiki_search.py` ranks with a small BM25: a ranking function in the script, not a
+search service. Until 0.5.0 that was all of search. It stopped being enough when the
+questions stopped sharing words with the pages, and the retrieval eval showed it.
+
+**Gordon V. Cormack, Charles L. A. Clarke and Stefan Büttcher, "Reciprocal Rank Fusion
+Outperforms Condorcet and Individual Rank Learning Methods" (2009).** *SIGIR '09*, 758-759.
+
+Hybrid search merges the BM25 list and the embedding list by reciprocal rank fusion with
+the paper's constant, 60. No score calibration between the two, which is the point.
+
+**Liang Wang, Nan Yang, Xiaolong Huang, Linjun Yang, Rangan Majumder and Furu Wei,
+"Multilingual E5 Text Embeddings: A Technical Report" (2024).** arXiv:2402.05672.
+
+The embedding model behind `tools/semantic_index.py`, run locally through fastembed. It
+was chosen by the eval over a smaller multilingual model, which made search worse than
+BM25 alone. The reasoning is in [docs/scripts.md](scripts.md).
 
 ### Surface, not substrate
 

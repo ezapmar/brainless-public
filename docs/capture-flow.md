@@ -11,7 +11,7 @@ job is to keep it. Sorting and connection happen later.
 flowchart LR
   hand["Handwritten page"] --> image["Photo: Inbox, Telegram or Buzz"]
   phone["Telegram: text, voice, photo, link"] --> capture["Capture workers"]
-  buzz["Buzz #inbox: text, voice, image, link"] --> capture
+  buzz["Buzz #inbox: text, voice, image, link, document"] --> capture
   image --> capture
   docs["PDF, DOCX, XLSX, PPTX, audio"] --> processor["Hourly smart_processor"]
   capture --> daily["Thinking/Daily/*.md"]
@@ -53,6 +53,14 @@ flowchart LR
   audio in `Work/`, `Personal/` or `Library/`. MarkItDown creates a raw Markdown
   conversion beside the original. High-value resources also get a Summary and a
   Fiche de Lecture. Originals and raw conversions remain recoverable.
+- **Documents from the phone.** Attach a PDF, Word, Excel, PowerPoint or EPUB file
+  in Buzz `#inbox`. The worker converts it with MarkItDown into
+  `Inbox/Documents/<stamp>-<name>.md`; a caption becomes the title. The original is
+  read from a temporary folder and never enters the vault. A file whose name or
+  caption matches a private name part (`private_name_parts` in PROFILE.md, plus the
+  passport and ID words) is refused before download, with the reason in the thread.
+  The check reads names, not contents. A scanned PDF with no text layer saves nothing
+  and says so.
 - **Direct notes.** Type or hand-edit durable beliefs, decisions and project notes
   in their human-owned homes. These are the source of truth; automation proposes
   and connects, but does not silently decide for you.
@@ -88,12 +96,13 @@ the source.
 |---|---|---|
 | On Inbox image change | `inbox_watch_wrapper.sh` | OCRs a handwritten or printed image immediately; `smart_processor.py --images` is also the hourly backstop. |
 | Every 2 minutes on the worker | `telegram_worker.sh` | Polls Telegram, transcribes voice locally, reads photos, fetches links, and writes `Thinking/Daily/` or `Inbox/Links/`. |
-| Every 2 minutes on the worker | `buzz_capture_worker.sh` | Reads owner posts in Buzz `#inbox`, handles text, voice, images and links, and writes the same capture homes. |
+| Every 2 minutes on the worker | `buzz_capture_worker.sh` | Reads owner posts in Buzz `#inbox`, handles text, voice, images, links and documents, and writes the same capture homes (documents to `Inbox/Documents/`). |
 | Hourly | `cron_wrapper.sh` -> `smart_processor.py` | Converts documents, OCRs missed Inbox images, validates outputs, and records retry state. |
 | Every 10 minutes on the worker | `tools/media_import.py run` | Works the YouTube and podcast queue one link at a time and writes `Inbox/Media/`. |
 | 12:30 and 21:20 | `tools/dialectic.py` | Clusters that day's Telegram and Buzz captures, asks six critical personas to argue them in `#dialectic`, and files the synthesis. |
 | 21:00 | `tools/evening_closeout.py` | Reads the day's captures and proposes one seed, one decision and one contradiction. |
-| 23:00 | `tools/nightly_processor.py` | Turns daily captures into a digest, extracts owner tasks, archives raw files, compiles `.wiki/` (summaries, concept pages, entities, aliases, links, index), refreshes lint and scores the retrieval questions. |
+| 23:00 | `tools/nightly_processor.py` | Turns daily captures into a digest, extracts owner tasks, archives raw files. |
+| 23:20 | `tools/nightly_compile.py` | Compiles `.wiki/` (summaries, concept pages, entities, aliases, links, index), refreshes lint, rebuilds the search index and scores the retrieval questions. Runs every night, captures or not. |
 | Monthly, from the hourly job | `tools/vault_archive.py create` | Seals the vault and its history with `age` into the backup folder, newest six kept. |
 | Weekly | `resurface`, `thinking`, `reconcile`, `lint` | Brings due decisions back, asks a reflective question, checks belief drift and repairs the compiled layer. |
 

@@ -15,18 +15,6 @@ ARCHIVE_DIR = os.path.join(VAULT_ROOT, 'Archive/Daily-Captures')
 DIGESTS_DIR = os.path.join(VAULT_ROOT, '.wiki/digests')
 PROJECTS_WORK_DIR = os.path.join(VAULT_ROOT, 'Work')
 PROJECTS_PERSONAL_DIR = os.path.join(VAULT_ROOT, 'Personal')
-# The compile makes serial LLM calls of up to 300s each. 30 minutes cut a large
-# backlog short every night (Sep 8-10, 2026); 90 minutes lets it drain.
-COMPILE_TIMEOUT = int(os.environ.get("BRAINLESS_COMPILE_TIMEOUT", "5400"))
-# A window alone was not enough: a backlog larger than the window meant the hard
-# kill landed mid-phase every night (Sep 15, 17, 19, 21, 2026), took the cheap
-# phases behind it (INDEX.md) with it, and threw away the child's buffered
-# output, so the journal could not even show where it stopped. The compile now
-# gets its own smaller budget and stops itself between items; the timeout stays
-# as the backstop for a genuine hang, and the child runs unbuffered so its
-# progress reaches the journal as it happens.
-COMPILE_BUDGET = int(os.environ.get("BRAINLESS_COMPILE_BUDGET",
-                                    str(max(600, COMPILE_TIMEOUT - 600))))
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from resolve_bin import resolve_claude
 from llm import run_prompt  # noqa: E402
@@ -335,40 +323,11 @@ def main():
                 shutil.move(f, date_archive_dir)
             print(f"Archived {len(notes)} files.")
 
-            # After daily digest, run incremental wiki compile. Its exit code
-            # used to be dropped here (check=False), so a night where most
-            # model calls failed still looked like a clean run.
-            compile_rc = -1
-            try:
-                compile_rc = subprocess.run(
-                    [sys.executable, "-u",
-                     os.path.join(VAULT_ROOT, 'tools/compile_resources.py'),
-                     f"--budget-seconds={COMPILE_BUDGET}"],
-                    cwd=VAULT_ROOT, check=False, timeout=COMPILE_TIMEOUT,
-                ).returncode
-            except Exception as e:
-                print(f"compile_resources error: {e}")
-
-            # Always refresh the lint report (non-blocking, report-only mode)
-            try:
-                subprocess.run(
-                    [sys.executable, os.path.join(VAULT_ROOT, 'tools/lint_wiki.py')],
-                    cwd=VAULT_ROOT, check=False, timeout=180,
-                )
-            except Exception as e:
-                print(f"lint_wiki report refresh skipped: {e}")
-            # Retrieval check after the compile: the same golden questions every
-            # night, so a compile change that hurts search shows up as a number.
-            hit5 = ""
-            try:
-                import retrieval_eval
-                res = retrieval_eval.evaluate()
-                if res["n"]:
-                    hit5 = f" hit5={res['hit5']}"
-            except Exception as e:
-                print(f"retrieval eval skipped: {e}")
-            print(f"RUNLOG captures={len(notes)} digest=1 compile_rc={compile_rc}{hit5}"
-                  + ("" if compile_rc == 0 else " status=partial"))
+            # The wiki compile, index and retrieval check run in their own unit
+            # (tools/nightly_compile.py, brainless-compile.timer): here they ran
+            # only on nights with captures and a good digest, so a quiet day
+            # left edits in the human homes uncompiled.
+            print(f"RUNLOG captures={len(notes)} digest=1")
         except Exception as e:
             print(f"Error: {e}")
             print(f"RUNLOG captures={len(notes)} digest=0 status=fail")

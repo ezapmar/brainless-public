@@ -12,7 +12,12 @@
   "err_audio_download": "audio file could not be downloaded",
   "err_transcript_empty": "transcript came back empty",
   "err_image_download": "image could not be downloaded",
-  "err_no_content": "nothing to process (text, audio or image expected)",
+  "err_no_content": "nothing to process (text, audio, image or document expected)",
   "reply_saved": "Note saved: {title}\n{rel}",
-  "reply_failed": "This message could not be processed: {exc}. It did not reach the vault."
+  "reply_failed": "This message could not be processed: {exc}. It did not reach the vault.",
+  "document_note_title": "Document",
+  "document_origin": "Converted from {name}, sent to Buzz #{channel} on {stamp}. The original is not kept in the vault.",
+  "err_document_download": "document could not be downloaded",
+  "err_document_empty": "the document has no text layer (a scanned PDF?), nothing was saved",
+  "err_document_private": "the file name matches the private list ({part}), so it was not converted. Keep it on the Mac"
 }
