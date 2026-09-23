@@ -53,7 +53,7 @@ git add -A && git commit -m "notes" && git push
   against the backup timer, and the two-writer rule (one owner per file, append-only for
   anything two machines touch) is what stops the failure mode where two devices write the
   same file and every push is rejected. That discipline only exists in the git path. See
-  [the reference setup](how-it-works.md#usage-example-our-real-setup) and
+  [the reference setup](reference-deployment.md) and
   `_Agent-Context/TRUNK-BASED-DEVELOPMENT.md`.
 - **The phone.** You usually do not sync the whole vault to a phone here. Capture goes
   through the Telegram bot instead, landing in `Thinking/Daily/` on whichever machine runs

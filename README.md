@@ -158,6 +158,25 @@ busy head.
 - **Overnight, without me.** An always-on machine digests the day, rebuilds everything
   and runs the six voices at 12:30 and 21:20.
 
+## What it runs on
+
+One laptop is enough to start. Mine grew into three devices:
+
+- **iPhone 16 Pro.** Capture goes in through a Telegram bot (voice, photos, links, text).
+  Everything that comes back (receipts, the morning three, the six voices, alerts) arrives
+  as a [Buzz](https://github.com/block/buzz) channel on the same phone, and I reply in the
+  thread.
+- **MacBook Pro (macOS).** Where I write and run the commands, with Claude Code on a
+  subscription, no API key. launchd runs the jobs while it is open.
+- **A laptop running [Omarchy](https://omarchy.org) (Arch Linux).** The always-on worker,
+  reachable only over [Tailscale](https://tailscale.com). systemd timers, the Telegram
+  capture with local whisper.cpp, the self-hosted Buzz relay and the persona agents all
+  run here, and it pulls, commits and pushes so the Mac can sleep.
+
+The vault is one git repo between the two computers. The units, the schedule and the
+sandbox are in
+[Reference Deployment](https://github.com/ezapmar/brainless-public/wiki/Reference-Deployment).
+
 ## What it changed
 
 I stopped carrying it all in my head, which was the whole point.
@@ -369,8 +388,8 @@ built against: [Commands](https://github.com/ezapmar/brainless-public/wiki/Comma
 The full story, with the mechanics and the file names, lives in the
 [wiki](https://github.com/ezapmar/brainless-public/wiki).
 
-- [How it works](https://github.com/ezapmar/brainless-public/wiki/How-It-Works): the loop step by step, the privacy rules, the addons
-  and the exact setup I run.
+- [How it works](https://github.com/ezapmar/brainless-public/wiki/How-It-Works): the loop step by step, the privacy rules, the addons.
+- [Reference Deployment](https://github.com/ezapmar/brainless-public/wiki/Reference-Deployment): the exact three-device setup I run.
 - [The Loop](https://github.com/ezapmar/brainless-public/wiki/The-Loop) and [Method](https://github.com/ezapmar/brainless-public/wiki/Method): how a note moves from capture to
   decision, and why judging is postponed at each step.
 - [Personas and Dialectic](https://github.com/ezapmar/brainless-public/wiki/Personas-and-Dialectic): the six voices and the two rounds.

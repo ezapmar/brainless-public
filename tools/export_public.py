@@ -188,6 +188,9 @@ OWNER_ALLOW = (
     "README.md",
     # The long half of the README, moved out on 2026-09-22: same voice, same review.
     "docs/how-it-works.md",
+    # The real setup, moved out of how-it-works on 2026-09-23: the worker's name and the
+    # profile's owner name are the point of the page.
+    "docs/reference-deployment.md",
     "LICENSE",
     "_Agent-Context/TRUNK-BASED-DEVELOPMENT.md",
     "tools/export_public.py",
