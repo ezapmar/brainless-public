@@ -3,6 +3,18 @@
 All notable changes to the public brainless engine. Dates are the day of the public
 push. The private vault this is exported from has its own history.
 
+## 0.6.1 (2026-09-25)
+
+Health sees the worker's LLM login.
+
+- **Worker LLM row.** The LLM breadcrumb (`.agents/state/llm_status`) is per machine, and
+  the worker does the heavy LLM work. `tools/worker_reach.py` now copies the worker's
+  breadcrumb over ssh each hour, with the worker's own file time, into
+  `.agents/state/worker_llm_status.json`. `health_check` shows it as a second LLM row, red
+  on an authentication error, so an expired worker login no longer hides behind the main
+  machine's green row. `BRAINLESS_WORKER_VAULT` sets the worker's vault path, relative to
+  its home (default `projects/brainless`).
+
 ## 0.6.0 (2026-09-25)
 
 The nightly compile says what it did.
