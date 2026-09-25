@@ -442,10 +442,11 @@ age, and a job that is quiet and a job that is dead look identical otherwise.
 
 **Definition.** The 23:20 job that keeps `.wiki/` current, every night.
 
-**Description.** Runs `compile_resources.py` inside its own budget, refreshes the lint
-report, rebuilds the semantic index and the link suggestions, and scores the retrieval
-questions. The run log gets `compile_rc` and `hit5`; a non-zero compile marks the run
-partial. The compile timeout is 90 minutes (`BRAINLESS_COMPILE_TIMEOUT`), the budget ten
+**Description.** Runs `compile_resources.py` inside its own budget, writes the change
+brief (`wiki_changes.py`), refreshes the lint report, rebuilds the semantic index and the
+link suggestions, and scores the retrieval questions. The run log gets `compile_rc`,
+`wiki_changed` and `hit5`; a non-zero compile marks the run partial, and seven nights in a
+row with `wiki_changed=0` turn HEALTH.md yellow. The compile timeout is 90 minutes (`BRAINLESS_COMPILE_TIMEOUT`), the budget ten
 minutes less (`BRAINLESS_COMPILE_BUDGET`). On the worker it is `brainless-compile.timer`;
 on a Mac, `install.sh --schedule` adds a launchd agent at the same time.
 
@@ -454,6 +455,24 @@ nights with captures and a good summary. A quiet day, or a failed digest, left t
 edits in `Work/` and `Library/` out of the wiki, and search went stale with them. Edits
 and captures are different doors; neither should wait for the other. The timeout used to
 be 30 minutes, until a backlog was cut short three nights running.
+
+### `tools/wiki_changes.py`
+
+**Definition.** What last night's compile did, in one short page.
+
+**Description.** `nightly_compile.py` snapshots `.wiki/` before the compile and diffs it
+after: pages added, updated and removed per kind (concepts, summaries, entities, projects,
+ideas, maps of content, relationships), wikilinks gained, and new bullets under a concept
+page's Contested and Superseded headings. No model is involved. Pages git ignores are left
+out. The result overwrites `_Agent-Context/WIKI-CHANGES.md`, which the morning briefing
+reads; a new contested or superseded claim becomes a quick action for the owner. Run by
+hand with `python3 tools/wiki_changes.py --since <git ref>` to see the change since any
+commit.
+
+**Philosophy.** The compile runs while the owner sleeps and touches dozens of pages. A
+loop that changes what you know without telling you is one you stop trusting, and a
+contradiction filed in a page nobody opens has not been flagged at all. The brief costs
+nothing to produce, so it runs every night, including the nights it has nothing to say.
 
 ### `tools/compile_resources.py`
 

@@ -1,0 +1,23 @@
+{
+  "title": "# Wiki Changes",
+  "updated_line": "Last compile: {time}",
+  "nothing": "The compile changed nothing.",
+  "changed_heading": "## Changed",
+  "linked_heading": "## Linked",
+  "links_line": "- {links} new link(s) on {pages} page(s)",
+  "flagged_heading": "## Flagged",
+  "no_flags": "- No new contradictions or superseded claims",
+  "added": "- {kind}: {n} new ({names})",
+  "updated": "- {kind}: {n} updated ({names})",
+  "removed": "- {kind}: {n} removed ({names})",
+  "more": " and {n} more",
+  "flag_contested": "- Contested, {page}: {text}",
+  "flag_superseded": "- Superseded, {page}: {text}",
+  "kind_concepts": "Concepts",
+  "kind_summaries": "Summaries",
+  "kind_entities": "Entities",
+  "kind_projects": "Projects",
+  "kind_ideas": "Ideas",
+  "kind_moc": "Maps of Content",
+  "kind_relationships": "Relationships"
+}

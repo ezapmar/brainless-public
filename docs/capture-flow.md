@@ -102,7 +102,7 @@ the source.
 | 12:30 and 21:20 | `tools/dialectic.py` | Clusters that day's Telegram and Buzz captures, asks six critical personas to argue them in `#dialectic`, and files the synthesis. |
 | 21:00 | `tools/evening_closeout.py` | Reads the day's captures and proposes one seed, one decision and one contradiction. |
 | 23:00 | `tools/nightly_processor.py` | Turns daily captures into a digest, extracts owner tasks, archives raw files. |
-| 23:20 | `tools/nightly_compile.py` | Compiles `.wiki/` (summaries, concept pages, entities, aliases, links, index), refreshes lint, rebuilds the search index and scores the retrieval questions. Runs every night, captures or not. |
+| 23:20 | `tools/nightly_compile.py` | Compiles `.wiki/` (summaries, concept pages, entities, aliases, links, index), writes the change brief (`_Agent-Context/WIKI-CHANGES.md`), refreshes lint, rebuilds the search index and scores the retrieval questions. Runs every night, captures or not. |
 | Monthly, from the hourly job | `tools/vault_archive.py create` | Seals the vault and its history with `age` into the backup folder, newest six kept. |
 | Weekly | `resurface`, `thinking`, `reconcile`, `lint` | Brings due decisions back, asks a reflective question, checks belief drift and repairs the compiled layer. |
 

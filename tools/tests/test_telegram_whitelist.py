@@ -3,6 +3,7 @@
 The docstring promise: only the whitelisted chat is served, the first sender
 becomes the whitelist only in an explicit setup run, an unreadable whitelist
 file fails closed, and the offset advances either way so nothing is replayed.
+The one outgoing Telegram call is the saved receipt, to the whitelisted chat.
 Telegram is a mock; nothing leaves the machine.
 
 Run: python3 -B -m unittest discover -s tools/tests -v
@@ -82,7 +83,7 @@ class WhitelistTest(PollerFixture):
         log = self.poll([update(1, STRANGER, "let me in"), update(2, OWNER, "a thought")])
         self.assertEqual(self.handled_chats(), [OWNER])
         self.assertIn(f"Unauthorized chat ignored: {STRANGER}", log)
-        self.assertEqual(self.sent(), [], "Telegram is capture-only")
+        self.assertEqual([m["chat_id"] for m in self.sent()], [OWNER], "the receipt goes to the owner only")
         self.assertEqual(self.buzz.call_count, 1)
         self.assertEqual(self.offset(), "2", "ignored updates still advance the offset")
 
@@ -100,7 +101,7 @@ class WhitelistTest(PollerFixture):
         self.assertEqual(stat.S_IMODE(self.chat.stat().st_mode), 0o600)
         self.assertEqual(self.handled_chats(), [OWNER], "the adopting message itself is not captured; later ones are")
         self.assertEqual(self.handle.call_args.args[1]["text"], "third")
-        self.assertEqual(self.sent(), [])
+        self.assertEqual([m["chat_id"] for m in self.sent()], [OWNER], "only the captured message is receipted")
         self.assertEqual(self.buzz.call_count, 2)
 
     def test_setup_flag_does_not_reopen_an_existing_whitelist(self):
@@ -137,6 +138,42 @@ class WhitelistTest(PollerFixture):
         self.handle.assert_not_called()
         self.assertEqual(self.sent(), [])
         self.assertEqual(self.offset(), "4")
+
+
+class ReceiptTest(PollerFixture):
+    def test_receipt_is_plain_and_not_repeated(self):
+        self.chat.write_text(OWNER)
+        self.handle.return_value = "[[TEGV]] ile [[Ebru Hanım|Ebru]] toplantısı"
+        self.poll([update(1, OWNER)])
+        (receipt,) = self.sent()
+        self.assertNotIn("[[", receipt["text"])
+        self.assertIn("TEGV ile Ebru toplantısı", receipt["text"])
+        self.assertNotIn("[[", self.buzz.call_args.args[1])
+        self.poll([])
+        self.assertEqual(len(self.sent()), 0, "a finished record is gone; nothing to repeat")
+
+    def test_failed_receipt_does_not_block_the_capture(self):
+        self.chat.write_text(OWNER)
+        def api(token, method, params=None, timeout=30):
+            if method == "sendMessage":
+                raise OSError("telegram down")
+            return {"ok": True, "result": [update(1, OWNER)]}
+        with patch.object(capture, "api", Mock(side_effect=api)):
+            capture.main()
+        self.assertIn("Telegram receipt failed", self.out.getvalue())
+        self.assertFalse((self.state.parent / "telegram_pending/1.json").exists())
+
+
+class LinkCommentTest(unittest.TestCase):
+    def test_buzz_autolink_brackets_are_not_a_comment(self):
+        import media_import
+        raw = "<https://podcasts.apple.com/tr/podcast/x/id1?i=2>"
+        with patch.object(media_import, "enqueue", Mock(return_value=("id", True))) as enqueue, \
+                contextlib.redirect_stdout(io.StringIO()):
+            capture.handle_link(raw, capture.URL_RE.search(raw))
+        url, comment = enqueue.call_args.args[:2]
+        self.assertEqual(url, "https://podcasts.apple.com/tr/podcast/x/id1?i=2")
+        self.assertEqual(comment, "")
 
 
 class PollerRobustnessTest(PollerFixture):

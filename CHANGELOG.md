@@ -3,6 +3,27 @@
 All notable changes to the public brainless engine. Dates are the day of the public
 push. The private vault this is exported from has its own history.
 
+## 0.6.0 (2026-09-25)
+
+The nightly compile says what it did.
+
+- **Change brief.** `tools/wiki_changes.py` snapshots `.wiki/` before the 23:20 compile
+  and diffs it after: pages added, updated and removed per kind, links gained, and new
+  Contested or Superseded bullets on concept pages. No model. It writes
+  `_Agent-Context/WIKI-CHANGES.md`, the morning briefing reads it, and a new contradiction
+  becomes a quick action for the owner. `--since <git ref>` shows the change since any
+  commit.
+- **A stuck compiler shows in health.** The run log gets `wiki_changed`; seven nights in
+  a row with no page changed turn HEALTH.md yellow. The dry-run check now counts only runs
+  that report the field, so a field added later does not read older runs as zeros.
+- **Dialectic backstage.** The persona rounds move to `#dialectic-lab`; the owner's
+  `#dialectic` gets one short card per topic. The long context goes to a brief file the
+  personas read, so moderator messages stay a few lines.
+- **Telegram receipt.** Capture sends one "saved" line back to the whitelisted chat; still
+  no commands or buttons. Buzz deliveries drop the hidden marker, which Buzz rendered
+  verbatim.
+- **Leak scan.** Common words that are also entity aliases no longer flag every file.
+
 ## 0.5.2 (2026-09-23)
 
 The README says what it runs on, and the root shows the engine.

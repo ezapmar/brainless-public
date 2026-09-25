@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """Nightly wiki compile (worker, brainless-compile.timer at 23:20).
 
-Compile, lint report, semantic index + link suggestions, retrieval check. Until
-23/09/2026 this block sat inside nightly_processor.py after the digest, so it
-ran only on nights with captures and a good summary: a quiet day (17 and 22/09)
-left edits in Work/, Personal/ and Library/ uncompiled, and the index and the
-retrieval number went stale with them. Now it runs every night on its own.
+Compile, change brief, lint report, semantic index + link suggestions,
+retrieval check. Until 23/09/2026 this block sat inside nightly_processor.py
+after the digest, so it ran only on nights with captures and a good summary: a
+quiet day (17 and 22/09) left edits in Work/, Personal/ and Library/
+uncompiled, and the index and the retrieval number went stale with them. Now it runs every night on its own.
 
 Run: python3 tools/nightly_compile.py   (via worker_job.sh: pull, run, backup)
 """
@@ -34,6 +34,13 @@ def main():
     # Its exit code used to be dropped (check=False), so a night where most
     # model calls failed still looked like a clean run.
     compile_rc = -1
+    # Snapshot .wiki/ first so the change brief can say what this compile did.
+    before = None
+    try:
+        import wiki_changes
+        before = wiki_changes.snapshot()
+    except Exception as e:
+        print(f"change brief snapshot skipped: {e}")
     try:
         compile_rc = subprocess.run(
             [sys.executable, "-u",
@@ -43,6 +50,16 @@ def main():
         ).returncode
     except Exception as e:
         print(f"compile_resources error: {e}")
+
+    # The change brief: what the compile added, updated, linked and flagged,
+    # read by the morning briefing (_Agent-Context/WIKI-CHANGES.md).
+    changed = ""
+    if before is not None:
+        try:
+            d = wiki_changes.write(before, wiki_changes.snapshot())
+            changed = f" wiki_changed={wiki_changes.count(d)}"
+        except Exception as e:
+            print(f"change brief skipped: {e}")
 
     # Always refresh the lint report (non-blocking, report-only mode)
     try:
@@ -78,7 +95,7 @@ def main():
             hit5 = f" hit5={res['hit5']}"
     except Exception as e:
         print(f"retrieval eval skipped: {e}")
-    print(f"RUNLOG compile_rc={compile_rc}{hit5}"
+    print(f"RUNLOG compile_rc={compile_rc}{changed}{hit5}"
           + ("" if compile_rc == 0 else " status=partial"))
 
 

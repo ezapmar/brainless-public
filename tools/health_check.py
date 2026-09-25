@@ -305,7 +305,9 @@ def _runs_text(host):
 
 # Capture paths that should produce something within these many days; zeros
 # for longer mean the path is broken, not that the owner was quiet.
-DRY_CAPTURE = {("nightly_processor", "captures"): 3, ("spiky_capture", "reports"): 7}
+DRY_CAPTURE = {("nightly_processor", "captures"): 3, ("spiky_capture", "reports"): 7,
+               # A week of compiles that change no page is a stuck compiler.
+               ("nightly_compile", "wiki_changed"): 7}
 
 
 def run_findings(roll, now=None):
@@ -338,8 +340,13 @@ def run_findings(roll, now=None):
         for (j, key), limit in DRY_CAPTURE.items():
             if j != job:
                 continue
-            recent = [e for e in days if e["day"] > (now - timedelta(days=limit)).strftime("%Y-%m-%d")]
-            covered = days[0]["day"] <= (now - timedelta(days=limit - 1)).strftime("%Y-%m-%d")
+            # Only runs that report the field: one added later must not read
+            # its older runs as zeros.
+            keyed = [e for e in days if key in e["counts"]]
+            if not keyed:
+                continue
+            recent = [e for e in keyed if e["day"] > (now - timedelta(days=limit)).strftime("%Y-%m-%d")]
+            covered = keyed[0]["day"] <= (now - timedelta(days=limit - 1)).strftime("%Y-%m-%d")
             if covered and recent and all(e["counts"].get(key, 0) == 0 for e in recent):
                 out.append(("WARN", t("health_check.runs_dry", job=job, field=key, days=limit)))
     return out

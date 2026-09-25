@@ -1,0 +1,23 @@
+{
+  "title": "# Wiki Değişiklikleri",
+  "updated_line": "Son derleme: {time}",
+  "nothing": "Derleme hiçbir şeyi değiştirmedi.",
+  "changed_heading": "## Değişenler",
+  "linked_heading": "## Bağlananlar",
+  "links_line": "- {pages} sayfada {links} yeni link",
+  "flagged_heading": "## İşaretlenenler",
+  "no_flags": "- Yeni çelişki ya da geçersizleşen iddia yok",
+  "added": "- {kind}: {n} yeni ({names})",
+  "updated": "- {kind}: {n} güncellendi ({names})",
+  "removed": "- {kind}: {n} kaldırıldı ({names})",
+  "more": " ve {n} tane daha",
+  "flag_contested": "- Tartışmalı, {page}: {text}",
+  "flag_superseded": "- Geçersizleşen, {page}: {text}",
+  "kind_concepts": "Kavramlar",
+  "kind_summaries": "Özetler",
+  "kind_entities": "Varlıklar",
+  "kind_projects": "Projeler",
+  "kind_ideas": "Fikirler",
+  "kind_moc": "İçerik haritaları",
+  "kind_relationships": "İlişkiler"
+}

@@ -172,17 +172,18 @@ class Outbox:
                 raise ValueError('Unknown outbox key')
             if row['event']:
                 return row['event']
-            marker = '<!-- brainless:' + hashlib.sha256(key.encode()).hexdigest() + ' -->'
             try:
                 cid = self.client.channel(row['channel'], row['identity'])
                 if row['parent'] and not re.fullmatch('[a-f0-9]{64}', row['parent']):
                     raise ValueError('Invalid Buzz parent')
                 if row['status'] == 'sending':
                     # A crash/timeout may have happened AFTER relay acceptance.
-                    # Reconcile the exact marker and author before another send.
+                    # Reconcile the exact body and author before another send; no
+                    # hidden marker, because Buzz renders HTML comments verbatim.
                     _, public = self.client.credentials(row['identity'])
                     matches = [m for m in self.client.history(row['identity'], cid, row['created'])
-                               if m.get('pubkey') == public and marker in m.get('content', '')]
+                               if m.get('pubkey') == public
+                               and m.get('content', '').strip() == row['body'].strip()]
                     if matches:
                         mid = event_id(matches[0])
                         with self.db() as db:
@@ -193,7 +194,7 @@ class Outbox:
                 args = ['messages', 'send', '--channel', cid, '--content', '-']
                 if row['parent']:
                     args += ['--reply-to', row['parent']]
-                result = self.client.call(row['identity'], args, row['body'] + '\n\n' + marker)
+                result = self.client.call(row['identity'], args, row['body'])
                 mid = event_id(result)
                 if not mid:
                     raise RuntimeError('Buzz returned no event id; delivery will be reconciled')

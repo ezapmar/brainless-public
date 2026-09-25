@@ -221,7 +221,7 @@ OWNER_ALLOW = (
 REGISTRY_FILES = ("_Agent-Context/entities.md", "_Agent-Context/entity-candidates.md")
 PEOPLE_GLOB_DIR = "About People"  # Work/<company>/About People/<team>/<Full Name>.md
 # Registered names that are also everyday words in the shipped code and docs.
-NAME_COMMON = {"Can", "Doğan", "Zafer", "Metin", "Deniz", "Elif", "Su", "Bayrak", "Advisors", "Financial"}
+NAME_COMMON = {"Can", "Doğan", "Zafer", "Metin", "Deniz", "Elif", "Su", "Bayrak", "Advisors", "Financial", "Core"}
 
 
 def registry_names(vault=VAULT):

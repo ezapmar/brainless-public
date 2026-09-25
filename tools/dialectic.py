@@ -4,7 +4,13 @@
 Twice a day (12:30 and 21:20 on the always-on worker) the moderator takes the day's raw
 captures (Telegram and Buzz voice notes, text, photos already transcribed into
 Thinking/Daily/*-telegram.md and *-buzz.md), clusters them into topics and has
-six live persona agents argue each topic in the Buzz channel #dialectic.
+six live persona agents argue each topic backstage in the Buzz channel
+#dialectic-lab (falls back to #dialectic until that channel is in
+channels.json). The owner's channel #dialectic gets one short card per topic
+(render_card): thesis, computed verdict, one line per persona, the round 2
+clash, the result, one question, in the language of the topic. The long part
+of every moderator message (wiki context, beliefs, round 1 quotes) goes to a
+brief file under .agents/state/dialectic_briefs/ that the personas read.
 On a day with no captures the evening run argues one vault topic instead (a
 decision past its review date, a decided note without a prediction, a pending
 decision near review, a belief not challenged in 90 days, or a live question
@@ -91,7 +97,9 @@ PERSONA_DIR = os.path.join(VAULT, ".agents", "buzz", "personas")
 TEAM_FILE = os.path.join(VAULT, ".agents", "buzz", "team_instructions.md")
 BUZZ_DIR = os.path.expanduser("~/.config/brainless/buzz")
 BUZZ_BIN = os.path.expanduser("~/.cargo/bin/buzz")
-CHANNEL_NAME = "dialectic"
+CHANNEL_NAME = "dialectic"      # the stage: one card per topic, what the owner reads
+LAB_CHANNEL = "dialectic-lab"   # backstage: the rounds; falls back to the stage until it exists
+BRIEF_DIR = os.path.join(STATE_DIR, "dialectic_briefs")
 MODERATOR = "moderator"
 PERSONAS = [("skeptic", "Skeptic"), ("gambler", "Gambler"), ("scientist", "Scientist"),
             ("postmortem", "Postmortem"), ("strategist", "Strategist"), ("methodologist", "Methodologist")]
@@ -664,38 +672,67 @@ def grounding_text(topic):
     return "\n\n".join(parts)
 
 
-def round_text(n, topic, context, persona=None, r1=None):
+def write_brief(topic, context, n, r1=None):
+    """The long part of a moderator message, written to a file the personas read
+    (they have Read on the vault). Keeps the Buzz message to a few lines."""
+    os.makedirs(BRIEF_DIR, exist_ok=True)
+    slug = re.sub(r"[^a-z0-9]+", "-", topic["title"].lower())[:40].strip("-") or "topic"
+    path = os.path.join(BRIEF_DIR, f"{datetime.now().strftime('%Y-%m-%d-%H%M')}-{slug}-r{n}.md")
+    body = [f"# {topic['title']}", "", f"**Thesis:** {topic['claim']}", "",
+            f"**Source:** {', '.join(topic['sources']) or topic_label(topic)}", "",
+            "**Prior context:**", ("\n".join(context) if context else "- (no wiki match)")]
+    ground = grounding_text(topic)
+    if ground:
+        body += ["", "Use a belief or calendar line only where it bears on the thesis; ignore the rest.", "", ground]
+    if r1 is not None:
+        body += ["", "**Round 1 replies:**", ""]
+        body += [f"### {name}\n{(txt or NO_REPLY)[:R1_QUOTE_CHARS]}\n" for name, txt in r1.items()]
+    write_file(path, no_dashes("\n".join(body)) + "\n")
+    return path
+
+
+R1_ASK = ("Test the thesis with your own method (do not read the thread or other personas). Relate it to the prior "
+          "context and the beliefs where they bear on it, naming the file. At most 250 words, ending with "
+          "Finding / Strongest objection / Question for {owner} / Vote (YES, NO or CONDITIONAL: does the thesis hold "
+          "as stated) / Number (NN%: probability the thesis proves right within 12 months).")
+R2_ASK = ("Read the round 1 replies. Pick the strongest objection other than your own, agree with it or refute it "
+          "(at most 3 sentences), citing at least one vault file by name from the prior context, the beliefs or your "
+          "own search, or saying that nothing in the vault bears on it. End with Chosen objection / My answer / "
+          "Vote (YES, NO or CONDITIONAL) / Number (NN%) / New evidence (one fact or argument that was not in your "
+          "round 1 reply, or \"none\").")
+
+
+def round_text(n, topic, context, persona=None, r1=None, brief=None):
     """Moderator text. Round 1 goes to ONE persona per root (isolated: nobody can
     read anyone else before answering). Round 2 is one root that quotes every
-    round 1 reply, so personas read each other only through the moderator."""
+    round 1 reply, so personas read each other only through the moderator.
+    With `brief` (Buzz) the context, beliefs and quotes live in that file and the
+    message stays short; without it (local mode, no file tools) all is inline."""
+    who = f"{persona}, this round is yours alone. " if (persona and n == 1) else ""
+    if brief:
+        head = (f"## {topic['title']}" + (" (round 2)" if n == 2 else "") +
+                f"\n\n**Thesis:** {topic['claim']}\n\n**Brief:** `{brief}` (read it first; it holds the prior context, "
+                f"the beliefs" + (" and the round 1 replies" if n == 2 else "") + ")")
+        ask = R1_ASK.format(owner=OWNER) if n == 1 else R2_ASK
+        return f"{head}\n\n**Round {n}:** {who}{ask}"
     ground = grounding_text(topic)
     ground = ("\n\n" + ground) if ground else ""
     if n == 1:
-        who = f"{persona}, this round is yours alone. " if persona else ""
         return (f"## {topic['title']}\n\n**Thesis:** {topic['claim']}\n\n"
                 f"**Source:** {', '.join(topic['sources']) or topic_label(topic)}\n\n"
                 f"**Prior context:**\n" + ("\n".join(context) if context else "- (no wiki match)") + ground +
-                f"\n\n**Round 1:** {who}Test the thesis with your own method, from this message only "
-                "(do not read the thread or other personas). Relate it to the prior context and the beliefs "
-                "above where they bear on it, naming the file. At most 250 words, ending with "
-                f"Finding / Strongest objection / Question for {OWNER} / Vote (YES, NO or CONDITIONAL: "
-                "does the thesis hold as stated) / Number (NN%: probability the thesis proves right within 12 months).")
+                f"\n\n**Round 1:** {who}From this message only. " + R1_ASK.format(owner=OWNER))
     quoted = "\n\n".join(f"### {name}\n{(txt or NO_REPLY)[:R1_QUOTE_CHARS]}" for name, txt in (r1 or {}).items())
     return (f"## {topic['title']} (round 2)\n\n**Thesis:** {topic['claim']}\n\n"
             f"**Prior context:**\n" + ("\n".join(context) if context else "- (no wiki match)") + ground +
-            f"\n\n**Round 1 replies:**\n\n{quoted or '(none)'}\n\n"
-            "**Round 2:** read the round 1 replies above. Pick the strongest objection other than your own, "
-            "agree with it or refute it (at most 3 sentences), citing at least one vault file by name from the "
-            "prior context, the beliefs or your own search, or saying that nothing in the vault bears on it. "
-            "End with Chosen objection / My answer / "
-            "Vote (YES, NO or CONDITIONAL) / Number (NN%) / New evidence (one fact or argument that was not "
-            "in your round 1 reply, or \"none\").")
+            f"\n\n**Round 1 replies:**\n\n{quoted or '(none)'}\n\n**Round 2:** " + R2_ASK)
 
 
 def run_rounds_buzz(topic, context, sequential):
-    channel = channel_id(CHANNEL_NAME)
+    channel = channel_id(LAB_CHANNEL) or channel_id(CHANNEL_NAME)
     if not channel:
-        raise RuntimeError(f"channel #{CHANNEL_NAME} not in channels.json")
+        raise RuntimeError(f"neither #{LAB_CHANNEL} nor #{CHANNEL_NAME} in channels.json")
+    brief1 = write_brief(topic, context, 1)
     wanted = {}
     for slug, name in PERSONAS:
         pk = pubkey(slug)
@@ -708,7 +745,7 @@ def run_rounds_buzz(topic, context, sequential):
     since = int(time.time()) - 5
     roots, r1 = {}, {}
     for pk, name in wanted.items():
-        rid = post(channel, round_text(1, topic, context, persona=name), mentions=[pk])
+        rid = post(channel, round_text(1, topic, context, persona=name, brief=brief1), mentions=[pk])
         if not rid:
             log(f"round 1 root for {name} not returned by relay")
             continue
@@ -724,7 +761,8 @@ def run_rounds_buzz(topic, context, sequential):
     log(f"round 1: {sum(1 for v in r1.values() if v != NO_REPLY)}/{len(wanted)} replies")
     # Round 2: one root quoting every round 1 reply; synthesis is filed under it.
     since2 = int(time.time()) - 5
-    root = post(channel, round_text(2, topic, context, r1=r1), mentions=[] if sequential else list(wanted))
+    brief2 = write_brief(topic, context, 2, r1=r1)
+    root = post(channel, round_text(2, topic, context, r1=r1, brief=brief2), mentions=[] if sequential else list(wanted))
     if not root:
         raise RuntimeError("round 2 root message id not returned by relay")
     if sequential:
@@ -1054,6 +1092,96 @@ def render_topic(topic, r1, r2, synthesis, link=None, score=None):
     return "\n".join(md)
 
 
+CARD_LABELS = {
+    "tr": {"thesis": "Tez", "verdict": "Karar", "Go": "Devam", "Stop": "Dur", "Test first": "Önce test et",
+           "YES": "EVET", "NO": "HAYIR", "CONDITIONAL": "ŞARTLI", "ABSTAIN": "pas", "median": "medyan",
+           "no_reply": "cevap yok", "clash": "Çatışma", "most": "en çok tartışılan itiraz: {n} ({k} persona)",
+           "moved": "oy değiştiren: {m} ({e} yeni kanıtla)", "result": "Sonuç", "test": "Test",
+           "ask": "Sana soru", "lab": "Tartışma", "note": "Not"},
+    "en": {"thesis": "Thesis", "verdict": "Verdict", "Go": "Go", "Stop": "Stop", "Test first": "Test first",
+           "YES": "YES", "NO": "NO", "CONDITIONAL": "CONDITIONAL", "ABSTAIN": "pass", "median": "median",
+           "no_reply": "no reply", "clash": "Clash", "most": "most argued objection: {n} ({k} personas)",
+           "moved": "moved: {m} ({e} with new evidence)", "result": "Result", "test": "Test",
+           "ask": "Question for you", "lab": "Debate", "note": "Note"},
+}
+
+
+def _cut(text, n):
+    text = (text or "").strip()
+    return text if len(text) <= n else text[:n].rsplit(" ", 1)[0] + "..."
+
+
+def topic_lang(topic):
+    """Language of an ad-hoc or vault topic. Short text falls back to the vault
+    default in lang_detect; a short thesis with no Turkish letters is English."""
+    text = f"{topic['title']} {topic['claim']}"
+    code, conf = detect(text)
+    if conf == 0.0 and text.isascii():
+        return "en"
+    return code
+
+
+def render_card(topic, r1, r2, synthesis, score, link=None, note=None):
+    """The stage card: the only thing the owner has to read. One line per
+    persona, the clash from round 2, the moderator's result, one question. In
+    the language of the topic; the full debate stays backstage and in the note."""
+    L = CARD_LABELS.get(topic.get("lang"), CARD_LABELS["en"])
+    call, median, votes = verdict(score)
+    tally = ", ".join(f"{votes.count(v)} {L[v]}" for v in VOTES if votes.count(v))
+    med = "" if median is None else (f", {L['median']} %{median}" if topic.get("lang") == "tr" else f", {L['median']} {median}%")
+    md = [f"## {topic['title']}", "", f"**{L['thesis']}:** {_cut(topic['claim'], 220)}",
+          f"**{L['verdict']}:** {L[call]}" + (f" ({tally}{med})" if tally else ""), ""]
+    by = {r["persona"]: r for r in score["rows"]}
+    for name, txt in r1.items():
+        row = by.get(name, {})
+        final = L.get(row.get("r1_vote"), "?")
+        if row.get("replied_r2") and row.get("r2_vote") and row.get("r2_vote") != row.get("r1_vote"):
+            final += " → " + L.get(row["r2_vote"], "?")
+        if txt == NO_REPLY:
+            md.append(f"**{name}** · {L['no_reply']}")
+        elif PASS_RE.match(txt):
+            md.append(f"**{name}** · {L['ABSTAIN']}")
+        else:
+            md.append(f"**{name}** · {final} · {_cut(_field(txt, 'strongest objection', 400), 150) or '?'}")
+    # Clash: whose objection round 2 picked most, and who moved.
+    picks = {}
+    for txt in r2.values():
+        chosen = _field(txt, "chosen objection", 400)
+        for name in r1:
+            if name.lower() in chosen.lower():
+                picks[name] = picks.get(name, 0) + 1
+                break
+    clash = []
+    if picks:
+        top = max(picks, key=picks.get)
+        clash.append(L["most"].format(n=top, k=picks[top]))
+    clash.append(L["moved"].format(m=score["moved"], e=score["moved_with_evidence"]))
+    md += ["", f"**{L['clash']}:** " + "; ".join(clash)]
+    parts = split_synthesis(synthesis)
+    body = parts.get("synthesis", "")
+    result = _field(body, "conclusion", 400)
+    if result:
+        md.append(f"**{L['result']}:** {_cut(result, 300)}")
+    test = _field(body, "proposed test", 300)
+    if test:
+        md.append(f"**{L['test']}:** {_cut(test, 200)}")
+    # One question: from the persona whose objection drew the most fire, else the first that asked one.
+    order = ([max(picks, key=picks.get)] if picks else []) + list(r1)
+    for name in order:
+        q = _field(r1.get(name, ""), "question for " + OWNER.lower(), 300) or _field(r1.get(name, ""), "question for", 300)
+        if q:
+            md.append(f"**{L['ask']}:** {_cut(q, 200)} ({name})")
+            break
+    tail = []
+    if link:
+        tail.append(f"{L['lab']}: {link}")
+    if note:
+        tail.append(f"{L['note']}: `{os.path.relpath(note, VAULT) if os.path.isabs(note) else note}`")
+    if tail:
+        md += ["", " · ".join(tail)]
+    return "\n".join(md)
+
+
 def coverage_table(day, date_str):
     files = todays_capture_files(date_str)
     rows = ["| Capture | Topic | Run |", "|---|---|---|"]
@@ -1243,23 +1371,28 @@ def main():
         if not t.get("context"):     # a replayed topic carries the day's context already
             t["context"] = wiki_search(f"{t['title']} {t['claim'][:120]}")
         t["beliefs"], t["calib"] = beliefs, calib
+        t.setdefault("lang", topic_lang(t))
 
     if args.dry_run:
         for t in topics:
             print("=" * 70)
-            print(round_text(1, t, t["context"], persona=PERSONAS[0][1]))
+            print(round_text(1, t, t["context"], persona=PERSONAS[0][1], brief="<brief file, round 1>"))
             print("-" * 70)
             print(f"(round 1: {len(PERSONAS)} isolated roots like the one above, one per persona; "
                   f"round 2: one root quoting all replies, layout below)")
             print("-" * 70)
-            print(round_text(2, t, t["context"], r1={name: "(round 1 reply)" for _, name in PERSONAS}))
+            print(round_text(2, t, t["context"], r1={name: "(round 1 reply)" for _, name in PERSONAS},
+                             brief="<brief file, round 2>"))
+            print("-" * 70)
+            print("Brief file (prior context + beliefs):")
+            print(round_text(1, t, t["context"], persona=PERSONAS[0][1]))
         print("=" * 70)
         print("Coverage (this run):")
         for t in topics:
             print(f"- {t['title']}: {', '.join(t['sources'])}")
         return
 
-    sections, replies, expected, links, participants, scores = [], 0, 0, [], [], []
+    sections, replies, expected, links, participants, scores, cards = [], 0, 0, [], [], [], []
     started = time.time()
     judged = None
     for t in topics:
@@ -1283,6 +1416,7 @@ def main():
             link = f"buzz://message?channel={channel}&id={root}"
             post(channel, render_verdict(score) + "\n\n" + render_scorecard(score) + "\n\n" + synthesis, reply_to=root)
             links.append(link)
+            cards.append((t, r1, r2, synthesis, score, link))
         section = render_topic(t, r1, r2, synthesis, link, score)
         if mode == "night":
             judged = judge_local_replies(t, r1, r2)
@@ -1322,6 +1456,10 @@ def main():
                    f"model, {replies}/{expected} replies, {judged[1]}/{judged[2]} judged usable, cloud synthesis.")
     path = file_note(text, title, summary)
     log(f"filed: {path}")
+    stage = channel_id(CHANNEL_NAME)
+    for t, r1, r2, synthesis, score, link in cards:
+        if stage:
+            post(stage, render_card(t, r1, r2, synthesis, score, link, path))
 
     if mode == "night":
         usable_night = judged[2] > 0 and judged[1] / judged[2] >= NIGHT_USABLE_SHARE

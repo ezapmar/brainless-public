@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Capture-only Telegram inbox. Owner text, images and audio enter the vault.
 All receipts and errors go to Buzz #inbox. Raw updates remain in a local
-journal until processing succeeds; no Telegram interaction or outgoing API.
+journal until processing succeeds. The only outgoing Telegram call is a
+one-line "saved" receipt to the whitelisted chat; no commands, no buttons.
 """
 import json
 import os
@@ -45,12 +46,31 @@ def log(msg):
 
 
 def api(token, method, params=None, timeout=30):
-    if method not in {"getUpdates", "getFile"}:
+    if method not in {"getUpdates", "getFile", "sendMessage"}:
         raise ValueError("Telegram is capture-only")
     url = f"https://api.telegram.org/bot{token}/{method}"
     data = urllib.parse.urlencode(params or {}).encode()
     with urllib.request.urlopen(url, data=data, timeout=timeout) as resp:
         return json.load(resp)
+
+
+WIKILINK_RE = re.compile(r"\[\[([^\]|]+)(?:\|([^\]]+))?\]\]")
+
+
+def plain_title(title):
+    """[[Page|alias]] -> alias, [[Page]] -> Page: receipts are read, not linked."""
+    return WIKILINK_RE.sub(lambda m: m.group(2) or m.group(1), title).strip()
+
+
+def ack(token, chat_id, text):
+    """Best-effort receipt back to the whitelisted chat; Buzz holds the record."""
+    try:
+        api(token, "sendMessage", {"chat_id": chat_id, "text": text,
+                                   "disable_web_page_preview": "true"})
+        return True
+    except Exception as exc:
+        log(f"Telegram receipt failed: {type(exc).__name__}")
+        return False
 
 
 def read_file(path):
@@ -92,7 +112,7 @@ def transcribe(token, file_id):
         return r.stdout.strip()
 
 
-URL_RE = re.compile(r"https?://\S+")
+URL_RE = re.compile(r"https?://[^\s<>]+")
 LINKS_DIR = os.path.join(VAULT, "Inbox", "Links")
 
 
@@ -159,7 +179,8 @@ RULES:
 
 def handle_link(raw_text, url_match, stamp=None):
     url = url_match.group(0).rstrip(").,>]")
-    comment = URL_RE.sub("", raw_text).strip()
+    # Buzz autolinks as <url>; drop the empty brackets the URL leaves behind.
+    comment = re.sub(r"<\s*>", "", URL_RE.sub("", raw_text)).strip()
     log(f"Link received: {url}")
     # YouTube and Apple Podcasts links become transcripts, not page notes. The
     # capture only queues: transcription can take an hour and must not block
@@ -366,7 +387,14 @@ def retry_pending(token, allowed):
                 stamp = datetime.fromtimestamp(msg.get("date") or time.time()).strftime("%Y-%m-%d-%H%M%S") + "-" + str(msg['message_id'])
                 files = [str(p.relative_to(VAULT)) for base in (CAPTURE_DIR, LINKS_DIR)
                          for p in Path(base).glob(stamp + "*.md")]
-                send("inbox", t("telegram_capture.reply_saved", title=record["result"]) + "\n" + "\n".join(files), key=key + ":saved")
+                receipt = t("telegram_capture.reply_saved", title=plain_title(record["result"]))
+                send("inbox", "\n".join([receipt] + [f"`{f}`" for f in files]), key=key + ":saved")
+                if not record.get("acked"):
+                    # Mark first: a crash after sending must not repeat the receipt.
+                    record["acked"] = True
+                    from today_queue import atomic_write
+                    atomic_write(pending, json.dumps(record, ensure_ascii=False))
+                    ack(token, chat, receipt)
             pending.unlink()
         except Exception as exc:
             log(f"Message handling error: {type(exc).__name__}")

@@ -25,6 +25,11 @@ class DeliveryTests(unittest.TestCase):
         self.assertIsNotNone(self.box.deliver('one'))
         self.assertEqual(len(self.relay.posts), 1)
 
+    def test_delivered_body_has_no_visible_marker(self):
+        self.box.enqueue('inbox', 'inbox', 'Saved: note', key='clean')
+        self.box.deliver('clean')
+        self.assertEqual(self.relay.posts[0]['content'], 'Saved: note')
+
     def test_offline_survives_restart(self):
         self.relay.offline = True
         self.box.enqueue('watchdog', 'ops', 'Alert', key='alert')
