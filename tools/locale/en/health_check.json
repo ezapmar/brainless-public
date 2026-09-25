@@ -22,6 +22,8 @@
   "status_file_unreadable": "status file unreadable",
   "llm_ok": "last call succeeded ({ago})",
   "llm_auth": "authentication error ({ago}): {detail}. Log in again with 'claude'",
+  "llm_access_worker": "LLM access ({worker})",
+  "llm_auth_worker": "authentication error ({ago}): {detail}. Log in again with 'claude' on {worker}",
   "llm_timeout": "last call timed out ({ago})",
   "llm_error": "last call failed ({ago}): {detail}",
   "crm_snapshot": "CRM snapshot",

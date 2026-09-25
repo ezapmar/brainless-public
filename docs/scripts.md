@@ -1085,7 +1085,10 @@ promise in different words. One module, one definition, both writers.
 **Description.** Hourly, with no LLM. It checks git freshness, the age and errors of
 each job log, LLM authentication (through the breadcrumb), the CRM status line, the
 morning briefing, kill criteria, the worker, the Mac's reach to it and the dialectic. It fires a notification
-when a check crosses the two-day red line. `brainless health` runs it and prints the
+when a check crosses the two-day red line. The LLM breadcrumb is per machine and the
+heavy LLM work runs on the worker, so LLM access has two rows: this machine's own, and
+the worker's, read from the copy `worker_reach` keeps. An expired worker login turns the
+second row red even while the Mac's own calls succeed. `brainless health` runs it and prints the
 result.
 
 **Philosophy.** Automation fails silently by default. This one refuses to: briefings
@@ -1101,7 +1104,10 @@ worker answers ssh within 8 seconds, and the worker has committed to origin in t
 two hours. The target lives in `~/.config/brainless/worker_ssh` (Mac-local, never in
 git); without it the job does nothing. Two failed hours in a row raise one macOS
 notification, recovery raises one more, and `health_check` shows a "reach" row from
-`.agents/state/worker_reach.json`.
+`.agents/state/worker_reach.json`. While ssh works, it also copies the worker's LLM
+breadcrumb (`.agents/state/llm_status` there) to `.agents/state/worker_llm_status.json`,
+with the worker's own file time, for the second LLM row. The worker's vault path is
+`BRAINLESS_WORKER_VAULT`, relative to its home (default `projects/brainless`).
 
 **Philosophy.** On 22 and 23 September every ssh to the worker timed out and nothing
 said so. The cause was Tailscale stopped on the Mac. The worker's watchdog could not

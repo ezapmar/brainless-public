@@ -116,35 +116,58 @@ def check_log(label, path, red_after, hint):
     add(label, status, t("health_check.log_last_trace", ago=ago(age), hint=hint))
 
 
+def llm_row(label, line, age_s, auth_key="health_check.llm_auth"):
+    """One llm_status line ('<stamp>\t<outcome>\t<detail>') -> an added row."""
+    parts = line.strip().split("\t")
+    outcome = parts[1] if len(parts) > 1 else "error"
+    detail = parts[2] if len(parts) > 2 else ""
+    age = ago(age_s)
+    if outcome == "ok":
+        add(label, "OK", t("health_check.llm_ok", ago=age))
+    elif outcome == "auth":
+        add(label, "RED", t(auth_key, ago=age, detail=detail[:70], worker=WORKER))
+    elif outcome == "timeout":
+        add(label, "WARN", t("health_check.llm_timeout", ago=age))
+    else:
+        add(label, "WARN", t("health_check.llm_error", ago=age, detail=detail[:70]))
+
+
 def check_llm_auth():
-    """LLM backend auth canary.
+    """LLM backend auth canary, for this machine and for the worker.
 
     Reads the breadcrumb llm.py drops on every real call. Freshness checks see
     a script that ran and logged; they cannot see that its LLM call 401'd. This
     catches a silent token/API-key expiry that would otherwise show green.
+
+    llm_status is per machine and the heavy LLM work runs on the worker, so
+    the worker's line gets its own row from the mirror tools/worker_reach.py
+    copies over ssh (.agents/state/worker_llm_status.json). No mirror, no row:
+    this machine has no worker target, or is the worker itself.
     """
     label = t("health_check.llm_access")
     path = os.path.join(VAULT, ".agents", "state", "llm_status")
     if not os.path.exists(path):
         add(label, "WARN", t("health_check.llm_no_record"))
+    else:
+        try:
+            with open(path, errors="replace") as fh:
+                line = fh.read()
+        except Exception:
+            add(label, "WARN", t("health_check.status_file_unreadable"))
+        else:
+            llm_row(label, line, time.time() - os.path.getmtime(path))
+
+    mirror = os.path.join(VAULT, ".agents", "state", "worker_llm_status.json")
+    if not os.path.exists(mirror):
         return
+    label = t("health_check.llm_access_worker", worker=WORKER)
     try:
-        with open(path, errors="replace") as fh:
-            parts = fh.read().strip().split("\t")
-        outcome = parts[1] if len(parts) > 1 else "error"
-        detail = parts[2] if len(parts) > 2 else ""
-    except Exception:
+        m = json.loads(open(mirror).read())
+        line, mtime = m["line"], m["mtime"]
+    except (OSError, ValueError, KeyError, TypeError):
         add(label, "WARN", t("health_check.status_file_unreadable"))
         return
-    age = ago(time.time() - os.path.getmtime(path))
-    if outcome == "ok":
-        add(label, "OK", t("health_check.llm_ok", ago=age))
-    elif outcome == "auth":
-        add(label, "RED", t("health_check.llm_auth", ago=age, detail=detail[:70]))
-    elif outcome == "timeout":
-        add(label, "WARN", t("health_check.llm_timeout", ago=age))
-    else:
-        add(label, "WARN", t("health_check.llm_error", ago=age, detail=detail[:70]))
+    llm_row(label, line, time.time() - mtime, "health_check.llm_auth_worker")
 
 
 def check_crm():

@@ -22,6 +22,8 @@
   "status_file_unreadable": "durum dosyası okunamadı",
   "llm_ok": "son çağrı başarılı ({ago})",
   "llm_auth": "kimlik doğrulama hatası ({ago}): {detail}. 'claude' ile yeniden giriş yap",
+  "llm_access_worker": "LLM erişimi ({worker})",
+  "llm_auth_worker": "kimlik doğrulama hatası ({ago}): {detail}. {worker} üzerinde 'claude' ile yeniden giriş yap",
   "llm_timeout": "son çağrı zaman aşımı ({ago})",
   "llm_error": "son çağrı hatası ({ago}): {detail}",
   "crm_snapshot": "CRM anlık görüntü",

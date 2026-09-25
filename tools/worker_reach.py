@@ -18,6 +18,14 @@ The worker's ssh target is Mac-local config, never in git:
   (or BRAINLESS_WORKER_SSH). Without it the script does nothing.
 
 State: .agents/state/worker_reach.json {checked_at, fails, reason, alerted}.
+
+While ssh works it also copies the worker's LLM canary (the llm_status line
+tools/llm.py writes on every call) to .agents/state/worker_llm_status.json
+{fetched_at, mtime, line}, so health_check can show the worker's auth next to
+the Mac's. On 24 and 25/09/2026 the worker's login had expired while HEALTH.md
+showed the Mac's own green line. The worker's vault path, relative to its home,
+is BRAINLESS_WORKER_VAULT (default projects/brainless). A failed copy keeps
+the previous mirror; the reach row already says the worker is out of reach.
 The notification fires once when fails reaches ALERT_AFTER, and once on
 recovery after an alert. Always exits 0: a down worker is a finding, not a
 crash of this job.
@@ -34,6 +42,8 @@ from owner_profile import WORKER  # noqa: E402
 
 VAULT = os.environ.get("BRAINLESS_VAULT") or os.path.expanduser("~/projects/brainless")
 STATE = os.path.join(VAULT, ".agents", "state", "worker_reach.json")
+LLM_MIRROR = os.path.join(VAULT, ".agents", "state", "worker_llm_status.json")
+WORKER_VAULT = os.environ.get("BRAINLESS_WORKER_VAULT", "projects/brainless")
 CONFIG = os.path.expanduser("~/.config/brainless/worker_ssh")
 ALERT_AFTER = 2       # consecutive failed hourly runs
 PULSE_HOURS = 2
@@ -86,8 +96,39 @@ def check_pulse(now):
     return f"no {WORKER} commit in the last 300 on origin"
 
 
+def link_down(host):
+    return check_tailscale() or check_ssh(host)
+
+
 def diagnose(host, now):
-    return check_tailscale() or check_ssh(host) or check_pulse(now)
+    return link_down(host) or check_pulse(now)
+
+
+def parse_llm_status(stdout, now):
+    """'<mtime epoch>\n<llm_status line>' from the worker -> mirror dict or None.
+    The worker's mtime, not its printed stamp, so time zones cannot skew the age."""
+    first, _, rest = stdout.partition("\n")
+    line = rest.strip().splitlines()[0] if rest.strip() else ""
+    try:
+        mtime = int(first.strip())
+    except ValueError:
+        return None
+    if not line:
+        return None
+    return {"fetched_at": int(now), "mtime": mtime, "line": line}
+
+
+def fetch_llm_status(host, now):
+    """Copy the worker's llm_status to LLM_MIRROR. Best-effort; returns the dict or None."""
+    f = f"{WORKER_VAULT}/.agents/state/llm_status"
+    r = run(["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=8", host,
+             f"stat -c %Y '{f}' && head -n 1 '{f}'"], timeout=20)
+    mirror = parse_llm_status(r.stdout, now) if r.returncode == 0 else None
+    if mirror:
+        os.makedirs(os.path.dirname(LLM_MIRROR), exist_ok=True)
+        with open(LLM_MIRROR, "w") as fh:
+            json.dump(mirror, fh)
+    return mirror
 
 
 def load():
@@ -122,7 +163,10 @@ def main():
         print(f"no worker ssh target ({CONFIG}); skipping")
         return 0
     now = time.time()
-    reason = diagnose(host, now)
+    down = link_down(host)
+    reason = down or check_pulse(now)
+    if not down:
+        fetch_llm_status(host, now)
     state, message = step(load(), reason, now)
     os.makedirs(os.path.dirname(STATE), exist_ok=True)
     with open(STATE, "w") as fh:
