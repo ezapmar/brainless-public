@@ -17,6 +17,7 @@ previews and approvals go to Buzz. The Telegram API helper permits only
 | Content suggestions | `#content` |
 | Morning briefing, evening closeout | `#daily` |
 | CRM snapshot | `#crm` |
+| Link and concept proposals | `#dreaming` |
 
 Reply inside the relevant thread. Today supports `apply`, `edit`, `defer` and
 `dismiss`, plus the owner's language equivalents. Defer asks for a date, dismiss

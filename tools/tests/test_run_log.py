@@ -64,6 +64,12 @@ class RunLog(unittest.TestCase):
         self.assertEqual(row["status"], "partial")
         self.assertNotIn("status", row["counts"])
 
+    def test_keys_may_carry_digits(self):
+        # hit5 used to fail the pattern, and the lint's earlier line was kept.
+        self.exec("print('RUNLOG broken=3'); print('RUNLOG compile_rc=1 hit5=94 status=partial')")
+        row = self.rl.load()[-1]
+        self.assertEqual((row["status"], row["counts"]), ("partial", {"compile_rc": 1, "hit5": 94}))
+
     def test_rollup_sums_counts_per_day_and_job(self):
         now = datetime(2026, 9, 22, 23, 0)
         for h, n in ((1, 2), (5, 3)):
@@ -112,6 +118,10 @@ class HealthFindings(unittest.TestCase):
         found = self.texts(roll)
         self.assertTrue(any("lint_wiki" in m for m in found))
         self.assertTrue(any("dashboard" in m for m in found))
+
+    def test_a_partial_run_is_named(self):
+        roll = [self.day(1, "nightly_compile", status="partial"), self.day(2, "nightly_compile")]
+        self.assertTrue(any("nightly_compile" in m for m in self.texts(roll)))
 
     def test_a_weekly_job_is_not_quiet_after_three_days(self):
         roll = [self.day(n, "wiki_prune") for n in (3, 10)]

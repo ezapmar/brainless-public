@@ -81,6 +81,14 @@ class WikiChangesTest(unittest.TestCase):
         for ch in BANNED:
             self.assertNotIn(ch, md)
 
+    def test_conflicts_show_under_flagged(self):
+        d = wc.diff(self.before, wc.snapshot(self.wiki))
+        d["conflicts"] = [("pricing-meeting", "[[product-note]]: 35 TL / 50 TL")]
+        self.assertFalse(wc.is_empty(d))
+        md = wc.markdown(d)
+        self.assertIn("Conflict, pricing-meeting vs [[product-note]]: 35 TL / 50 TL", md)
+        self.assertNotIn("No new contradictions", md)
+
     def test_quiet_night(self):
         d = wc.diff(self.before, wc.snapshot(self.wiki))
         self.assertTrue(wc.is_empty(d))

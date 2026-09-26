@@ -152,8 +152,16 @@ def diff(before: dict, after: dict) -> dict:
     return res
 
 
+def changed_pages(before: dict, after: dict, kind: str) -> list[str]:
+    """Vault-relative paths of one kind's pages added (first) or changed."""
+    new = [r for r in after if kind_of(r) == kind and r not in before]
+    upd = [r for r in after if kind_of(r) == kind and r in before and before[r]["sha"] != after[r]["sha"]]
+    return [".wiki/" + r for r in sorted(new) + sorted(upd)]
+
+
 def is_empty(d: dict) -> bool:
-    return not (d["added"] or d["updated"] or d["removed"] or d["contested"] or d["superseded"])
+    return not (d["added"] or d["updated"] or d["removed"] or d["contested"] or d["superseded"]
+                or d.get("conflicts"))
 
 
 def _names(titles: list[str]) -> str:
@@ -167,12 +175,22 @@ def _clip(s: str, n: int = 160) -> str:
     return s if len(s) <= n else s[:n - 3].rstrip() + "..."
 
 
-def markdown(d: dict, when: datetime | None = None) -> str:
+def _waiting_block(waiting) -> list[str]:
+    """Concept proposals that wait for the owner (tools/concept_review.py)."""
+    if waiting is None:
+        return []
+    lines = [t("concept_review.waiting_heading")]
+    lines += [t("concept_review.waiting_line", label=label, days=days) for label, days in waiting] \
+        or [t("concept_review.waiting_none")]
+    return lines + [""]
+
+
+def markdown(d: dict, when: datetime | None = None, waiting=None) -> str:
     when = when or datetime.now()
     lines = [t("wiki_changes.title"), "",
              t("wiki_changes.updated_line", time=when.strftime("%Y-%m-%d %H:%M")), ""]
     if is_empty(d):
-        lines += [t("wiki_changes.nothing"), ""]
+        lines += [t("wiki_changes.nothing"), ""] + _waiting_block(waiting)
         return "\n".join(lines)
     lines.append(t("wiki_changes.changed_heading"))
     for k in KINDS:
@@ -184,13 +202,15 @@ def markdown(d: dict, when: datetime | None = None) -> str:
     lines += ["", t("wiki_changes.linked_heading"),
               t("wiki_changes.links_line", links=d["links"], pages=d["linked_pages"]), ""]
     lines.append(t("wiki_changes.flagged_heading"))
-    if not (d["contested"] or d["superseded"]):
+    if not (d["contested"] or d["superseded"] or d.get("conflicts")):
         lines.append(t("wiki_changes.no_flags"))
+    for page, text in d.get("conflicts", []):
+        lines.append(t("wiki_changes.flag_conflict", page=page, text=_clip(text, 240)))
     for key in ("contested", "superseded"):
         for title, bullet in d[key][:MAX_LISTED]:
             lines.append(t(f"wiki_changes.flag_{key}", page=title, text=_clip(bullet)))
     lines.append("")
-    return "\n".join(lines)
+    return "\n".join(lines + _waiting_block(waiting))
 
 
 def tracked_diff(before: dict, after: dict) -> dict:
@@ -200,10 +220,17 @@ def tracked_diff(before: dict, after: dict) -> dict:
                 {k: v for k, v in after.items() if k not in hidden})
 
 
-def write(before: dict, after: dict) -> dict:
-    """Diff the tracked pages and write the brief; returns the diff."""
+def write(before: dict, after: dict, conflicts=None) -> dict:
+    """Diff the tracked pages and write the brief; returns the diff.
+    `conflicts`: (page, text) pairs from contradiction_check.py."""
     d = tracked_diff(before, after)
-    REPORT.write_text(markdown(d), encoding="utf-8")
+    d["conflicts"] = list(conflicts or [])
+    try:
+        import concept_review
+        waiting = concept_review.waiting_list()
+    except Exception:
+        waiting = None
+    REPORT.write_text(markdown(d, waiting=waiting), encoding="utf-8")
     return d
 
 

@@ -62,6 +62,7 @@
   "graph_detail": "orphan {orphans}, derece {degree}, ana bileşen {main} ({date})",
   "runs_label": "Koşu logu",
   "runs_ok": "{jobs} iş, hata, sessizlik veya boş koşu yok",
+  "runs_partial": "{job} son koşuda yarım kaldı ({day} {time}); logunu oku",
   "runs_failed": "{job} son koşuda hata verdi ({day} {time})",
   "runs_quiet": "{job} {days} gündür sessiz",
   "runs_dry": "{job} {days} gündür {field}=0, yakalama yolu bozuk olabilir",

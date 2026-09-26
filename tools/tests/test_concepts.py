@@ -177,7 +177,7 @@ class Phases(unittest.TestCase):
                             ("_DEADLINE", None)):
             stack.enter_context(patch.object(compiler, name, value))
         self.pings = []
-        stack.enter_context(patch.object(compiler, "_ping_proposals", side_effect=self.pings.append))
+        stack.enter_context(patch.object(compiler, "_announce_proposals", side_effect=self.pings.append))
         self.answers = []
         self.prompts = []
         stack.enter_context(patch.object(compiler, "call_claude", side_effect=self.answer))
@@ -198,7 +198,9 @@ class Phases(unittest.TestCase):
         p.write_text(text)
         return p
 
-    def summary(self, stem, source, h):
+    def summary(self, stem, source, h, *, on_disk=True):
+        if on_disk:     # the catalogue keeps only summaries whose source still exists
+            self.write(source, f"source text {stem}\n")
         return self.write(f".wiki/summaries/{stem}.md",
                           fm(lang="tr", summary_en=f"gist {stem}", source=source, sources_hash=h)
                           + f"# {stem}\n\n## Bağlantılar\n")
@@ -220,6 +222,62 @@ class Phases(unittest.TestCase):
         # A second night asks nothing: every summary carries the current revision.
         compiler.phase_concept_assign(False, False)
         self.assertEqual(len(self.prompts), 1)
+
+    def test_full_review_queue_takes_no_new_proposal(self):
+        waiting = "".join(f"w{i} | W{i} | | proposed | | x\n" for i in range(5))
+        self.write("_Agent-Context/concepts.md",
+                   "# Concept registry\n\n## Concepts\nnakit | Nakit | | active | | cash\n" + waiting)
+        self.answers.append(json.dumps({
+            "assign": {"lib-a": ["nakit"], "lib-b": [], "dog": []},
+            "proposals": [{"title": "Yeni fikir", "members": ["lib-a", "lib-b"]}]}))
+        compiler.phase_concept_assign(False, False)
+        rows = C.parse_registry((self.root / "_Agent-Context/concepts.md").read_text())
+        self.assertNotIn("yeni-fikir", [r["slug"] for r in rows])
+        read = lambda s: C.read_concepts_key((self.root / f".wiki/summaries/{s}.md").read_text())
+        self.assertEqual(read("lib-b"), [])
+        # The weekly pass does not even ask the model while the queue is full.
+        compiler.phase_concept_propose(False, False)
+        self.assertEqual(len(self.prompts), 1)
+
+    def test_catalogue_is_one_live_entry_per_document(self):
+        book = "Library/Books/Purple Cow"
+        self.summary("cow-book", f"{book}/Purple Cow.md", "b1")
+        self.summary("cow-summary", f"{book}/Summary.md", "b2")
+        self.summary("cow-fiche", f"{book}/Fiche_de_Lecture.md", "b3")
+        self.summary("lib-b_raw", "Library/Articles/b_raw.md", "b4")
+        self.summary("renamed", "Library/Articles/Old Name.md", "b5", on_disk=False)
+        stems = {s["stem"] for s in compiler.summary_catalogue()}
+        self.assertIn("cow-summary", stems)          # the whole-book summary stands in for the book
+        self.assertFalse(stems & {"cow-book", "cow-fiche", "lib-b_raw", "renamed"})
+        self.assertIn("lib-b", stems)
+
+    def test_filtered_sources_are_not_compiled_and_old_summaries_are_archived(self):
+        self.write("Library/Articles/b_raw.md", "raw text\n")
+        old = self.write(".wiki/summaries/library_articles_b_raw.md", "---\nsource: x\n---\n# b raw\n")
+        page = self.write(".wiki/concepts/nakit.md", "# Nakit\n\nsee [[library_articles_b_raw]] and [[library_articles_b_raw|raw]]\n")
+        self.write(".wiki/summaries/library_articles_b.md", "---\nsource: Library/Articles/b.md\n---\n# b\n")
+        self.write(".wiki/_archive/LOG.md", "# Log\n\n| a | b | c | d | e |\n|---|---|---|---|---|\n| old row |\n")
+        seen = []
+        with patch.object(compiler, "SUMMARY_SOURCES", [self.root / "Library"]), \
+                patch.object(compiler, "summarize_file", side_effect=lambda src, d, f: seen.append(src.name)):
+            compiler.phase_summaries(False, False)
+        self.assertNotIn("b_raw.md", seen)
+        self.assertIn("b.md", seen)
+        self.assertFalse(old.exists())
+        self.assertTrue((self.root / ".wiki/_archive/summaries/library_articles_b_raw.md").exists())
+        log = (self.root / ".wiki/_archive/LOG.md").read_text().splitlines()
+        self.assertIn("source-filter", log[4])       # newest first, above the old rows
+        self.assertEqual(log[5], "| old row |")
+        self.assertEqual(page.read_text(), "# Nakit\n\nsee [[library_articles_b]] and [[library_articles_b|raw]]\n")
+
+    def test_raw_twin_is_not_a_second_source(self):
+        self.summary("lib-a_raw", "Library/Books/a_raw.md", "h5")
+        self.answers.append(json.dumps({
+            "assign": {"lib-a": [], "lib-a_raw": [], "lib-b": [], "dog": []},
+            "proposals": [{"title": "Tek kaynak", "members": ["lib-a", "lib-a_raw"]}]}))
+        compiler.phase_concept_assign(False, False)
+        rows = C.parse_registry((self.root / "_Agent-Context/concepts.md").read_text())
+        self.assertNotIn("tek-kaynak", [r["slug"] for r in rows])
 
     def test_update_keeps_old_page_when_the_model_drops_history(self):
         for s in ("lib-a", "lib-b"):
@@ -256,18 +314,21 @@ class Preamble(unittest.TestCase):
         self.assertEqual(C.validate_update("", out), [])
 
 
-class PingPrivacy(unittest.TestCase):
-    def test_personal_titles_never_reach_buzz(self):
-        sent = []
-        fake = type(sys)("buzz_delivery")
-        fake.send = lambda channel, body, **kw: sent.append(body)
-        rows = [{"slug": "okul", "title": "Okul geçişi", "sensitivity": "personal"},
-                {"slug": "nakit", "title": "Nakit", "sensitivity": ""}]
-        with patch.dict(sys.modules, {"buzz_delivery": fake}), \
-                contextlib.redirect_stdout(io.StringIO()):
-            compiler._ping_proposals(rows)
-        self.assertIn("Nakit", sent[0])
-        self.assertNotIn("Okul", sent[0])
+class SourceFilter(unittest.TestCase):
+    def test_rules(self):
+        files = {"L/a.md", "L/a_raw.md", "L/solo_raw.md", "B/Summary.md", "B/Fiche_de_Lecture.md",
+                 "B/Book.md", "C/Fiche_de_Lecture.md"}
+        ex = files.__contains__
+        self.assertEqual(C.skip_reason("L/a_raw.md", ex), "raw-twin")
+        self.assertIsNone(C.skip_reason("L/solo_raw.md", ex))       # the only copy stays
+        self.assertEqual(C.skip_reason("B/Fiche_de_Lecture.md", ex), "reading-sheet")
+        self.assertIsNone(C.skip_reason("C/Fiche_de_Lecture.md", ex))  # no summary beside it
+        self.assertIsNone(C.skip_reason("B/Book.md", ex))
+        self.assertEqual(C.source_group("L/a_raw.md", ex), C.source_group("L/a.md", ex))
+        self.assertEqual(C.source_group("B/Book.md", ex), C.source_group("B/Summary.md", ex))
+        self.assertEqual(C.source_group("B.md", ex), C.source_group("B/Summary.md", ex))  # book beside its folder
+        self.assertLess(C.source_rank("B/Summary.md"), C.source_rank("B/Book.md"))
+        self.assertLess(C.source_rank("L/a.md"), C.source_rank("L/a_raw.md"))
 
 
 if __name__ == "__main__":

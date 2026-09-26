@@ -62,6 +62,7 @@
   "graph_detail": "orphans {orphans}, degree {degree}, main component {main} ({date})",
   "runs_label": "Run log",
   "runs_ok": "{jobs} jobs, none failed, quiet or dry",
+  "runs_partial": "{job} finished only partly last run ({day} {time}); read its log",
   "runs_failed": "{job} failed last run ({day} {time})",
   "runs_quiet": "{job} silent for {days} days",
   "runs_dry": "{job} {field}=0 for {days} days, capture path may be broken",

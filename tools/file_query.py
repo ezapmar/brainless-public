@@ -22,6 +22,7 @@ from pathlib import Path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from owner_profile import LANG  # noqa: E402
 from lang_detect import detect  # noqa: E402
+from concepts import yaml_scalar  # noqa: E402
 
 # Portable: env override, else the repo that contains this script.
 VAULT = Path(os.environ.get("BRAINLESS_VAULT") or Path(__file__).resolve().parents[1])
@@ -62,9 +63,9 @@ def main():
     fm = (
         "---\n"
         f"lang: {lang}\n"
-        f"summary_en: {args.summary or args.title}\n"
+        f"summary_en: {yaml_scalar(args.summary or args.title)}\n"
         f"command: {args.command}\n"
-        f"title: {args.title}\n"
+        f"title: {yaml_scalar(args.title)}\n"
         f"compiled_at: {datetime.now().isoformat(timespec='seconds')}\n"
         "status: seed\n"
         f"tags: [query, {args.command}]\n"

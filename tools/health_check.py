@@ -346,6 +346,10 @@ def run_findings(roll, now=None):
         last = days[-1]
         if last["status"] == "fail":
             out.append(("WARN", t("health_check.runs_failed", job=job, day=last["day"], time=last["last"])))
+        elif last["status"] == "partial":
+            # A compile whose every model call failed exits cleanly and says
+            # partial; on 24/09/2026 that read as a quiet night.
+            out.append(("WARN", t("health_check.runs_partial", job=job, day=last["day"], time=last["last"])))
         # Expected gap from the job's own history: several runs a day, or one run every few days.
         if len(days) >= 2:
             span = (datetime.strptime(last["day"], "%Y-%m-%d")

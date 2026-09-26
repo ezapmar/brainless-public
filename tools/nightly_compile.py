@@ -12,6 +12,8 @@ Run: python3 tools/nightly_compile.py   (via worker_job.sh: pull, run, backup)
 import os
 import subprocess
 import sys
+import time
+from datetime import datetime
 
 VAULT_ROOT = os.environ.get("BRAINLESS_VAULT") or os.path.expanduser("~/projects/brainless")
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -28,6 +30,43 @@ COMPILE_TIMEOUT = int(os.environ.get("BRAINLESS_COMPILE_TIMEOUT", "5400"))
 # progress reaches the journal as it happens.
 COMPILE_BUDGET = int(os.environ.get("BRAINLESS_COMPILE_BUDGET",
                                     str(max(600, COMPILE_TIMEOUT - 600))))
+# The nightly concept-assign only proposes from the summaries it is handed that
+# night, so two related sources compiled weeks apart never meet. Once a week
+# (Sunday by default) concept-propose reads the whole catalogue. About four
+# model calls; it adds nothing while the review queue is full.
+PROPOSE_WEEKDAY = int(os.environ.get("BRAINLESS_CONCEPT_PROPOSE_WEEKDAY", "6"))  # Monday = 0
+PROPOSE_TIMEOUT = 1500
+# The unit's hard limit is TimeoutStartSec=2h. Optional steps start only while
+# this much of it is left unused, so a long compile never gets the job killed.
+HARD_LIMIT = 7200
+STARTED = time.monotonic()
+
+
+def time_left() -> float:
+    return HARD_LIMIT - (time.monotonic() - STARTED)
+
+
+def weekly_propose() -> str:
+    """Run concept-propose on its weekday; the RUNLOG fragment it earned."""
+    if datetime.now().weekday() != PROPOSE_WEEKDAY:
+        return ""
+    if time_left() < PROPOSE_TIMEOUT + 1200:
+        print("concept-propose skipped: the compile used the time")
+        return " concept_propose=late"
+    try:
+        import concept_review
+        before = {r["slug"] for r in concept_review.pending()}
+        if not concept_review.room():
+            print(f"concept-propose skipped: {len(before)} proposals wait for a decision")
+            return " concept_propose=skipped"
+        subprocess.run([sys.executable, "-u", os.path.join(VAULT_ROOT, "tools/compile_resources.py"),
+                        "--only", "concept-propose", f"--budget-seconds={PROPOSE_TIMEOUT - 300}"],
+                       cwd=VAULT_ROOT, check=False, timeout=PROPOSE_TIMEOUT)
+        new = {r["slug"] for r in concept_review.pending()} - before
+        return f" concept_proposed={len(new)}"
+    except Exception as e:
+        print(f"concept-propose error: {e}")
+        return " concept_propose=fail"
 
 
 def main():
@@ -51,15 +90,20 @@ def main():
     except Exception as e:
         print(f"compile_resources error: {e}")
 
-    # The change brief: what the compile added, updated, linked and flagged,
-    # read by the morning briefing (_Agent-Context/WIKI-CHANGES.md).
-    changed = ""
+    proposed = weekly_propose()
+    # Any proposal not yet in Buzz (a failed send, a hand-added row) goes out now.
+    try:
+        import concept_review
+        concept_review.announce()
+    except Exception as e:
+        print(f"concept proposal announcement skipped: {e}")
+
+    after = None
     if before is not None:
         try:
-            d = wiki_changes.write(before, wiki_changes.snapshot())
-            changed = f" wiki_changed={wiki_changes.count(d)}"
+            after = wiki_changes.snapshot()
         except Exception as e:
-            print(f"change brief skipped: {e}")
+            print(f"change brief snapshot skipped: {e}")
 
     # Always refresh the lint report (non-blocking, report-only mode)
     try:
@@ -85,6 +129,31 @@ def main():
                       f"{len(s['new_links'])} new links, {len(s['near_identical'])} near-identical")
     except Exception as e:
         print(f"semantic index skipped: {e}")
+
+    # Contradictions: tonight's summaries against their nearest pages, on the
+    # index just rebuilt. Needs the search addon; stops at a time budget.
+    flags, conflicts = [], ""
+    if after is not None and time_left() > 1500:
+        try:
+            import semantic_index
+            if semantic_index.available():
+                import contradiction_check as cc
+                pages = wiki_changes.changed_pages(before, after, "summaries")
+                added, n = cc.run_night(pages, deadline=time.monotonic() + time_left() - 900)
+                flags = cc.brief_lines(added)
+                conflicts = f" checked={n['checked']} conflicts={n['conflicts']}"
+        except Exception as e:
+            print(f"contradiction check skipped: {e}")
+
+    # The change brief: what the compile added, updated, linked and flagged,
+    # read by the morning briefing (_Agent-Context/WIKI-CHANGES.md).
+    changed = ""
+    if after is not None:
+        try:
+            d = wiki_changes.write(before, after, conflicts=flags)
+            changed = f" wiki_changed={wiki_changes.count(d)}"
+        except Exception as e:
+            print(f"change brief skipped: {e}")
     # Retrieval check after the compile: the same golden questions every
     # night, so a compile change that hurts search shows up as a number.
     hit5 = ""
@@ -95,7 +164,7 @@ def main():
             hit5 = f" hit5={res['hit5']}"
     except Exception as e:
         print(f"retrieval eval skipped: {e}")
-    print(f"RUNLOG compile_rc={compile_rc}{changed}{hit5}"
+    print(f"RUNLOG compile_rc={compile_rc}{changed}{proposed}{conflicts}{hit5}"
           + ("" if compile_rc == 0 else " status=partial"))
 
 

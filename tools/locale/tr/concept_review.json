@@ -1,0 +1,17 @@
+{
+  "title": "💡 Kavram önerisi: {title}",
+  "title_personal": "💡 Kavram önerisi (kişisel)",
+  "personal_where": "Kişisel olduğu için başlık burada yok. _Agent-Context/concepts.md, satır {line}.",
+  "personal_label": "kişisel bir kavram",
+  "aliases": "Diğer adları: {aliases}",
+  "sources": "{n} kaynaktan:",
+  "more": "ve {n} tane daha",
+  "adds": "Onaylarsan bir sonraki derleme sayfayı yazar ve eskileri dahil uyan her özeti altına toplar.",
+  "applied": "✅ Aktif: {title}. Sayfa bir sonraki derlemede yazılır.",
+  "rejected": "Emekliye ayrıldı: {title}. Bir daha önerilmeyecek.",
+  "skipped": "Beklemede kaldı; sıradaki yerini korur.",
+  "already": "Bu öneri zaten karara bağlandı: {decision}.",
+  "waiting_heading": "## Kararını bekleyenler",
+  "waiting_line": "- {label}: {days} gündür bekliyor, Buzz #dreaming'de yanıtla",
+  "waiting_none": "- Bekleyen yok"
+}

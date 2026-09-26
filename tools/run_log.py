@@ -32,7 +32,9 @@ VAULT = Path(os.environ.get("BRAINLESS_VAULT") or Path(__file__).resolve().paren
 STATE = VAULT / ".agents" / "state" / "runs.jsonl"
 KEEP_DAYS = 30
 SHOW_DAYS = 14
-RUNLOG_RE = re.compile(r"^RUNLOG((?:\s+[a-z_]+=\S+)+)\s*$")
+# Keys may carry digits (hit5): a key the pattern refused dropped the whole
+# line, and the job was recorded with the previous line's counts instead.
+RUNLOG_RE = re.compile(r"^RUNLOG((?:\s+[a-z_][a-z0-9_]*=\S+)+)\s*$")
 
 
 def host() -> str:

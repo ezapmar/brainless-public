@@ -25,6 +25,7 @@ Usage:
   python3 tools/lint_wiki.py --fix --dry-run  # preview what --fix would do
 """
 import argparse
+import json
 import os
 import sys
 import re
@@ -54,7 +55,13 @@ def parse_fm(text: str) -> dict:
     for line in m.group(1).splitlines():
         if ":" in line:
             k, _, v = line.partition(":")
-            fm[k.strip()] = v.strip()
+            v = v.strip()
+            if len(v) >= 2 and v[0] == v[-1] == '"':
+                try:
+                    v = json.loads(v)
+                except ValueError:
+                    v = v[1:-1]
+            fm[k.strip()] = v
     return fm
 
 

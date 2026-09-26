@@ -87,6 +87,27 @@ def registry_row(row: dict) -> str:
                        row["status"], row.get("sensitivity", ""), row.get("scope", "")])
 
 
+def set_status(text: str, slug: str, status: str) -> str:
+    """Change one row's status in concepts.md, leaving every other line as it is.
+    Raises KeyError when the slug has no row."""
+    if status not in STATUSES:
+        raise ValueError(status)
+    out, hit = [], False
+    for line in text.splitlines(keepends=True):
+        parts = [p.strip() for p in line.split("|")]
+        if not hit and len(parts) >= 4 and parts[0] == slug and parts[3] in STATUSES:
+            parts += [""] * (6 - len(parts))
+            row = {"slug": parts[0], "title": parts[1],
+                   "aliases": [a.strip() for a in parts[2].split(",") if a.strip()],
+                   "status": status, "sensitivity": parts[4], "scope": " | ".join(parts[5:]).strip(" |")}
+            line = registry_row(row) + ("\n" if line.endswith("\n") else "")
+            hit = True
+        out.append(line)
+    if not hit:
+        raise KeyError(slug)
+    return "".join(out)
+
+
 def known_names(rows) -> set[str]:
     """Every slug, title and alias, casefolded, for deduping new proposals."""
     out = set()
@@ -140,7 +161,33 @@ def split_frontmatter(text: str) -> tuple[str, str]:
 
 def fm_value(fm: str, key: str) -> str | None:
     m = re.search(rf"^{re.escape(key)}:[ \t]*(.*)$", fm, re.M)
-    return m.group(1).strip() if m else None
+    if not m:
+        return None
+    v = m.group(1).strip()
+    if len(v) >= 2 and v[0] == v[-1] == '"':
+        try:
+            return json.loads(v)
+        except ValueError:
+            return v[1:-1]
+    if len(v) >= 2 and v[0] == v[-1] == "'":
+        return v[1:-1].replace("''", "'")
+    return v
+
+
+_YAML_INDICATORS = tuple("-?:,[]{}#&*!|>'\"%@`")
+
+
+def yaml_scalar(value) -> str:
+    """One frontmatter value that strict YAML (and Obsidian) parses back as the
+    same string. Plain when it can be, double-quoted when a colon-space, a
+    comment marker or a leading indicator would otherwise break the block.
+    Newlines fold to one space (every reader here matches `key: value` per line);
+    other whitespace is kept, since a `source:` path can hold a double space."""
+    v = re.sub(r"[ \t]*[\r\n]+[ \t]*", " ", str(value)).strip()
+    if (not v or v.startswith(_YAML_INDICATORS) or ": " in v or " #" in v
+            or v.endswith(":")):
+        return json.dumps(v, ensure_ascii=False)
+    return v
 
 
 def read_concepts_key(text: str) -> list[str] | None:
@@ -156,6 +203,30 @@ def read_concepts_key(text: str) -> list[str] | None:
         except ValueError:
             return [x.strip().strip("'\"") for x in v.strip("[]").split(",") if x.strip()]
     return [v] if v else []
+
+
+_FM_LINE_RE = re.compile(r"^([A-Za-z_][\w-]*):[ \t]+(\S.*?)[ \t]*$")
+_BLOCK_SCALAR_RE = re.compile(r"^[|>][+-]?\d*$")
+
+
+def quote_frontmatter(text: str) -> str:
+    """Quote the top-level frontmatter values of a model-written page that would
+    break strict YAML, the way yaml_scalar does for values we write ourselves.
+    Lists, block scalars and values already quoted are left as they are, so a
+    second pass changes nothing."""
+    m = _FM_RE.match(text)
+    if not m:
+        return text
+    out = []
+    for line in m.group(1).split("\n"):
+        lm = _FM_LINE_RE.match(line)
+        if lm:
+            key, val = lm.groups()
+            quoted = len(val) >= 2 and val[0] == val[-1] and val[0] in "\"'"
+            if not (quoted or val[0] in "[{" or _BLOCK_SCALAR_RE.match(val)):
+                line = f"{key}: {yaml_scalar(val)}"
+        out.append(line)
+    return text[:m.start(1)] + "\n".join(out) + text[m.end(1):]
 
 
 def set_fm_key(text: str, key: str, value: str) -> str:
@@ -239,6 +310,71 @@ def parse_assignment(out: str, stems: set[str], slugs: set[str]) -> tuple[dict, 
     return assign, proposals
 
 
+# ─── Source filter ──────────────────────────────────────────────
+# One document often reaches the vault as several files. Counting them as
+# sources inflated concept proposals (25/09/2026: one book was three
+# "sources"). These rules are deterministic on purpose. A magazine file is not
+# a table of contents even when its frontmatter lists the articles: the 47
+# checked on 25/09 were whole issues, 270 to 450 KB each.
+BOOK_SUMMARY = "Summary.md"
+READING_SHEET = "Fiche_de_Lecture.md"
+
+
+def _norm(rel: str) -> str:
+    return _nfc(str(rel)).replace("\\", "/")
+
+
+def skip_reason(rel: str, exists) -> str | None:
+    """Why a source file should not be compiled, or None. `exists(rel)` answers
+    for a vault-relative path.
+
+      raw-twin           X_raw.md beside X.md: the same text before cleanup
+      reading-sheet      Fiche_de_Lecture.md beside Summary.md: a French rewrite
+                         of the same book summary, framed by an old pipeline
+    """
+    rel = _norm(rel)
+    folder, _, name = rel.rpartition("/")
+    sib = (folder + "/") if folder else ""
+    if name.endswith("_raw.md") and exists(sib + name[:-len("_raw.md")] + ".md"):
+        return "raw-twin"
+    if name == READING_SHEET and exists(sib + BOOK_SUMMARY):
+        return "reading-sheet"
+    return None
+
+
+def source_group(rel: str, exists) -> str:
+    """Files that are one document share a key. A folder holding a book summary
+    is one book, whatever else sits in it, and so is `X.md` beside a folder `X/`
+    that holds one (the converted book next to its summaries); otherwise X and
+    X_raw are one."""
+    rel = _norm(rel)
+    folder, _, name = rel.rpartition("/")
+    if folder and exists(folder + "/" + BOOK_SUMMARY):
+        return folder + "/"
+    beside = rel[:-len(".md")] if rel.endswith(".md") else ""
+    if beside and exists(beside + "/" + BOOK_SUMMARY):
+        return beside + "/"
+    return (folder + "/" if folder else "") + re.sub(r"_raw\.md$", ".md", name)
+
+
+def source_rank(rel: str) -> int:
+    """Lower is the better stand-in for its group. A book summary covers the
+    whole book, where the compiler reads only the first MAX_CHARS of the book
+    itself; a cleaned file beats its raw conversion."""
+    name = _norm(rel).rsplit("/", 1)[-1]
+    if name == BOOK_SUMMARY:
+        return 0
+    if name == READING_SHEET:
+        return 3
+    return 2 if name.endswith("_raw.md") else 1
+
+
+def source_count(stems) -> int:
+    """Distinct sources behind summary stems: `X` and `X_raw` are one document
+    converted twice, not two sources agreeing."""
+    return len({re.sub(r"_raw$", "", s) for s in stems})
+
+
 def new_proposals(proposals, rows, min_members: int = 2) -> list[dict]:
     """Proposals worth a registry row: not a known name, backed by enough summaries.
 
@@ -249,7 +385,7 @@ def new_proposals(proposals, rows, min_members: int = 2) -> list[dict]:
     for p in proposals:
         names = {p["slug"], _nfc(p["title"]).casefold(), slugify(p["title"]),
                  *(_nfc(a).casefold() for a in p["aliases"])}
-        if names & seen or len(p["members"]) < min_members:
+        if names & seen or source_count(p["members"]) < min_members:
             continue
         seen |= names
         out.append(p)
@@ -270,11 +406,14 @@ def cited_links(text: str) -> set[str]:
     return {m.strip() for m in _LINK_RE.findall(body)}
 
 
-def validate_update(old: str, new: str, *, min_ratio: float = 0.7) -> list[str]:
+def validate_update(old: str, new: str, *, min_ratio: float = 0.7,
+                    retracted: frozenset = frozenset()) -> list[str]:
     """Reasons the new page must not replace the old one (empty list = accept).
 
     The model rewrites the whole page, so everything the page promised to keep
-    is checked mechanically: superseded claims, every cited page, the shape."""
+    is checked mechanically: superseded claims, every cited page, the shape.
+    `retracted` names withdrawn sources (tools/retract_source.py): their links
+    must go, and only theirs may."""
     problems = []
     try:
         import output_guard
@@ -293,7 +432,10 @@ def validate_update(old: str, new: str, *, min_ratio: float = 0.7) -> list[str]:
     lost_struck = [s for s in struck_claims(old) if s not in new]
     if lost_struck:
         problems.append(f"dropped {len(lost_struck)} superseded claim(s): {lost_struck[0][:60]}")
-    lost_links = sorted(cited_links(old) - cited_links(new))
+    kept = cited_links(new) & set(retracted)
+    if kept:
+        problems.append(f"still cites retracted {', '.join(sorted(kept)[:3])}")
+    lost_links = sorted(cited_links(old) - cited_links(new) - set(retracted))
     if lost_links:
         problems.append(f"dropped {len(lost_links)} cited link(s): {', '.join(lost_links[:3])}")
     _, old_body = split_frontmatter(old)

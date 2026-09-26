@@ -27,6 +27,7 @@ import argparse
 import hashlib
 import json
 import os
+import random
 import re
 import subprocess
 import sys
@@ -257,7 +258,7 @@ def write_compiled(dst: Path, body: str, sources, *, scope="") -> bool:
     (tools/output_guard.py), is refused: the existing page stays, unstamped
     output never lands, and the next run tries again. False when refused.
     """
-    text = clean_markdown_output(body).rstrip("\n") + "\n"
+    text = C.quote_frontmatter(clean_markdown_output(body).rstrip("\n") + "\n")
     bad = output_guard.problems(text)
     if bad:
         print(f"[reject] {dst.relative_to(VAULT)}: {'; '.join(bad)}", file=sys.stderr)
@@ -306,8 +307,7 @@ view may have moved since.
 
 def summarize_file(src: Path, dry: bool, full: bool) -> bool:
     rel = src.relative_to(VAULT)
-    slug = slugify(str(rel).replace("/", "_").rsplit(".", 1)[0])
-    dst = WIKI / "summaries" / f"{slug}.md"
+    dst = _summary_dst(src)
     if not needs_rebuild(src, dst, full):
         return False
     if dry:
@@ -367,15 +367,113 @@ status: seed
     return True
 
 
+def _archive_log(lines):
+    """Newest first under the table header of .wiki/_archive/LOG.md, the log
+    wiki_prune.py keeps; every move the compiler makes is written there too."""
+    log = WIKI / "_archive" / "LOG.md"
+    if not lines or not log.exists():
+        return
+    text = log.read_text()
+    head, sep, rest = text.partition("|---")
+    if sep:
+        first_nl = rest.find("\n")
+        text = head + sep + rest[:first_nl + 1] + "\n".join(lines) + "\n" + rest[first_nl + 1:]
+    else:
+        text = text.rstrip("\n") + "\n" + "\n".join(lines) + "\n"
+    log.write_text(text)
+
+
+def _vault_exists(rel: str) -> bool:
+    return (VAULT / rel).exists()
+
+
+_RETRACTED = None
+
+
+def _retracted_groups() -> set[str]:
+    """Documents the owner retracted (tools/retract_source.py), read once a run."""
+    global _RETRACTED
+    if _RETRACTED is None:
+        try:
+            import retract_source
+            _RETRACTED = retract_source.groups()
+        except Exception as e:
+            print(f"[warn] retracted.md unreadable, nothing skipped for it: {e}", file=sys.stderr)
+            _RETRACTED = set()
+    return _RETRACTED
+
+
+def source_skip(src: Path) -> str | None:
+    """The source filter (concepts.skip_reason) for a file on disk, plus the
+    owner's retractions."""
+    rel = str(src.relative_to(VAULT))
+    retracted = _retracted_groups()
+    if retracted and C.source_group(rel, _vault_exists) in retracted:
+        return "retracted"
+    return C.skip_reason(rel, _vault_exists)
+
+
+def _summary_dst(src: Path) -> Path:
+    rel = src.relative_to(VAULT)
+    return WIKI / "summaries" / f"{slugify(str(rel).replace('/', '_').rsplit('.', 1)[0])}.md"
+
+
+def _kept_twin(src: Path, reason: str) -> Path:
+    """The file that stays when `src` is filtered out."""
+    if reason == "raw-twin":
+        return src.with_name(src.name[:-len("_raw.md")] + ".md")
+    return src.with_name(C.BOOK_SUMMARY)
+
+
+def _retarget_links(mapping: dict[str, str]) -> int:
+    """[[old]] becomes [[new]] on every live wiki page, so archiving a duplicate
+    breaks no link. Returns the number of pages changed."""
+    if not mapping:
+        return 0
+    pat = re.compile(r"\[\[(" + "|".join(re.escape(k) for k in mapping) + r")(?=[\]|#])")
+    changed = 0
+    for p in WIKI.rglob("*.md"):
+        if "_archive" in p.relative_to(WIKI).parts:
+            continue
+        text = p.read_text(errors="replace")
+        new = pat.sub(lambda m: "[[" + mapping[m.group(1)], text)
+        if new != text:
+            p.write_text(new)
+            changed += 1
+    return changed
+
+
 def phase_summaries(dry: bool, full: bool):
-    n = 0
+    n, skipped, moved, links = 0, 0, [], {}
+    stamp = datetime.now().strftime("%Y-%m-%d")
     for src in iter_sources(SUMMARY_SOURCES):
         if not dry and out_of_time("summaries"):
             break
+        reason = source_skip(src)
+        if reason:
+            skipped += 1
+            dst = _summary_dst(src)
+            if dst.exists() and not dry:
+                # Built before the filter existed: archived with its reason,
+                # never deleted, so a wrong rule costs one git mv to undo.
+                to = WIKI / "_archive" / "summaries" / dst.name
+                to.parent.mkdir(parents=True, exist_ok=True)
+                if not to.exists():
+                    dst.replace(to)
+                    kept = _summary_dst(_kept_twin(src, reason))
+                    if kept.exists():
+                        links[dst.stem] = kept.stem
+                    moved.append(f"| {stamp} | source-filter | {dst.relative_to(VAULT)} | "
+                                 f"{to.relative_to(VAULT)} | {reason}: {src.relative_to(VAULT)} |")
+            continue
         if summarize_file(src, dry, full):
             n += 1
+    _archive_log(moved)
+    relinked = _retarget_links(links)
     _COUNTS["summaries"] = n
-    print(f"phase summaries: {n} file(s)")
+    print(f"phase summaries: {n} file(s), {skipped} skipped by the source filter, "
+          f"{len(moved)} old summar{'y' if len(moved) == 1 else 'ies'} archived, "
+          f"links repointed on {relinked} page(s)")
 
 
 # ─── Phase: projects mirror ─────────────────────────────────────
@@ -523,7 +621,12 @@ def _active_rev(rows) -> str:
 
 
 def summary_catalogue():
-    """In-scope summaries as dicts: stem, path, source, summary_en, hash, concepts, rev."""
+    """In-scope summaries as dicts: stem, path, source, summary_en, hash, concepts, rev.
+
+    One entry per document: a summary whose source is gone (renamed or
+    removed; wiki_prune.py archives it later) is left out, and of the files
+    that are one document (concepts.source_group) only the best stand-in
+    (concepts.source_rank) stays. Otherwise one book counted as three sources."""
     out = []
     d = WIKI / "summaries"
     if not d.exists():
@@ -541,7 +644,18 @@ def summary_catalogue():
             "concepts": C.read_concepts_key(text),
             "rev": C.fm_value(fm, "concepts_rev") or "",
         })
-    return out
+    best = {}
+    retracted = _retracted_groups()
+    for s in out:
+        if not _vault_exists(s["source"]):
+            continue
+        g = C.source_group(s["source"], _vault_exists)
+        if g in retracted:
+            continue
+        if g not in best or C.source_rank(s["source"]) < C.source_rank(best[g]["source"]):
+            best[g] = s
+    keep = {id(s) for s in best.values()}
+    return [s for s in out if id(s) in keep]
 
 
 def _stamp_concepts(path: Path, slugs, rev: str):
@@ -554,41 +668,34 @@ def _stamp_concepts(path: Path, slugs, rev: str):
 
 
 def _append_proposals(props, catalogue):
-    """Add new proposals to the registry as `proposed` rows. Returns the rows added."""
+    """Add new proposals to the registry as `proposed` rows, no more than the
+    review queue has room for (tools/concept_review.py). Returns the rows added."""
+    import concept_review
     by_stem = {s["stem"]: s for s in catalogue}
-    rows = []
-    for p in props:
-        personal = any(C.is_personal(by_stem[m]["source"]) for m in p["members"] if m in by_stem)
-        rows.append({"slug": p["slug"], "title": p["title"], "aliases": p["aliases"],
-                     "status": "proposed", "sensitivity": "personal" if personal else "",
-                     "scope": p["scope"]})
-    if rows:
-        text = C.read_page(CONCEPT_REGISTRY).rstrip("\n")
-        text += "\n" + "\n".join(C.registry_row(r) for r in rows) + "\n"
-        CONCEPT_REGISTRY.write_text(text)
+    with concept_review.registry_lock():
+        text = C.read_page(CONCEPT_REGISTRY)
+        rows = []
+        for p in props[:concept_review.room(C.parse_registry(text))]:
+            personal = any(C.is_personal(by_stem[m]["source"]) for m in p["members"] if m in by_stem)
+            rows.append({"slug": p["slug"], "title": p["title"], "aliases": p["aliases"],
+                         "status": "proposed", "sensitivity": "personal" if personal else "",
+                         "scope": p["scope"]})
+        if rows:
+            text = text.rstrip("\n") + "\n" + "\n".join(C.registry_row(r) for r in rows) + "\n"
+            CONCEPT_REGISTRY.write_text(text)
     return rows
 
 
-def _ping_proposals(rows):
-    """One Buzz line when the compiler proposes concepts. Personal ones are only
-    counted: their titles alone can say too much about family or health."""
+def _announce_proposals(rows):
+    """Each waiting proposal becomes a message in Buzz #dreaming that a reply
+    decides (tools/concept_review.py). Personal ones show no title."""
     if not rows:
         return
-    public = [r["title"] for r in rows if r["sensitivity"] != "personal"]
-    personal = len(rows) - len(public)
-    lines = [t("compile_resources.concept_ping_intro").format(n=len(rows))]
-    lines += [f"- {title}" for title in public]
-    if personal:
-        lines.append(t("compile_resources.concept_ping_personal").format(n=personal))
-    lines.append(t("compile_resources.concept_ping_howto"))
-    key = "concept-proposals:" + hashlib.sha256(
-        "\n".join(sorted(r["slug"] for r in rows)).encode()).hexdigest()[:16]
     try:
-        from buzz_delivery import send
-        send("thinking", "\n".join(lines), key=key)
-        print(f"[buzz] {len(rows)} concept proposal(s) announced")
-    except Exception as e:  # a failed ping must never cost the compile
-        print(f"[buzz] concept proposal ping failed: {e}", file=sys.stderr)
+        import concept_review
+        print(f"[buzz] {concept_review.announce(catalogue=summary_catalogue())} concept proposal(s) announced")
+    except Exception as e:  # a failed announcement must never cost the compile
+        print(f"[buzz] concept proposal announcement failed: {e}", file=sys.stderr)
 
 
 def _assign_prompt(rows, batch, *, propose_only=False):
@@ -629,6 +736,14 @@ def phase_concept_assign(dry: bool, full: bool, *, propose_only: bool = False):
     catalogue = summary_catalogue()
     todo = catalogue if (full or propose_only) else \
         [s for s in catalogue if s["concepts"] is None or s["rev"] != rev]
+    if propose_only:
+        import concept_review
+        if not concept_review.room(rows):
+            print(f"phase concept-propose: {concept_review.MAX_PENDING} proposals wait for a decision; none added")
+            return
+        # A new mix each week: related sources filed months apart only meet
+        # when they land in the same batch of the prompt.
+        random.Random(datetime.now().strftime("%G-%V")).shuffle(todo)
     label = "concept-propose" if propose_only else "concept-assign"
     if not todo:
         print(f"phase {label}: nothing to assign")
@@ -640,6 +755,9 @@ def phase_concept_assign(dry: bool, full: bool, *, propose_only: bool = False):
     for i in range(0, len(todo), CONCEPT_ASSIGN_BATCH):
         if out_of_time(label, need=240):
             break
+        if propose_only and not concept_review.room(concept_rows()):
+            print(f"phase {label}: review queue full, stopping")
+            break
         batch = todo[i:i + CONCEPT_ASSIGN_BATCH]
         stems = {s["stem"] for s in batch}
         out = call_claude(_assign_prompt(concept_rows(), batch, propose_only=propose_only),
@@ -650,8 +768,9 @@ def phase_concept_assign(dry: bool, full: bool, *, propose_only: bool = False):
                   file=sys.stderr)
             continue
         fresh = C.new_proposals(props, concept_rows())
-        added += _append_proposals(fresh, catalogue)
-        for p in fresh:                  # a proposal's evidence is assigned to it right away
+        kept = {r["slug"] for r in _append_proposals(fresh, catalogue)}
+        added += [r for r in concept_rows() if r["slug"] in kept]
+        for p in (p for p in fresh if p["slug"] in kept):  # its evidence is assigned to it right away
             slugs.add(p["slug"])
             for m in p["members"]:
                 assign[m] = sorted(set(assign.get(m, [])) | {p["slug"]})
@@ -660,7 +779,7 @@ def phase_concept_assign(dry: bool, full: bool, *, propose_only: bool = False):
         for s in batch:
             _stamp_concepts(s["path"], assign.get(s["stem"], []), rev)
             assigned += bool(assign.get(s["stem"]))
-    _ping_proposals(added)
+    _announce_proposals(added)
     print(f"phase {label}: {len(todo)} summaries seen, {assigned} assigned, "
           f"{len(added)} concept(s) proposed")
 
@@ -750,6 +869,7 @@ def _finish_concept(out, row, members_map, personal):
         if not m:
             return text
         text = text[m.start():]
+    text = C.quote_frontmatter(text)
     for key, value in (("type", "concept"),
                        ("aliases", json.dumps(row["aliases"], ensure_ascii=False)),
                        ("members", C.members_value(members_map))):
@@ -857,7 +977,6 @@ def migrate_articles(dry: bool):
         s = catalogue[stem]
         _stamp_concepts(s["path"], set(s["concepts"] or []) | slugs, rev)
     CONCEPT_ARCHIVE.mkdir(parents=True, exist_ok=True)
-    log = WIKI / "_archive" / "LOG.md"
     stamp = datetime.now().strftime("%Y-%m-%d")
     lines = []
     for p in sorted(src_dir.glob("*.md")):
@@ -867,15 +986,7 @@ def migrate_articles(dry: bool):
             p.replace(dst)
         lines.append(f"| {stamp} | concept-migrate | {p.relative_to(VAULT)} | "
                      f"{dst.relative_to(VAULT)} | article became concept [[{p.stem}]] |")
-    if lines and log.exists():
-        text = log.read_text()
-        head, sep, rest = text.partition("|---")
-        if sep:
-            first_nl = rest.find("\n")
-            text = head + sep + rest[:first_nl + 1] + "\n".join(lines) + "\n" + rest[first_nl + 1:]
-        else:
-            text = text.rstrip("\n") + "\n" + "\n".join(lines) + "\n"
-        log.write_text(text)
+    _archive_log(lines)
     try:
         src_dir.rmdir()
     except OSError:
@@ -933,7 +1044,7 @@ Output ONLY valid JSON. For the body: {output_lang_directive()}
         zk = stored_zk(dst) or (now + timedelta(minutes=i)).strftime("%Y%m%d%H%M")
         body = f"""---
 lang: {LANG}
-summary_en: {idea.get('en','')}
+summary_en: {C.yaml_scalar(idea.get('en',''))}
 zk: {zk}
 compiled_at: {datetime.now().isoformat(timespec='seconds')}
 status: seed

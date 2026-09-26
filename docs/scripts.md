@@ -446,7 +446,11 @@ age, and a job that is quiet and a job that is dead look identical otherwise.
 brief (`wiki_changes.py`), refreshes the lint report, rebuilds the semantic index and the
 link suggestions, and scores the retrieval questions. The run log gets `compile_rc`,
 `wiki_changed` and `hit5`; a non-zero compile marks the run partial, and seven nights in a
-row with `wiki_changed=0` turn HEALTH.md yellow. The compile timeout is 90 minutes (`BRAINLESS_COMPILE_TIMEOUT`), the budget ten
+row with `wiki_changed=0` turn HEALTH.md yellow. On Sundays it also runs `concept-propose`
+over the whole catalogue (`BRAINLESS_CONCEPT_PROPOSE_WEEKDAY`, Monday is 0), and every
+night it posts waiting concept proposals to `#dreaming`. After the search index is rebuilt,
+`contradiction_check.py` reads tonight's summaries against the vault; optional steps start
+only while enough of the unit's two hours is left. The compile timeout is 90 minutes (`BRAINLESS_COMPILE_TIMEOUT`), the budget ten
 minutes less (`BRAINLESS_COMPILE_BUDGET`). On the worker it is `brainless-compile.timer`;
 on a Mac, `install.sh --schedule` adds a launchd agent at the same time.
 
@@ -480,7 +484,10 @@ nothing to produce, so it runs every night, including the nights it has nothing 
 
 **Description.** The phases run in this order:
 
-1. summaries: one per source note.
+1. summaries: one per source note, after a source filter. `X_raw.md` beside `X.md` and a
+   `Fiche_de_Lecture.md` beside a book's `Summary.md` are the same document again, so
+   they are not compiled; a summary built before the filter is archived with its reason
+   in `.wiki/_archive/LOG.md`, and links to it move to the copy that stays.
 2. concept-assign: each summary gets the concepts it informs, from the registry in
    `_Agent-Context/concepts.md`.
 3. concepts: each concept page is updated in place from the summaries it has not seen yet.
@@ -499,7 +506,8 @@ A project mirror that shares its name with an entity page is written as
 It is incremental by default, using source digests and modification times. The flags are
 `--full-rebuild`, `--dry-run` and `--only <phase>`. Two phases run only when named:
 
-- `concept-propose` suggests a starting set of concepts.
+- `concept-propose` reads the whole catalogue and suggests concepts. `nightly_compile.py`
+  runs it every Sunday night in a new shuffled order, unless the review queue is full.
 - `concept-migrate` turned the old articles into concepts.
 
 **Concept pages.** A summary says what one source said. A concept page says what the vault
@@ -512,9 +520,14 @@ knows about one idea, and each new source updates it instead of adding a page be
 - **Validator.** The model rewrites the whole page, so a deterministic check in
   `tools/concepts.py` refuses any rewrite that loses a struck claim or a cited source, uses
   a dash, or shrinks the page. The old page stays in place.
-- **Proposals.** The compiler proposes new concepts in #thinking. A concept becomes active
-  only when I change its registry row to active. Concepts built on family or health sources
-  are marked personal: Buzz only counts them, and they are never exported.
+- **One entry per document.** Concepts read one summary per document: of a book folder,
+  its `Summary.md`, which covers the whole book where the book itself is read only up to
+  `MAX_CHARS`; of a raw twin, the cleaned file. A summary whose source was renamed or
+  removed is left out until `wiki_prune.py` archives it.
+- **Proposals.** The compiler proposes a concept when at least two sources share an idea. Each proposal becomes a message in
+  `#dreaming` that I answer; see `tools/concept_review.py`. Concepts built on family or
+  health sources are marked personal: Buzz shows no title for them, and they are never
+  exported.
 
 **Philosophy.** `.wiki/` is disposable. Anything in it can be regenerated, which is what
 lets the machine own a folder without anyone worrying about what it does there. Private
@@ -616,6 +629,86 @@ because their pages share a template. So a model reads the pair, and I decide. A
 typed into a summary would vanish at its next recompile, which is why approvals live in a
 registry the compiler replays. Asking five times a night is a budget of attention, and the
 kill rule is there because a proposer I keep saying no to is worse than none.
+
+### `tools/contradiction_check.py`
+
+**Definition.** Whether tonight's new sources disagree with what the vault already holds.
+
+**Description.** After each compile, every new or changed summary (at most eight a night)
+is read against its three nearest pages in the search index: another document, still live,
+similarity 0.86 or more but under 0.93, which marks another copy of the same text.
+Summaries, concepts, projects, entities and ideas qualify; the summary's own raw twin or
+book folder does not, and neither does a summary of a renamed file or any page git
+ignores. One model call per summary answers with the conflicts: a claim that cannot be
+true alongside the old one, or a new fact that makes an old claim out of date. More
+detail or different emphasis is not a conflict. Each conflict goes to
+`_Agent-Context/CONTRADICTIONS.md` with both claims and why, newest first, 30 days,
+once per pair, and into the change brief's Flagged section. No page is edited.
+
+`--page <path>` checks one page; `--since <ref>` every summary changed since a commit;
+`--dry-run` lists what would be compared without calling a model.
+
+**Philosophy.** A concept page keeps its disagreements, but only for the sources assigned
+to it, and most sources feed no concept. A new article that reverses an old note is the
+moment knowledge should change, and it used to pass in silence. The check reports and
+stops there: whether the old note is wrong, the new source is, or both hold in different
+settings is a judgement, and it is mine.
+
+### `tools/retract_source.py`
+
+**Definition.** Takes a source that turned out wrong back out of the wiki.
+
+**Description.** Without `--apply` it only traces: every summary of the document (its
+raw twin and book folder included), the concept pages that cite it, other pages that
+link to it, approved link rows and contradiction entries. With `--apply --reason "..."`:
+
+1. The document goes into `_Agent-Context/retracted.md`, and the compiler never
+   compiles it again or reads it into concepts.
+2. Each concept page is rewritten by the model. A claim that rests only on the source is
+   struck and moved to Superseded as `~~claim~~ retracted YYYY-MM: source withdrawn
+   (reason)`; a claim with other sources keeps them and loses only this citation. The
+   validator must pass with the retracted links as the only ones allowed to go, so a
+   rewrite that drops any other citation or struck line is refused, the page stays as
+   it was, and the command names it for a hand edit.
+3. Links from other pages become plain text, approved link rows are marked `retracted`,
+   contradiction entries that cite it are removed.
+4. Its summaries move to `.wiki/_archive/summaries/`, logged with the reason.
+
+The source file stays where it is, in a human folder. To undo: delete the row in
+`retracted.md` and revert the commit.
+
+**Philosophy.** Compiling spreads a source into a dozen pages, which is the point, and
+also the risk: a bad source in a library is one file to delete; a bad source in a
+compiler is in every page it touched. Retraction keeps the record honest instead of
+clean. The claim stays visible, struck, with the reason it was withdrawn, because what I
+once believed and why is part of what the vault knows.
+
+### `tools/concept_review.py`
+
+**Definition.** Concept proposals I answer in Buzz.
+
+**Description.** Every proposal the compiler adds to `_Agent-Context/concepts.md` becomes
+its own message in `#dreaming`: the title, its scope, other names, and the sources behind
+it. I reply `evet` to make it active, `hayır` to retire it, or `atla` to leave it waiting.
+An active concept collects every matching summary at the next compile, older ones
+included, and gets its page. A retired row stays in the registry so the idea is not
+proposed again. A personal proposal shows no title in Buzz, only the registry line to read.
+
+- **Queue cap:** no new proposals while five wait. The compiler asks before adding any, and
+  the Sunday `concept-propose` does not call the model at all while the queue is full.
+- **In the brief:** the change brief (`wiki_changes.py`) lists what waits and for how many
+  days; the morning briefing treats two days as a red flag.
+- **Run log:** `concept_proposed` on Sundays, or `concept_propose=skipped` when the queue
+  was full.
+
+`--list` prints the queue. A plain run posts any waiting proposal that is not in Buzz yet;
+the nightly compile does the same after every run.
+
+**Philosophy.** The compiler proposed concepts from the start, but accepting one meant
+opening a registry file and editing a column. Five proposals then sat for days while the
+catalogue of 600 summaries had six concepts. A decision that needs a text editor does not
+get made from a phone. The cap is the other half: a proposer that outruns the person
+deciding only builds a pile.
 
 ---
 

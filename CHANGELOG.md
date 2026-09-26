@@ -3,6 +3,45 @@
 All notable changes to the public brainless engine. Dates are the day of the public
 push. The private vault this is exported from has its own history.
 
+## 0.7.0 (2026-09-26)
+
+Take a bad source back out, one document per source, concepts decided in Buzz, and
+frontmatter that Obsidian can read.
+
+- **Retract a source.** `tools/retract_source.py` traces a source that turned out wrong:
+  its summaries (raw twin and book folder included), the concept pages that cite it, the
+  pages that link to it. With `--apply --reason "..."` it goes into
+  `_Agent-Context/retracted.md` and the compiler never compiles it again. A concept claim
+  that stood on it alone is struck and kept in Superseded, marked retracted with the
+  reason; a claim with other sources keeps them. The validator lets only the retracted
+  links go, and a page it refuses stays as it was and is named for a hand edit.
+- **One document, one source.** A raw conversion beside its cleaned file, and a reading
+  sheet beside a book summary, stop compiling as separate sources. Their old summaries go
+  to `.wiki/_archive/summaries/` with the reason in `LOG.md`, and links move to the copy
+  that stays. Concepts read one summary per document.
+- **Concepts are decided in Buzz.** `tools/concept_review.py` posts each concept proposal
+  to `#dreaming`; reply `evet`, `hayır` or `atla`. The Sunday proposal pass reads the whole
+  catalogue and stops while five proposals wait.
+- **Contradiction check.** `tools/contradiction_check.py` reads each night's new summaries
+  against their nearest pages and writes real conflicts to
+  `_Agent-Context/CONTRADICTIONS.md` and the change brief. No page is edited.
+- **Run log fix.** The run log dropped any line with a digit in a key, so a night of
+  failed calls could read as ok. Fixed, and a partial run now warns in health.
+- **Quoted frontmatter.** A colon followed by a space in a title or summary made the whole
+  frontmatter block invalid YAML, and Obsidian dropped the page's properties. The tools
+  never noticed because they read values by regex. `tools/file_query.py` and the idea
+  writer now quote a value when it needs quotes (`concepts.yaml_scalar`), and every page
+  the model writes passes through `concepts.quote_frontmatter` before it lands: summaries,
+  projects, digests and concept pages. Lists, block scalars and quoted values stay as they
+  are, and a second pass changes nothing. A ` #` inside a summary, which YAML reads as a
+  comment and cuts off, is quoted too.
+- **Readers strip the quotes.** `concepts.fm_value` and `lint_wiki.parse_fm` return the
+  value without its quotes, so search, the index and the graph export see the same text as
+  before.
+- **Repair existing pages** once, from the vault root:
+  `python3 -c "import sys;sys.path.insert(0,'tools');import concepts as C;from pathlib import Path;[p.write_text(n) for p in Path('.wiki').rglob('*.md') if (n:=C.quote_frontmatter(t:=p.read_text()))!=t]"`
+- **Test:** `tools/tests/test_file_query.py`.
+
 ## 0.6.1 (2026-09-25)
 
 Health sees the worker's LLM login.

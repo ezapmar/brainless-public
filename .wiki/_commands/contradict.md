@@ -1,7 +1,7 @@
 ---
 name: contradict
 description: Find tensions between beliefs, decisions, and recent actions; flag unused beliefs
-argument-hint: [scope: "beliefs" | "decisions" | "all", default "all"]
+argument-hint: "[scope: \"beliefs\" | \"decisions\" | \"all\", default \"all\"]"
 ---
 
 ## Inputs

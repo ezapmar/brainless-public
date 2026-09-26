@@ -1,0 +1,10 @@
+{
+  "title": "# Çelişkiler",
+  "intro": "Vault'taki bir sayfayla çelişen yeni kaynaklar; her gece derlemesinden sonra tools/contradiction_check.py bulur. En yenisi üstte, son {days} gün. Hiçbir sayfa değiştirilmedi; çelişkinin ne anlama geldiğine sen karar verirsin.",
+  "none": "Bu aralıkta yok.",
+  "item_contradiction": "- **{day}** çelişki: [[{new}]] ile [[{old}]]",
+  "item_outdated": "- **{day}** eskimiş: [[{new}]], [[{old}]] içindeki bir iddianın artık geçerli olmadığını gösteriyor",
+  "new_says": "Yeni",
+  "old_says": "Eski",
+  "why": "Neden"
+}

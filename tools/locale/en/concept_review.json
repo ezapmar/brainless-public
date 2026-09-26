@@ -1,0 +1,17 @@
+{
+  "title": "💡 Concept proposal: {title}",
+  "title_personal": "💡 Concept proposal (personal)",
+  "personal_where": "Personal, so no title here. Read it in _Agent-Context/concepts.md, line {line}.",
+  "personal_label": "a personal concept",
+  "aliases": "Also called: {aliases}",
+  "sources": "Built from {n} source(s):",
+  "more": "and {n} more",
+  "adds": "If you approve, the next compile writes the page and files every matching summary under it, older ones included.",
+  "applied": "✅ Active: {title}. The page is written at the next compile.",
+  "rejected": "Retired: {title}. It will not be proposed again.",
+  "skipped": "Left waiting; it keeps its place in the queue.",
+  "already": "This proposal is already decided: {decision}.",
+  "waiting_heading": "## Waiting for your decision",
+  "waiting_line": "- {label}: {days} day(s), reply in Buzz #dreaming",
+  "waiting_none": "- Nothing waiting"
+}

@@ -19,5 +19,6 @@
   "kind_projects": "Projeler",
   "kind_ideas": "Fikirler",
   "kind_moc": "İçerik haritaları",
-  "kind_relationships": "İlişkiler"
+  "kind_relationships": "İlişkiler",
+  "flag_conflict": "- Çelişki, {page} ile {text}"
 }

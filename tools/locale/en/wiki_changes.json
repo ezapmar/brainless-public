@@ -19,5 +19,6 @@
   "kind_projects": "Projects",
   "kind_ideas": "Ideas",
   "kind_moc": "Maps of Content",
-  "kind_relationships": "Relationships"
+  "kind_relationships": "Relationships",
+  "flag_conflict": "- Conflict, {page} vs {text}"
 }
