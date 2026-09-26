@@ -57,6 +57,29 @@ def read_projects():
                     projects.append(f"[[{name}]] ({label})")
     return projects
 
+def write_digest(path, summary):
+    """Write the day's digest; a second digest on the same day is appended.
+
+    The worker digests once a night, but a laptop can digest twice (a tick
+    after a late note, a manual run), and the second write used to replace
+    the first while its captures were already archived: that day's digest was
+    lost (lite install test, 2026-09-26). The later part keeps its own heading
+    and drops its frontmatter, so the file still has one.
+    """
+    if not os.path.exists(path):
+        with open(path, "w") as f:
+            f.write(summary)
+        return
+    body = summary
+    if body.startswith("---\n"):
+        end = body.find("\n---", 4)
+        if end != -1:
+            body = body[end + 4:].lstrip("\n")
+    stamp = datetime.now().strftime("%H:%M")
+    with open(path, "a") as f:
+        f.write(f"\n\n---\n\n<!-- later digest, {stamp} -->\n{body}")
+
+
 def process_notes(files, labels=None):
     labels = labels or {}
     raw_content = ""
@@ -296,6 +319,11 @@ def main():
     # (tools/output_guard.py): treat it as no digest, keep the captures.
     try:
         import output_guard
+        if summary:
+            clean = output_guard.strip_preamble(summary)
+            if clean != summary:
+                print("Digest: dropped the model's preamble before the frontmatter")
+                summary = clean
         if summary and output_guard.is_bad(summary):
             print(f"Digest refused: {'; '.join(output_guard.problems(summary))}")
             summary = None
@@ -310,8 +338,7 @@ def main():
         output_path = os.path.join(DIGESTS_DIR, date_filename)
         
         try:
-            with open(output_path, 'w') as f:
-                f.write(summary)
+            write_digest(output_path, summary)
             print(f"Summary saved to {output_path}")
             
             # Sync tasks to central file

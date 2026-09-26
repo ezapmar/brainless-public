@@ -3,6 +3,30 @@
 All notable changes to the public brainless engine. Dates are the day of the public
 push. The private vault this is exported from has its own history.
 
+## 0.8.1 (2026-09-26)
+
+What the first full lite install found, from the published one-liner to an uninstall.
+
+- **A second digest on the same day no longer replaces the first.** A laptop can digest
+  twice in a day; the later one is now appended to the day's file. Before, the earlier
+  digest was lost while its notes were already archived.
+- **Chatter in front of a digest is cut, and caught.** A digest that opened with the model
+  explaining it could not search the wiki was saved as it came. The page is now kept and
+  the preamble dropped, and the guard knows the new phrasing. The stricter check also
+  finds older damaged pages, which lint now lists.
+- **Search returns your notes before the command prompts.** "What did I decide about
+  price" used to rank the `/decide` instructions first. `.wiki/_commands/` is out of the
+  search.
+- **The nightly change brief works on a lite clone.** It listed nothing, because it skipped
+  every page git ignores. It now keeps them when the brief itself is untracked.
+- **Generated wiki files stay out of git.** The index pages, which name your documents, and
+  the lint report were visible to `git add .` in a public clone.
+- **Aliases in your language.** An English vault got Turkish aliases; they now follow the
+  vault's language, with English added for other languages.
+- **`init` says which vault the command opens.** When another vault is already the
+  default, the closing screen says how to use the new one. The Lite guide says where the
+  day's notes go after the digest.
+
 ## 0.8.0 (2026-09-26)
 
 The lite profile: brainless on one computer, with a folder of notes and any model. It is

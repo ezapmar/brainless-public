@@ -1376,11 +1376,15 @@ def _registry_aliases() -> dict[str, list[str]]:
 def _alias_prompt(batch):
     items = "\n".join(f"- {p.stem} [{p.parent.name}]: {(C.fm_value(C.split_frontmatter(C.read_page(p))[0], 'summary_en') or '')[:300]}"
                       for p in batch)
+    # The owner's language plus English: a Turkish vault asks in both, an
+    # English one got Turkish aliases it would never type (lite test, 2026-09-26).
+    langs = "English" if LANG == "en" else f"{lang_name()} and English; give both where natural"
+    example = ('"ofis taşınması", "office move"' if LANG == "tr" else '"office move", "new office"')
     return f"""For each wiki page below, give 3 to 5 aliases: the other names and short
 phrases the owner would use when asking about it without using its title.
-The owner writes Turkish and English; give both where natural. Include common
+The owner writes {langs}. Include common
 misspellings of names and the plain-language description of the thing
-(for a project called "Workspace": "ofis taşınması", "office move").
+(for a project called "Workspace": {example}).
 Do NOT use generic words ("proje", "toplantı", "strategy"), and do NOT use the
 name of a different person, company or project.
 Do NOT put personal data in an alias: no birth dates, ages, ID or registration

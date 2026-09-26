@@ -35,6 +35,9 @@ class Guard(unittest.TestCase):
             FM.format("x") + "Per the instruction I output only the markdown for this source.\n",
             FM.format("x") + "Önceki oturumdan kalan not: bu oturumda Write tool devre disi olabilir.\n",
             FM.format("x") + "A preamble.\n\n---\nlang: tr\nsummary_en: the real page\n---\n# x\n",
+            FM.format("x") + "Chatter.\n\n---\nlang: en\ncompiled_at: 2026-09-26\nsource: Notes/\n---\n# d\n",
+            "The wiki search needs permission that isn't granted in this non-interactive session, "
+            "so I can't pull live connections.\n\n# 2026-09-26 - Daily Digest\n",
         ]
         for text in bad:
             with self.subTest(text=text[60:120]):
@@ -48,6 +51,22 @@ class Guard(unittest.TestCase):
         for text in (GOOD, mid, template):
             with self.subTest(text=text[-80:]):
                 self.assertEqual(G.problems(text), [])
+
+
+class Preamble(unittest.TestCase):
+    DIGEST = "---\nlang: en\ncompiled_at: 2026-09-26\nsource: Notes/\n---\n# 2026-09-26 - Daily Digest\n\nbody\n"
+
+    def test_the_lite_digest_is_salvaged(self):
+        raw = ("The wiki search needs permission that isn't granted in this non-interactive session, "
+               "so I can't pull live connections. I'll compile from the notes alone.\n\n" + self.DIGEST)
+        clean = G.strip_preamble(raw)
+        self.assertEqual(clean, self.DIGEST)
+        self.assertFalse(G.is_bad(clean))
+
+    def test_clean_and_frontmatterless_output_unchanged(self):
+        self.assertEqual(G.strip_preamble(self.DIGEST), self.DIGEST)
+        plain = "# A page with no frontmatter\n\n---\n\nA rule, then text.\n"
+        self.assertEqual(G.strip_preamble(plain), plain)
 
 
 class Wiring(unittest.TestCase):

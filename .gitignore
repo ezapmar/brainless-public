@@ -46,6 +46,11 @@ Thinking/**/*.md
 .wiki/entities/*
 .wiki/relationships/*
 .wiki/INDEX.md
+# Everything else the compiler writes (indexes, lint report, archive, logs):
+# generated, and the index pages name your own documents.
+.wiki/*.md
+.wiki/_*/
+!.wiki/_commands/
 _Agent-Context/*.md
 !_Agent-Context/AGENT-RULES.md
 !_Agent-Context/TRUNK-BASED-DEVELOPMENT.md

@@ -47,6 +47,10 @@ ARCHIVE_DIR = "_archive"
 # INDEX.md and the topic indexes name every page, so they would outrank the pages
 # themselves. An agent reads the index directly; search returns pages.
 INDEX_DIR = "_index"
+# The slash command prompts are engine instructions, not the owner's knowledge.
+# On a new vault they outranked the notes: "what did I decide about price"
+# returned the /decide prompt first (lite install test, 2026-09-26).
+COMMANDS_DIR = "_commands"
 
 
 # Generated reports list pages by name and would outrank them.
@@ -54,7 +58,8 @@ REPORTS = {"INDEX.md", "_lint-report.md", "_link-suggestions.md"}
 
 
 def _searchable(p: Path) -> bool:
-    return ARCHIVE_DIR not in p.parts and INDEX_DIR not in p.parts and p.name not in REPORTS
+    return (ARCHIVE_DIR not in p.parts and INDEX_DIR not in p.parts and COMMANDS_DIR not in p.parts
+            and p.name not in REPORTS)
 
 
 def walk(root: Path):
@@ -65,7 +70,7 @@ def rg_candidates(query: str, root: Path):
     try:
         out = subprocess.run(
             ["rg", "--no-heading", "--line-number", "--ignore-case",
-             "--max-count", "5", "--glob", f"!{ARCHIVE_DIR}/**", "--glob", f"!{INDEX_DIR}/**",
+             "--max-count", "5", "--glob", f"!{ARCHIVE_DIR}/**", "--glob", f"!{INDEX_DIR}/**", "--glob", f"!{COMMANDS_DIR}/**",
              *[a for r in REPORTS for a in ("--glob", f"!{r}")], query, str(root)],
             capture_output=True, text=True, timeout=15,
         )

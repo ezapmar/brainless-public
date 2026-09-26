@@ -141,6 +141,25 @@ BRAINLESS_LLM_API_KEY = "sk-nope"
             self.assertEqual(config.to_env(config.load(empty)), {})
 
 
+
+class TestImportTimeFolders(unittest.TestCase):
+    """Modules that resolve a folder at import must see brainless.toml even when
+    nothing imported config first (a fresh process, as the CLI starts them)."""
+
+    def test_fresh_process_reads_the_toml(self):
+        import subprocess
+        with tempfile.TemporaryDirectory() as vault:
+            Path(vault, "brainless.toml").write_text(
+                '[folders]\ndaily = "Notlar"\ndecisions = "Düşünce/Kararlar"\n', encoding="utf-8")
+            env = {k: v for k, v in os.environ.items() if not k.startswith("BRAINLESS_")}
+            env["BRAINLESS_VAULT"] = vault
+            code = ("import sys; sys.path.insert(0, 'tools'); import calibrate, nightly_processor as n; "
+                    "print(calibrate.DEC); print(n.CAPTURE_DIR)")
+            out = subprocess.run([sys.executable, "-c", code], cwd=ROOT, env=env,
+                                 capture_output=True, text=True, timeout=60).stdout.splitlines()
+            self.assertTrue(out[0].endswith("Düşünce/Kararlar"), out)
+            self.assertTrue(out[1].endswith("Notlar"), out)
+
 class TestFileSecrets(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()

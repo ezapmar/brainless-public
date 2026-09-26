@@ -76,7 +76,9 @@ brainless dialectic "We should hire before we have the revenue"
 
 A thought goes into today's notes. A document goes into the inbox and becomes Markdown
 within the hour. The real work happens later. From nine o'clock the digest reads
-the day's notes and the compile folds them into the wiki.
+the day's notes and the compile folds them into the wiki. Then the notes move to
+`Archive/Daily-Captures/<date>/`, so the notes folder starts each day empty. Nothing is
+deleted.
 
 Laptops spend more evenings shut than open. So nothing here runs on
 the clock. Every 15 minutes, and whenever you log in, `brainless tick` asks what has not

@@ -49,8 +49,18 @@ def _clean(rel):
     return clean
 
 
+def _settings():
+    """Load brainless.toml before answering. A tool that asked for a folder at
+    import time, before anything imported config, got the default name: the
+    digest read Thinking/Daily in a vault whose notes were in Notes (lite
+    install test, 2026-09-26). config imports this module, so the import is
+    here, at call time, not at the top."""
+    import config  # noqa: F401  applies once per process
+
+
 def folder(key):
     """Vault-relative folder for a logical key, e.g. folder("daily") -> "Thinking/Daily"."""
+    _settings()
     if key not in FOLDER_KEYS:
         raise KeyError(key)
     env = os.environ.get(f"BRAINLESS_FOLDER_{key.upper()}")
@@ -68,6 +78,7 @@ def folder_path(key, vault=None):
 
 def extra_sources():
     """Additional vault-relative summary sources (BRAINLESS_SOURCES, comma separated)."""
+    _settings()
     raw = os.environ.get("BRAINLESS_SOURCES") or ""
     return tuple(_clean(x) for x in raw.split(",") if x.strip())
 

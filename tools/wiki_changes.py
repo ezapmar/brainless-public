@@ -213,9 +213,21 @@ def markdown(d: dict, when: datetime | None = None, waiting=None) -> str:
     return "\n".join(lines + _waiting_block(waiting))
 
 
+def _report_is_private() -> bool:
+    """True when git ignores the brief itself (a lite clone ignores all of
+    _Agent-Context and .wiki): then naming ignored pages in it leaks nothing,
+    and filtering them would leave the brief empty every night."""
+    try:
+        rel = REPORT.relative_to(VAULT).as_posix()
+        return subprocess.run(["git", "check-ignore", "-q", rel], cwd=VAULT,
+                              capture_output=True, timeout=30).returncode == 0
+    except Exception:
+        return False
+
+
 def tracked_diff(before: dict, after: dict) -> dict:
-    """diff() without the pages git ignores."""
-    hidden = _ignored(sorted(set(before) | set(after)))
+    """diff() without the pages git ignores, unless the brief is untracked too."""
+    hidden = set() if _report_is_private() else _ignored(sorted(set(before) | set(after)))
     return diff({k: v for k, v in before.items() if k not in hidden},
                 {k: v for k, v in after.items() if k not in hidden})
 

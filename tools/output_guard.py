@@ -32,9 +32,16 @@ _CHATTER = re.compile("|".join([
     r"\bI (?:don't|do not) have (?:write |file )?(?:access|permission)",
     r"\bif you (?:re-?enable|grant|approve) (?:the )?(?:write|file|permission)",
     r"\bI output (?:only )?the (?:markdown|page|summary)\b",
+    # 2026-09-26, the first lite install: the digest opened with the model
+    # explaining it could not search the wiki.
+    r"\bpermission (?:that )?(?:isn't|is not|wasn't|was not) granted\b",
+    r"\bnon-interactive session\b",
+    r"\b(?:search|tool|tools) (?:needs|need|requires|require) permission\b",
 ]), re.IGNORECASE)
 
-_NESTED_FM = re.compile(r"\n---\s*\n(?:[a-z_]+:.*\n){1,}?(?:summary_en|lang):", re.IGNORECASE)
+# Any key lines, then lang or summary_en: a nested block that opens with lang:
+# slipped past the old {1,} count on the lite install's first digest.
+_NESTED_FM = re.compile(r"\n---\s*\n(?:[a-z_]+:.*\n)*?(?:summary_en|lang):", re.IGNORECASE)
 
 
 def _split(text: str) -> tuple[str, str]:
@@ -67,3 +74,20 @@ def problems(text: str) -> list[str]:
 
 def is_bad(text: str) -> bool:
     return bool(problems(text))
+
+
+def strip_preamble(text: str) -> str:
+    """Drop what the model said before the page began.
+
+    Output that does not open with frontmatter but carries a frontmatter block
+    (lang or compiled_at) near the start is a page with chatter in front of it.
+    The page is kept and the chatter goes. Anything else comes back unchanged,
+    so the checks above still see it.
+    """
+    if text.startswith("---\n"):
+        return text
+    m = re.search(r"(?:^|\n)---\s*\n(?:[a-z_]+:.*\n)*?(?:lang|compiled_at):.*\n(?:.*\n)*?---\s*\n",
+                  text[:HEAD_CHARS + 500])
+    if not m or m.start() > HEAD_CHARS:
+        return text
+    return text[m.start():].lstrip("\n")

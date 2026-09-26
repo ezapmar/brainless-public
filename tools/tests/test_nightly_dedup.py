@@ -61,5 +61,20 @@ class NightlyDedupTest(unittest.TestCase):
         self.assertNotIn("\u2014", line)
 
 
+
+class SameDayDigestTest(unittest.TestCase):
+    """A laptop can digest twice in a day; the first digest must survive."""
+
+    def test_second_digest_is_appended(self):
+        import nightly_processor as np_
+        with tempfile.TemporaryDirectory() as d:
+            path = os.path.join(d, "2026-09-26.md")
+            np_.write_digest(path, "---\nlang: en\n---\n# day\nfour notes\n")
+            np_.write_digest(path, "---\nlang: en\n---\n# day\none late note\n")
+            text = Path(path).read_text()
+            self.assertIn("four notes", text)
+            self.assertIn("one late note", text)
+            self.assertEqual(text.count("lang: en"), 1)
+
 if __name__ == "__main__":
     unittest.main()

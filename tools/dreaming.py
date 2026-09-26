@@ -47,6 +47,7 @@ from datetime import date
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+from owner_profile import lang_name  # noqa: E402
 
 VAULT = Path(os.environ.get("BRAINLESS_VAULT") or Path(__file__).resolve().parents[1])
 STATE = VAULT / ".agents" / "state" / "dreaming.json"
@@ -103,7 +104,7 @@ Page B
 >>>
 
 Reply with JSON only, no other text:
-{{"verdict": "link" | "duplicate" | "none", "reason": "one short sentence in Turkish saying what joins them"}}"""
+{{"verdict": "link" | "duplicate" | "none", "reason": "one short sentence in {lang_name()} saying what joins them"}}"""
 
 
 def parse(reply: str | None) -> dict | None:

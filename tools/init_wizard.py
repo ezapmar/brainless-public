@@ -485,6 +485,16 @@ def run(args, pr):
     if probed:
         first_run(pr, args, lang)
     say("Ready")
+    pointer = os.path.expanduser("~/.config/brainless/vault")
+    try:
+        with open(pointer, encoding="utf-8") as fh:
+            current = fh.readline().strip()
+    except OSError:
+        current = ""
+    if current and os.path.realpath(current) != os.path.realpath(vault):
+        warn(f"the `brainless` command still opens {current}. For this vault, run "
+             f"`export BRAINLESS_VAULT={vault}` first, or make it the default with "
+             f"`echo {vault} > {pointer}`.")
     print(f"""
   brainless add "a thought"     capture a note (it lands in {folders['daily']}/)
   brainless add <file>          drop a document into {folders['inbox']}/
