@@ -160,9 +160,12 @@ busy head.
 
 ## What it runs on
 
-One laptop is enough, and it is what the installer sets up: a folder, any model, one
-background entry. That is the [Lite](https://github.com/ezapmar/brainless-public/wiki/Lite)
-profile. Mine grew into three devices:
+One laptop is enough, and that is what the installer sets up. A folder, whichever model
+you already use, and one scheduler entry that catches up after the lid was shut. I call it
+[Lite](https://github.com/ezapmar/brainless-public/wiki/Lite), and it is where I would
+start.
+
+Mine grew into three devices.
 
 - **iPhone 16 Pro.** Capture goes in through a Telegram bot (voice, photos, links, text).
   Everything that comes back (receipts, the morning three, the six voices, alerts) arrives
@@ -251,33 +254,34 @@ you are wrong by a script at 21:20.
 
 ## Install
 
-Requirements: git and Python 3.11 or newer. A model comes during setup.
+You need git and Python 3.11 or newer. The model comes during setup.
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/ezapmar/brainless-public/main/install.sh | bash
 ```
 
 Yes, that is curl piped into bash, on a page with a whole section about trust. The
-script is short enough to read first, and I would. It checks git and Python, clones the
-engine into `~/brainless` (`--vault <dir>` for another place), creates `.venv` with the
-document converter, installs the `brainless` command into `~/.local/bin`, and hands over
-to `brainless init`, which asks:
+script is short enough to read first, and I would. It sets up Python and the `brainless`
+command in `~/brainless` (`--vault <dir>` for another place), then hands over to
+`brainless init`, which asks a handful of questions.
 
-1. Your first name and the language it writes in.
-2. The folder names, in that language (`Gelen`, `Notlar`, `Kütüphane`, `Düşünce` in
-   Turkish), and other notes folders to read, such as an old Obsidian vault. Those are
-   linked and never written to. Obsidian itself is optional.
-3. The model: Ollama on your own machine (it can install it), a cloud API with a key
-   (Claude, OpenAI, Grok, Gemini, OpenRouter; the key goes into the macOS Keychain or
-   libsecret, never into the vault), or a CLI you are signed in to (Claude Code, Codex,
-   Gemini CLI). Then one test call.
-4. Background runs: one launchd or systemd entry that runs whatever is due every 15
-   minutes, and catches up after the laptop slept.
+1. Your name, and the language it should write in. The folders follow the language, so a
+   Turkish vault keeps its notes in `Notlar` and its inbox in `Gelen`.
+2. Notes you already have somewhere else, an old Obsidian vault for instance. Those
+   folders are linked in and read, never written to. Obsidian itself is optional.
+3. The model. Ollama on your own machine (it asks before installing it), a cloud API with
+   a key, or a command-line tool you are already signed in to. Keys go to the macOS
+   Keychain, or libsecret on Linux, and never into the folder.
+4. Whether it may run in the background. One scheduler entry, every 15 minutes. If the
+   laptop slept through the evening, the evening's work runs when it wakes.
 
-Everything lands in `brainless.toml`. It is safe to re-run. `--yes -- --provider ollama`
-and friends skip the questions; `brainless doctor` checks the result. The details, the
-model table and the limits are in [Lite](https://github.com/ezapmar/brainless-public/wiki/Lite).
-`bash install.sh --profile full --schedule` installs my multi-machine setup instead.
+Before it finishes, it makes one test call, so you find out now that the key had a typo.
+Every answer lands in `brainless.toml`, which you can edit by hand, and `brainless doctor`
+tells you what is broken, one line per check. Running it again is safe.
+
+`bash install.sh --profile full --schedule` installs my three-machine setup instead. The
+[Lite](https://github.com/ezapmar/brainless-public/wiki/Lite) page has the model table,
+the flags for an unattended install and the limits I know about.
 
 **Optional inputs.** Documents need nothing more: markitdown is installed with its PDF, DOCX,
 XLSX and PPTX extras, so a dropped file becomes Markdown with nothing more to install.
