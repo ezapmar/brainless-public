@@ -18,8 +18,12 @@ Usage in a prompt body:
 """
 import os
 import re
+import sys
 
-VAULT = os.environ.get("BRAINLESS_VAULT") or os.path.expanduser("~/projects/brainless")
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from paths import vault_root  # noqa: E402
+import config  # noqa: E402,F401  brainless.toml sets env defaults before anything reads env
+VAULT = vault_root()
 PROFILE_FILE = os.path.join(VAULT, "_Agent-Context", "PROFILE.md")
 # Display names for common codes; any other code is passed to prompts as the code itself.
 _LANG_NAMES = {"tr": "Turkish", "en": "English", "de": "German", "fr": "French", "es": "Spanish",

@@ -9,20 +9,20 @@ import shutil
 import sys
 
 # Configuration
-VAULT_ROOT = os.environ.get("BRAINLESS_VAULT") or os.path.expanduser("~/projects/brainless")
-CAPTURE_DIR = os.path.join(VAULT_ROOT, 'Thinking/Daily')
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from paths import folder, vault_root  # noqa: E402
+VAULT_ROOT = vault_root()
+CAPTURE_DIR = os.path.join(VAULT_ROOT, folder("daily"))
 ARCHIVE_DIR = os.path.join(VAULT_ROOT, 'Archive/Daily-Captures')
 DIGESTS_DIR = os.path.join(VAULT_ROOT, '.wiki/digests')
 PROJECTS_WORK_DIR = os.path.join(VAULT_ROOT, 'Work')
 PROJECTS_PERSONAL_DIR = os.path.join(VAULT_ROOT, 'Personal')
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from resolve_bin import resolve_claude
 from llm import run_prompt  # noqa: E402
 from owner_profile import OWNER, lang_name, CROSS_LINK_RULE  # noqa: E402
 from i18n import t, t_list  # noqa: E402
 from task_dedup import is_duplicate  # noqa: E402
 
-CLAUDE_PATH = resolve_claude()
 
 # Digest budget. Every capture used to enter the prompt whole, so one heavy day
 # blew the context, and every note, however small, got the same narrative
@@ -99,7 +99,7 @@ OUTPUT STRUCTURE:
 ---
 lang: en
 compiled_at: {date_str}
-source: Thinking/Daily/
+source: {folder('daily')}/
 ---
 # {date_str} - Daily Digest
 ## Executive Summary (3 sentences)

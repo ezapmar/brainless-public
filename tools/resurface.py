@@ -15,7 +15,9 @@ import sys
 import time
 from datetime import datetime
 
-VAULT = os.environ.get("BRAINLESS_VAULT") or os.path.expanduser("~/projects/brainless")
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from paths import vault_root  # noqa: E402
+VAULT = vault_root()
 sys.path.insert(0, os.path.join(VAULT, "tools"))
 from llm import run_prompt
 from owner_profile import OWNER, output_lang_directive  # noqa: E402

@@ -80,14 +80,16 @@ import sys
 import time
 from datetime import datetime, timedelta
 
-VAULT = os.environ.get("BRAINLESS_VAULT") or os.path.expanduser("~/projects/brainless")
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from paths import folder, vault_root  # noqa: E402
+VAULT = vault_root()
 sys.path.insert(0, os.path.join(VAULT, "tools"))
 from llm import run_prompt  # noqa: E402
 from calibrate import scan as calibration_scan  # noqa: E402
 from owner_profile import OWNER, lang_name, output_lang_directive  # noqa: E402
 from lang_detect import detect  # noqa: E402
 
-CAPTURE_DIR = os.path.join(VAULT, "Thinking", "Daily")
+CAPTURE_DIR = os.path.join(VAULT, folder("daily"))
 STATE_DIR = os.path.join(VAULT, ".agents", "state")
 SEEN_FILE = os.path.join(STATE_DIR, "dialectic_seen")
 DAY_FILE = os.path.join(STATE_DIR, "dialectic_day.json")
@@ -124,9 +126,9 @@ EXCLUDE = ("Contrarian Theses",)
 # is waiting on instead of idling. Rotated through this state file.
 FALLBACK_FILE = os.path.join(STATE_DIR, "dialectic_fallback.json")
 FALLBACK_COOLDOWN_DAYS = 14
-DECISIONS_DIR = os.path.join(VAULT, "Thinking", "Decisions")
-BELIEFS_DIR = os.path.join(VAULT, "Thinking", "Beliefs")
-QUESTIONS_FILE = os.path.join(VAULT, "Thinking", "Questions.md")
+DECISIONS_DIR = os.path.join(VAULT, folder("decisions"))
+BELIEFS_DIR = os.path.join(VAULT, folder("beliefs"))
+QUESTIONS_FILE = os.path.join(VAULT, folder("thinking"), "Questions.md")
 STALE_BELIEF_DAYS = 90
 PENDING_HORIZON_DAYS = 45
 

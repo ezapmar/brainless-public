@@ -8,15 +8,18 @@ import json
 import tempfile
 
 # Configuration
-BRAINLESS_ROOT = os.environ.get("BRAINLESS_VAULT") or os.path.expanduser("~/projects/brainless")
-
-sys.path.insert(0, os.path.join(BRAINLESS_ROOT, "tools"))
-from resolve_bin import resolve_claude
+# The engine sits in the vault: .agents/scripts/ -> vault root.
+_ENGINE = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, os.path.join(_ENGINE, "tools"))
+from paths import folder, vault_root  # noqa: E402
+BRAINLESS_ROOT = vault_root()
+import llm  # noqa: E402
 from owner_profile import COMPANY_AREA, LANG, lang_name, output_lang_directive  # noqa: E402
 from i18n import t  # noqa: E402
 from markitdown_native import convert_to_file  # noqa: E402
 
-CLAUDE_PATH = resolve_claude()
+# Documents longer than this reach a non-Claude provider cut, with a note saying so.
+MAX_CHARS = int(os.environ.get("BRAINLESS_LLM_MAX_CHARS", "30000"))
 
 # Self-healing state: persistent record of files that fail to convert, so we
 # can back off instead of re-attempting every single hourly run.
@@ -77,25 +80,30 @@ def is_backed_off(filepath, quarantine, now):
 # High-value knowledge resources get Summary + Fiche; originals stay recoverable.
 # General documents anywhere in the human homes will at least get converted to .md automatically.
 HIGH_VALUE_DIRS = [
-    os.path.join(BRAINLESS_ROOT, "Library/Books"),
+    os.path.join(BRAINLESS_ROOT, folder("library"), "Books"),
     os.path.join(BRAINLESS_ROOT, COMPANY_AREA, "Finance/Resources"),
 ]
 
 TARGET_DIRS = [
-    os.path.join(BRAINLESS_ROOT, "Library/Books"),
+    os.path.join(BRAINLESS_ROOT, folder("library"), "Books"),
     os.path.join(BRAINLESS_ROOT, COMPANY_AREA, "Finance/Resources"),
-    os.path.join(BRAINLESS_ROOT, "Library"),
+    os.path.join(BRAINLESS_ROOT, folder("library")),
     os.path.join(BRAINLESS_ROOT, "Personal"),
     os.path.join(BRAINLESS_ROOT, "Work"),
 ]
+# The lite profile has one drop folder: a document put in the inbox is converted
+# there and compiled from there. The full vault's Inbox holds other machines'
+# captures, so it stays out of this scan.
+if os.environ.get("BRAINLESS_PROFILE", "").strip() == "lite":
+    TARGET_DIRS.append(os.path.join(BRAINLESS_ROOT, folder("inbox")))
 SUPPORTED_EXTENSIONS = {'.pdf', '.epub', '.docx', '.doc', '.txt', '.xlsx', '.pptx', '.mp3', '.wav'}
 
 # Handwritten/printed note photos. These are OCR'd by Claude (markitdown has no
 # OCR) and, unlike documents, are handled ONLY when dropped in Inbox/ so the many
 # existing vault images (book covers, diagrams, screenshots) are never touched.
 IMAGE_EXTENSIONS = {'.jpg', '.jpeg', '.png', '.heic', '.webp'}
-IMAGE_INBOX = os.path.join(BRAINLESS_ROOT, "Inbox")
-CAPTURE_DIR = os.path.join(BRAINLESS_ROOT, "Thinking", "Daily")
+IMAGE_INBOX = os.path.join(BRAINLESS_ROOT, folder("inbox"))
+CAPTURE_DIR = os.path.join(BRAINLESS_ROOT, folder("daily"))
 IMAGE_ATTACH_DIR = os.path.join(BRAINLESS_ROOT, "_attachments", "handwritten")
 
 OCR_PROMPT = """First read '_Agent-Context/CONTEXT.md' to learn the correct spellings of the owner's projects and people.
@@ -112,17 +120,17 @@ Then turn the transcription into a clean vault note:
 - Never use em dashes or en dashes anywhere; use a plain hyphen.
 - For the title, tags and anything you add yourself: {lang_directive}
 
-Save ONLY the note markdown to '{out_path}' and write nothing else.
+Reply with ONLY the note markdown, nothing before or after it.
 """
 
-SUMMARY_PROMPT = """Read the markdown file at '{filepath}'.
+SUMMARY_PROMPT = """{source}
 Provide a concise but technical summary of the key findings, data points, and actionable insights.
 Focus on facts and figures.
 {lang_directive}
-Save the result to '{out_path}'.
+Reply with ONLY the summary markdown, nothing before or after it.
 """
 
-FICHE_PROMPT = """Read the markdown file at '{filepath}'.
+FICHE_PROMPT = """{source}
 Rewrite its contents into a comprehensive 'Fiche de Lecture' (French education reading card format).
 Analyze it through the 'brainless' mindset: "AI is a cognitive exoskeleton", "Calm is contagious", "Irreversible decisions deserve second-order thinking", and "Success is the compound interest of small positive choices".
 
@@ -136,25 +144,31 @@ Format:
 ## 4. Analyse Critique & Connexions (Use [[links]] to related vault notes)
 
 {lang_directive}
-Save the result to '{out_path}'.
+Reply with ONLY the reading card markdown, nothing before or after it.
 """
 
-def run_claude(prompt):
-    # acceptEdits: the prompts instruct the model to write the output file
-    # itself; headless mode needs edit auto-approval for that to succeed.
-    try:
-        subprocess.run(
-            [CLAUDE_PATH, "-p", prompt, "--permission-mode", "acceptEdits"],
-            cwd=BRAINLESS_ROOT,
-            check=True,
-            timeout=600,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL
-        )
-        return True
-    except Exception as e:
-        print(f"Claude error: {e}")
-        return False
+
+def _source_block(path, lane):
+    """How the model gets the document. claude-cli opens it itself with the Read
+    tool, so a whole book fits; any other provider gets the text in the prompt,
+    cut at MAX_CHARS and saying so."""
+    if llm.resolve_provider(lane) == "claude-cli":
+        return f"Read the markdown file at '{path}'.", ["Read"]
+    with open(path, encoding="utf-8", errors="replace") as fh:
+        text = fh.read()
+    note = ""
+    if len(text) > MAX_CHARS:
+        text, note = text[:MAX_CHARS], f"\n(The document was cut at {MAX_CHARS} characters.)"
+    return f"The document follows between the markers.\n<<<DOC\n{text}\nDOC>>>{note}", None
+
+
+def run_llm(prompt, lane, allowed_tools=None):
+    """Text back from the model, or None. The model never writes files: the
+    caller does, which is why no call here needs write permission."""
+    out = llm.run_prompt(prompt, timeout=600, allowed_tools=allowed_tools, lane=lane)
+    if not out or not out.strip():
+        return None
+    return out.strip() + "\n"
 
 def current_markdown(path, source):
     try:
@@ -218,9 +232,14 @@ def process_file(filepath):
             try:
                 with tempfile.TemporaryDirectory(prefix=".brainless-", dir=work_dir) as tmp:
                     staged = os.path.join(tmp, os.path.basename(output))
-                    ok = run_claude(template.format(filepath=raw_md, out_path=staged,
-                                                   lang_directive=output_lang_directive()))
-                    if not ok or not current_markdown(staged, raw_md):
+                    source, tools = _source_block(raw_md, "smart-summary")
+                    text = run_llm(template.format(source=source,
+                                                   lang_directive=output_lang_directive()),
+                                   "smart-summary", tools)
+                    if text:
+                        with open(staged, "w", encoding="utf-8") as fh:
+                            fh.write(text)
+                    if not text or not current_markdown(staged, raw_md):
                         print(f"Failed to generate {os.path.basename(output)} for {filename}")
                         return "failed"
                     os.replace(staged, output)
@@ -258,7 +277,12 @@ def process_image(filepath):
     The original image is archived to _attachments/handwritten/ and linked from
     the note; leaving Inbox on success is what makes this idempotent (no state
     file needed - a converted image is simply no longer in Inbox to re-scan).
+    Reading an image needs claude-cli (the Read tool with vision); on any other
+    provider the photo stays in Inbox, untouched, and is 'skipped'.
     """
+    if llm.resolve_provider("capture-photo") != "claude-cli":
+        print(f"Photo OCR needs the claude CLI; {os.path.basename(filepath)} stays in Inbox.")
+        return "skipped"
     stamp = time.strftime("%Y-%m-%d-%H%M")
     slug = _slugify(os.path.splitext(os.path.basename(filepath))[0])
     os.makedirs(CAPTURE_DIR, exist_ok=True)
@@ -276,10 +300,14 @@ def process_image(filepath):
 
     print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] OCR {os.path.basename(filepath)}...")
     langs = lang_name() if LANG == "en" else f"{lang_name()} and/or English"
-    ok = run_claude(OCR_PROMPT.format(image=ocr_path, out_path=note_path, langs=langs,
-                                      illegible=t("smart_processor.illegible_marker"),
-                                      lang_directive=output_lang_directive()))
-    if not ok or not os.path.exists(note_path):
+    text = run_llm(OCR_PROMPT.format(image=ocr_path, langs=langs,
+                                     illegible=t("smart_processor.illegible_marker"),
+                                     lang_directive=output_lang_directive()),
+                   "capture-photo", ["Read"])
+    if text:
+        with open(note_path, "w", encoding="utf-8") as fh:
+            fh.write(text)
+    if not text or not os.path.exists(note_path):
         if made_jpeg and os.path.exists(ocr_path):
             os.remove(ocr_path)          # clean the transcode on failure
         return "failed"

@@ -36,9 +36,10 @@ import unicodedata
 from datetime import datetime, timedelta
 from pathlib import Path
 
-VAULT = Path(os.environ.get("BRAINLESS_VAULT") or os.path.expanduser("~/projects/brainless"))
-WIKI = VAULT / ".wiki"
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from paths import extra_sources, folder, vault_root  # noqa: E402
+VAULT = Path(vault_root())
+WIKI = VAULT / ".wiki"
 from llm import run_prompt
 from owner_profile import LANG, lang_name, output_lang_directive, CROSS_LINK_RULE  # noqa: E402
 from owner_profile import COMPANY_AREA, GENERIC_PRIVATE_SEGMENTS, PRIVATE_SEGMENTS as PROFILE_PRIVATE_SEGMENTS  # noqa: E402
@@ -54,11 +55,12 @@ MAX_CHARS = int(os.environ.get("BRAINLESS_LLM_MAX_CHARS", "30000"))
 # compiled (machine-owned) layer. Summaries are drawn from the reference/cognition
 # homes plus the company area named in PROFILE.md (company_area).
 SUMMARY_SOURCES = [
-    VAULT / "Library",
-    VAULT / "Inbox",
-    VAULT / "Thinking" / "Daily",
+    VAULT / folder("library"),
+    VAULT / folder("inbox"),
+    VAULT / folder("daily"),
     VAULT / "Personal",
     VAULT / COMPANY_AREA,
+    *(VAULT / rel for rel in extra_sources()),
 ]
 
 # Privacy guard: NEVER summarize gitignored / sensitive homes into the tracked
@@ -285,12 +287,16 @@ def needs_rebuild(src: Path, dst: Path, full: bool) -> bool:
 
 
 def iter_sources(roots):
+    # A linked folder (brainless init) is its own root and also sits under the
+    # library root; Pythons that follow links in rglob would yield it twice.
+    seen = set()
     for root in roots:
         if not root.exists():
             continue
         for p in root.rglob("*.md"):
-            if _is_private(p):
+            if p in seen or _is_private(p):
                 continue
+            seen.add(p)
             yield p
 
 
@@ -318,7 +324,7 @@ def summarize_file(src: Path, dry: bool, full: bool) -> bool:
     except Exception as e:
         print(f"[skip] {rel}: {e}")
         return False
-    chat_rule = CHAT_RULE if str(rel).startswith("Library/Chats/") else ""
+    chat_rule = CHAT_RULE if str(rel).startswith(f"{folder('library')}/Chats/") else ""
     prompt = f"""You are compiling a personal knowledge wiki.
 
 {CROSS_LINK_RULE}
@@ -998,7 +1004,7 @@ def migrate_articles(dry: bool):
 # ─── Phase: ideas (auto-derived) ────────────────────────────────
 def phase_ideas(dry: bool, full: bool):
     blob = ""
-    for d in (VAULT / "Thinking" / "Beliefs", VAULT / "Thinking" / "Decisions"):
+    for d in (VAULT / folder("beliefs"), VAULT / folder("decisions")):
         if not d.exists():
             continue
         for p in d.rglob("*.md"):
@@ -1149,8 +1155,8 @@ ENTITY_REGISTRY = VAULT / "_Agent-Context" / "entities.md"
 # Areas scanned for entity sources: meeting corpus, daily capture, digests,
 # and the human project areas (the private guard is applied per file as well).
 ENTITY_SOURCE_ROOTS = [
-    VAULT / "Inbox" / "Spiky",
-    VAULT / "Thinking" / "Daily",
+    VAULT / folder("inbox") / "Spiky",
+    VAULT / folder("daily"),
     VAULT / ".wiki" / "digests",
     VAULT / "Work",
     VAULT / "Personal",

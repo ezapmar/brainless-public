@@ -40,7 +40,9 @@ from owner_profile import LANG, COMPANY_AREA  # noqa: E402
 _C = COMPANY_AREA.strip("/").split("/")[-1].lower()
 _COMPANY_TOKENS = tuple({_C, _C.replace(" ", "-"), _C.split()[0]}) if _C else ()
 
-VAULT = Path(os.environ.get("BRAINLESS_VAULT") or os.path.expanduser("~/projects/brainless"))
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from paths import vault_root  # noqa: E402
+VAULT = Path(vault_root())
 WIKI = VAULT / ".wiki"
 
 LINK_RE = re.compile(r"\[\[([^\]\|#]+)(?:#[^\]\|]+)?(?:\|[^\]]+)?\]\]")

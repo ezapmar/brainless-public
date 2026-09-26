@@ -2,7 +2,9 @@ import os
 import time
 import sys
 
-VAULT = os.environ.get("BRAINLESS_VAULT") or os.path.expanduser("~/projects/brainless")
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from paths import vault_root  # noqa: E402
+VAULT = vault_root()
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from owner_profile import COMPANY_AREA  # noqa: E402
 from markitdown_native import convert_to_file  # noqa: E402

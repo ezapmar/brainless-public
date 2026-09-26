@@ -22,7 +22,9 @@ import re
 import sys
 from datetime import date, datetime
 
-VAULT = os.environ.get("BRAINLESS_VAULT") or os.path.expanduser("~/projects/brainless")
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from paths import vault_root  # noqa: E402
+VAULT = vault_root()
 sys.path.insert(0, os.path.join(VAULT, "tools"))
 import calibrate  # noqa: E402  (reuses the decision-scan logic)
 from i18n import t, t_list  # noqa: E402

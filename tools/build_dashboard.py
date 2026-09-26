@@ -16,7 +16,9 @@ from pathlib import Path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import calibrate  # noqa: E402
 
-VAULT = Path(os.environ.get("BRAINLESS_VAULT") or os.path.expanduser("~/projects/brainless"))
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from paths import vault_root  # noqa: E402
+VAULT = Path(vault_root())
 OUT = VAULT / "personaldashboard.md"
 CADENCE = VAULT / "Thinking" / "Thinking Cadence.md"
 

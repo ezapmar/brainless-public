@@ -45,6 +45,7 @@ SHIP_FILES = [
     "requirements-core.txt",
     "requirements-search.txt",
     ".env.example",
+    "brainless.toml.example",
     "LICENSE",
     "CHANGELOG.md",
     "VERSION",
@@ -113,6 +114,8 @@ CONTENT_HOMES_IGNORE = """# brainless public engine repo
 *_token.json
 *.credentials.json
 .env
+# Per-install settings (brainless.toml.example is the template)
+brainless.toml
 
 # Privacy: personal identity, health and official documents anywhere in the tree
 **/Official Docs/
@@ -317,6 +320,42 @@ jobs:
 """
 
 
+# The installer on a clean macOS and Linux runner, against a stub model, so a
+# broken install fails here before a stranger meets it.
+LITE_INSTALL_WORKFLOW = """name: lite-install
+on: [push, pull_request]
+jobs:
+  install:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Start a stub model
+        run: (python3 tools/tests/stub_llm.py 8765 &) && sleep 1
+      - name: Install and answer every question with a default
+        run: |
+          bash install.sh --vault "$RUNNER_TEMP/vault" --repo "$GITHUB_WORKSPACE" --yes -- \\
+            --lang tr --provider openai-compatible --base-url http://127.0.0.1:8765/v1 \\
+            --model stub --no-schedule --no-search --no-first-run
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      - name: Doctor, capture, tick
+        env:
+          BRAINLESS_VAULT: ${{ runner.temp }}/vault
+        run: |
+          brainless doctor --probe
+          brainless add "ilk not"
+          ls "$BRAINLESS_VAULT/Notlar"
+          brainless tick --dry-run
+          brainless queue
+"""
+
+
 def write_tree(out):
     os.makedirs(out, exist_ok=True)
     n = 0
@@ -339,6 +378,10 @@ def write_tree(out):
     os.makedirs(os.path.dirname(wf), exist_ok=True)
     with open(wf, "w") as fh:
         fh.write(LEAK_SCAN_WORKFLOW)
+    wf = os.path.join(out, ".github", "workflows", "lite-install.yml")
+    os.makedirs(os.path.dirname(wf), exist_ok=True)
+    with open(wf, "w") as fh:
+        fh.write(LITE_INSTALL_WORKFLOW)
     return n
 
 

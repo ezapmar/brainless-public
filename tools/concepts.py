@@ -17,7 +17,12 @@ deterministic so it can be tested without a model.
 import json
 import re
 import unicodedata
+import os
+import sys
 from pathlib import Path
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from paths import folder  # noqa: E402
 
 STATUSES = {"active", "proposed", "retired"}
 CONFIDENCE = ("primary", "secondary", "self-reported", "unverified")
@@ -34,7 +39,7 @@ EXCLUDE_PARTS = (
 # knowledge, a finance pack in the company area is Finance Data.
 COMPANY_EXCLUDE = ("finance/",)
 # Knowledge roots. The company area comes from PROFILE.md and is added by the caller.
-INCLUDE_ROOTS = ("Library/", "Thinking/", "Personal/")
+INCLUDE_ROOTS = (f"{folder('library')}/", f"{folder('thinking')}/", "Personal/")
 
 # Family, health and legal-family material may feed a concept, but the concept
 # is then marked personal: no titles or claims on Buzz, never exported. The
@@ -135,7 +140,7 @@ def in_scope(source: str, company_area: str) -> bool:
     src = _nfc(source)
     low = src.casefold()
     area = _nfc(company_area.rstrip("/") + "/")
-    if any(p in low for p in EXCLUDE_PARTS):
+    if any(p in low for p in EXCLUDE_PARTS) or low.startswith(folder("inbox").casefold() + "/"):
         return False
     if any(low.startswith(area.casefold() + p) for p in COMPANY_EXCLUDE):
         return False

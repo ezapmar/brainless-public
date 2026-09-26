@@ -40,7 +40,9 @@ import time
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from owner_profile import WORKER  # noqa: E402
 
-VAULT = os.environ.get("BRAINLESS_VAULT") or os.path.expanduser("~/projects/brainless")
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from paths import vault_root  # noqa: E402
+VAULT = vault_root()
 STATE = os.path.join(VAULT, ".agents", "state", "worker_reach.json")
 LLM_MIRROR = os.path.join(VAULT, ".agents", "state", "worker_llm_status.json")
 WORKER_VAULT = os.environ.get("BRAINLESS_WORKER_VAULT", "projects/brainless")

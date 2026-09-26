@@ -15,7 +15,9 @@ import sys
 import time
 from datetime import datetime
 
-VAULT_ROOT = os.environ.get("BRAINLESS_VAULT") or os.path.expanduser("~/projects/brainless")
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from paths import vault_root  # noqa: E402
+VAULT_ROOT = vault_root()
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 # The compile makes serial LLM calls of up to 300s each. 30 minutes cut a large

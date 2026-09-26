@@ -25,7 +25,9 @@ import re
 import sys
 from datetime import date, datetime
 
-VAULT = os.environ.get("BRAINLESS_VAULT") or os.path.expanduser("~/projects/brainless")
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from paths import vault_root  # noqa: E402
+VAULT = vault_root()
 sys.path.insert(0, os.path.join(VAULT, "tools"))
 from i18n import t  # noqa: E402
 import build_dashboard as bd  # noqa: E402  (project discovery, frontmatter)

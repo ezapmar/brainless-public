@@ -108,9 +108,17 @@ returns a string or `None`.
 
 **Description.** The provider comes from `BRAINLESS_LLM_PROVIDER`. `claude-cli` (the
 default) shells out to `claude -p` with a pinned model, overridable through
-`BRAINLESS_CLAUDE_MODEL`. `openai-compatible` talks to any `/chat/completions` endpoint
-through `BRAINLESS_LLM_BASE_URL`, `_API_KEY` and `_MODEL`, using the standard library
-only. `goose` runs `goose run` on the machine itself, which is how a lane stays off the
+`BRAINLESS_CLAUDE_MODEL`. `anthropic` calls the Claude API with a key. `openai-compatible`
+talks to any `/chat/completions` endpoint through `BRAINLESS_LLM_BASE_URL`, using the
+standard library only; `ollama`, `openai`, `grok`, `gemini` and `openrouter` are the same
+call with a known address, and each reads only its own key, from
+`BRAINLESS_<NAME>_API_KEY` or the OS keychain (`brainless config secret set`), so a lane
+on one provider never carries another's key. The model for all of these is
+`BRAINLESS_LLM_MODEL[_<LANE>]`. `gemini-cli` and `codex-cli` run those CLIs with the
+user's own sign-in, from an empty temporary directory with the prompt on stdin, Codex
+in its read-only sandbox; they are agents, a weaker boundary than the claude deny list,
+so they suit lanes without untrusted text. The research lane reads the web only through
+`claude-cli`; without it the lane is skipped, never answered from memory. `goose` runs `goose run` on the machine itself, which is how a lane stays off the
 network entirely; see the [local inference guide](local-inference.md). Claude calls
 always pass a deny list for the dangerous tools (Bash, Write, Edit, WebFetch and
 friends), and deny beats allow. The default is no tools at all; a caller can open one
@@ -123,7 +131,8 @@ writes a one-line breadcrumb to `.agents/state/llm_status` and a line to
 can be routed on its own with `BRAINLESS_LLM_PROVIDER_<LANE>` (dashes become
 underscores), falling back to the global variable. `BRAINLESS_LLM_FALLBACK[_<LANE>]`
 names a second provider to try when the first fails. `python3 tools/llm.py --lanes`
-prints the current routing, `--probe <lane>` times one throwaway call.
+prints the current routing, `--probe <lane>` times one throwaway call, `--models
+<provider>` lists what an HTTP provider serves.
 
 **Philosophy.** Untrusted text flows into these prompts all day: Telegram messages,
 transcripts, fetched pages, calendar invites. A model with tools would turn a poisoned
@@ -168,6 +177,38 @@ and the private folder names.
 **Philosophy.** This file is the difference between a personal script collection and
 software. Before it existed my name was in every prompt. Now a name appears in exactly
 one private data file, which the public export replaces with a stub.
+
+### `tools/config.py`
+
+**Definition.** The one settings file, `brainless.toml` at the vault root, and the secret
+store beside it.
+
+**Description.** On import it reads the file and sets each `BRAINLESS_*` variable it names
+as a default: `[owner]`, `[folders]`, `[llm]` with per-lane `[llm.lanes.<lane>]`,
+`[schedule]`, and an `[env]` escape hatch for any other non-secret variable. The
+environment always wins. `brainless config show` prints what the file sets.
+`brainless config secret set <name>` puts a key in the macOS Keychain, libsecret on Linux,
+or a mode 600 file elsewhere, and never on a command line. A key written into the file
+is ignored with a warning. Template: `brainless.toml.example`.
+
+**Philosophy.** Sixty environment variables are a fine interface for a machine and a poor
+one for a person installing this on a laptop. The file is a front door to the same
+variables, not a second system, so no tool had to learn to read it. Keys stay out because
+the vault is a git repository, and a repository is where keys go to leak.
+
+### `tools/paths.py`
+
+**Definition.** Where the vault is and what its human folders are called.
+
+**Description.** `vault_root()` is `BRAINLESS_VAULT`, else the checkout the tools run from.
+`folder(key)` turns a role (inbox, library, thinking, daily, beliefs, decisions, ideas)
+into a vault-relative folder, from `BRAINLESS_FOLDER_<KEY>` or the full layout's default;
+beliefs, decisions, ideas and daily follow `thinking` unless set on their own.
+`skeleton(lang)` gives localised names for a new vault from
+`tools/locale/<lang>/folders.json`.
+
+**Philosophy.** Folder names are the owner's words, so the engine asks for roles. A Turkish
+vault can keep its notes in `Notlar/` and nothing in the compiler has to know.
 
 ### `tools/i18n.py`
 
@@ -762,6 +803,28 @@ run that finishes and does nothing, night after night. Counting the work turns t
 row that is visible the next morning.
 
 ---
+
+### `tools/jobqueue.py` and `tools/schedule.py`
+
+**Definition.** The lite profile's clock: one scheduler entry, one queue.
+
+**Description.** `brainless schedule install` writes a single entry (a launchd agent on
+macOS, a systemd user timer on Linux, a Task Scheduler task on Windows) that runs
+`brainless tick` every 15 minutes and at login. It refuses unless `brainless.toml` says
+`profile = "lite"`. The tick queues what is due and drains the queue in a SQLite file,
+`.agents/state/jobs.sqlite3`: convert hourly, digest then compile daily from
+`BRAINLESS_DAILY_HOUR` (21 by default), lint and prune weekly. Due is judged from the
+last successful run, so a night the laptop slept through runs at the next wake. Jobs
+that need the network or the model wait while either is missing; the rest run offline.
+A failure backs off (5 minutes, 30 minutes, 2 hours, 6 hours) and then stays failed for
+`brainless queue` to show and `brainless queue retry` to restart. Every job runs through
+`run_log.py`. `brainless add "a thought"` writes a note where the digest reads;
+`brainless add <file>` copies a document into the inbox and queues a convert.
+
+**Philosophy.** The full deployment trusts a clock because its worker never sleeps. A
+laptop sleeps, travels and loses the network, so the lite profile trusts the record of
+what last ran instead. One entry point also means one thing to install, one log to read
+and one thing to remove.
 
 ### `tools/chat_import.py`
 

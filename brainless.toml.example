@@ -1,0 +1,36 @@
+# brainless.toml: copy to brainless.toml at the vault root and edit.
+# Every key is optional. Environment variables always win over this file, and a
+# vault without the file runs on the defaults. Check what it sets with:
+#   brainless config show
+# Keys and tokens never go here (the vault is a git repo). Store them with:
+#   brainless config secret set llm_api_key
+
+profile = "lite"
+
+[owner]
+name = "Ada"
+lang = "en"            # output language code: en, tr, de, ...
+
+[folders]              # vault-relative; defaults are the full layout (Inbox, Library, Thinking/...)
+inbox = "Inbox"
+daily = "Notes"        # daily capture
+library = "Library"
+thinking = "Thinking"  # beliefs, decisions and ideas default to subfolders of this
+# sources = ["Projects"]   # extra folders to summarise
+
+[llm]
+# claude-cli | anthropic | ollama | openai | grok | gemini | openrouter
+# | openai-compatible (with base_url) | gemini-cli | codex-cli | goose
+provider = "ollama"
+model = "qwen3:8b"     # see: python3 tools/llm.py --models ollama
+# fallback = "claude-cli"
+
+# One lane on its own provider or model (lane names: python3 tools/llm.py --lanes):
+# [llm.lanes.compile]
+# provider = "claude-cli"
+
+[schedule]
+enabled = false
+
+# [env]                # any other non-secret BRAINLESS_* variable
+# BRAINLESS_LLM_MAX_CHARS = "12000"

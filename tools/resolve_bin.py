@@ -30,3 +30,29 @@ def resolve_claude() -> str:
             return c
     # Last resort: trust that PATH will be populated at call time.
     return "claude"
+
+
+# Where installers put CLIs when they are not on a scheduler's minimal PATH
+# (launchd and systemd user units start with little more than /usr/bin).
+_EXTRA_DIRS = ("~/.local/bin", "/opt/homebrew/bin", "/usr/local/bin",
+               "~/.npm-global/bin", "~/.bun/bin", "~/.cargo/bin")
+
+
+def resolve(name: str) -> str | None:
+    """Locate any CLI (gemini, codex, ollama, ...): PATH, the usual install
+    directories, then the newest nvm node install. None when not installed."""
+    if name == "claude":
+        found = resolve_claude()
+        return found if os.path.isabs(found) else shutil.which(found)
+    found = shutil.which(name)
+    if found:
+        return found
+    for d in _EXTRA_DIRS:
+        p = os.path.join(os.path.expanduser(d), name)
+        if os.access(p, os.X_OK):
+            return p
+    for p in sorted(glob.glob(os.path.expanduser(f"~/.nvm/versions/node/*/bin/{name}")),
+                    key=_node_version_key, reverse=True):
+        if os.access(p, os.X_OK):
+            return p
+    return None

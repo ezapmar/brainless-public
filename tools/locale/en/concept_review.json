@@ -13,5 +13,8 @@
   "already": "This proposal is already decided: {decision}.",
   "waiting_heading": "## Waiting for your decision",
   "waiting_line": "- {label}: {days} day(s), reply in Buzz #dreaming",
-  "waiting_none": "- Nothing waiting"
+  "waiting_none": "- Nothing waiting",
+  "unknown": "No proposal named {slug}.",
+  "none_waiting": "No concept proposals are waiting.",
+  "terminal_prompt": "Make it a concept? yes / no / skip: "
 }

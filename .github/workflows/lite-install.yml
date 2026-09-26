@@ -1,0 +1,31 @@
+name: lite-install
+on: [push, pull_request]
+jobs:
+  install:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Start a stub model
+        run: (python3 tools/tests/stub_llm.py 8765 &) && sleep 1
+      - name: Install and answer every question with a default
+        run: |
+          bash install.sh --vault "$RUNNER_TEMP/vault" --repo "$GITHUB_WORKSPACE" --yes -- \
+            --lang tr --provider openai-compatible --base-url http://127.0.0.1:8765/v1 \
+            --model stub --no-schedule --no-search --no-first-run
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      - name: Doctor, capture, tick
+        env:
+          BRAINLESS_VAULT: ${{ runner.temp }}/vault
+        run: |
+          brainless doctor --probe
+          brainless add "ilk not"
+          ls "$BRAINLESS_VAULT/Notlar"
+          brainless tick --dry-run
+          brainless queue

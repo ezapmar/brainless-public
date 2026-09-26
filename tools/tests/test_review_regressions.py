@@ -48,19 +48,21 @@ class DocumentRetentionTests(FixtureTest):
         self.summary = self.work / "Summary.md"
         self.fiche = self.work / "Fiche_de_Lecture.md"
         self.enterContext(patch.object(processor, "HIGH_VALUE_DIRS", [str(self.source.parent)]))
-        self.enterContext(patch.object(processor, "SUMMARY_PROMPT", "summary|{out_path}"))
-        self.enterContext(patch.object(processor, "FICHE_PROMPT", "fiche|{out_path}"))
+        self.enterContext(patch.object(processor, "SUMMARY_PROMPT", "summary|{source}"))
+        self.enterContext(patch.object(processor, "FICHE_PROMPT", "fiche|{source}"))
+        self.enterContext(patch.object(processor, "_source_block", return_value=("src", None)))
         self.convert = self.enterContext(patch.object(
             processor, "convert_to_file", side_effect=lambda src, dst: Path(dst).write_text("raw content")
         ))
-        self.llm = self.enterContext(patch.object(processor, "run_claude", side_effect=self.generate))
+        # The model returns text and the processor writes the file, so a mock
+        # answer is a string (or None for a failed call).
+        self.llm = self.enterContext(patch.object(processor, "run_llm", side_effect=self.generate))
         self.git = self.enterContext(patch.object(processor.subprocess, "run"))
 
     @staticmethod
-    def generate(prompt):
-        kind, path = prompt.split("|")
-        Path(path).write_text(f"# {kind}\nValid generated content")
-        return True
+    def generate(prompt, lane=None, tools=None):
+        kind = prompt.split("|")[0]
+        return f"# {kind}\nValid generated content\n"
 
     def process(self):
         return processor.process_file(str(self.source))
@@ -72,30 +74,28 @@ class DocumentRetentionTests(FixtureTest):
 
     def test_failed_llm_retains_source_and_raw(self):
         self.llm.side_effect = None
-        self.llm.return_value = False
+        self.llm.return_value = None
         self.assertEqual(self.process(), "failed")
         self.assert_sources_preserved()
         self.assertFalse(self.summary.exists())
 
     def test_success_without_output_is_failure(self):
         self.llm.side_effect = None
-        self.llm.return_value = True
+        self.llm.return_value = ""
         self.assertEqual(self.process(), "failed")
         self.assert_sources_preserved()
 
     def test_empty_output_is_failure(self):
-        def empty(prompt):
-            Path(prompt.split("|")[1]).write_text(" \n")
-            return True
+        def empty(prompt, lane=None, tools=None):
+            return " \n"
         self.llm.side_effect = empty
         self.assertEqual(self.process(), "failed")
         self.assert_sources_preserved()
         self.assertFalse(self.summary.exists())
 
     def test_partial_failed_output_is_not_published(self):
-        def partial(prompt):
-            self.generate(prompt)
-            return False
+        def partial(prompt, lane=None, tools=None):
+            raise OSError("disk full while staging")
         self.llm.side_effect = partial
         self.assertEqual(self.process(), "failed")
         self.assert_sources_preserved()
@@ -103,7 +103,8 @@ class DocumentRetentionTests(FixtureTest):
         self.assertEqual(list(self.work.glob(".brainless-*")), [])
 
     def test_retry_only_regenerates_failed_fiche(self):
-        self.llm.side_effect = lambda prompt: self.generate(prompt) if prompt.startswith("summary|") else False
+        self.llm.side_effect = lambda prompt, lane=None, tools=None: (
+            self.generate(prompt) if prompt.startswith("summary|") else None)
         self.assertEqual(self.process(), "failed")
         self.assertTrue(self.summary.exists())
         self.llm.reset_mock(side_effect=True)

@@ -18,9 +18,15 @@ Bounds: no new proposals while MAX_PENDING wait (the compiler asks `room()`
 before adding any). A personal proposal (family, health) shows no title in
 Buzz, only where to read it in the vault, and is decided the same way.
 
+Without Buzz (the lite profile) the same decision is made in the terminal:
+`brainless concepts review` shows each waiting proposal and takes the same
+words (yes/no/skip, evet/hayır/atla); `--decide SLUG yes` does one from a script.
+
 Usage:
-  python3 tools/concept_review.py           announce proposals not yet in Buzz
-  python3 tools/concept_review.py --list    print what is waiting
+  python3 tools/concept_review.py              announce proposals not yet in Buzz
+  python3 tools/concept_review.py --list       print what is waiting
+  python3 tools/concept_review.py --review     decide them one by one here
+  python3 tools/concept_review.py --decide SLUG yes|no
 """
 import argparse
 import fcntl
@@ -125,7 +131,14 @@ def preview(row: dict, mem: list[dict]) -> str:
 
 
 def announce(box=None, catalogue=None) -> int:
-    """Post every waiting proposal that is not in Buzz yet. Returns how many."""
+    """Post every waiting proposal that is not in Buzz yet. Returns how many.
+
+    Without a Buzz identity on this machine (the lite profile) nothing is posted
+    and nothing is marked announced, so the proposals stay pending for whatever
+    reviews them there instead of vanishing into an outbox nobody delivers.
+    """
+    if box is None and not (Path.home() / ".config/brainless/buzz/keys" / IDENTITY).exists():
+        return 0
     waiting = pending()
     if not waiting:
         return 0
@@ -211,10 +224,62 @@ def handle(msg, channel, owner, *, text=None, box=None):
     return True
 
 
+def decide(slug: str, word: str) -> str:
+    """Apply one answer to one proposal; returns the message to show. The same
+    words and the same effect as a Buzz reply."""
+    from dreaming import words
+    from i18n import t
+    row = next((r for r in rows() if r["slug"] == slug), None)
+    if not row:
+        return t("concept_review.unknown", slug=slug)
+    label = row["title"] if row["sensitivity"] != "personal" else t("concept_review.personal_label")
+    if row["status"] != "proposed":
+        return t("concept_review.already", decision=row["status"])
+    word = word.strip().casefold().rstrip(".!")
+    if word in words("apply") or word in ("y", "e"):
+        set_status(slug, "active")
+        return t("concept_review.applied", title=label)
+    if word in words("reject") or word in ("n", "h"):
+        set_status(slug, "retired")
+        return t("concept_review.rejected", title=label)
+    if word in words("skip") or word in ("s", "a", ""):
+        return t("concept_review.skipped")
+    return t("dreaming.unknown")
+
+
+def review(ask=input, out=print, catalogue=None) -> int:
+    """Terminal review of every waiting proposal. Returns how many were decided."""
+    from i18n import t
+    waiting = pending()
+    if not waiting:
+        out(t("concept_review.none_waiting"))
+        return 0
+    decided = 0
+    for row in waiting:
+        if catalogue is None:
+            from compile_resources import summary_catalogue
+            catalogue = summary_catalogue()
+        body = preview(row, members(row["slug"], catalogue))
+        out("\n".join(body.splitlines()[:-2]))          # the Buzz reply footer does not apply here
+        answer = ask(t("concept_review.terminal_prompt"))
+        msg = decide(row["slug"], answer)
+        out(msg + "\n")
+        decided += msg != t("concept_review.skipped")
+    return decided
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--list", action="store_true", help="print what is waiting and exit")
+    ap.add_argument("--review", action="store_true", help="decide waiting proposals in the terminal")
+    ap.add_argument("--decide", nargs=2, metavar=("SLUG", "ANSWER"), help="decide one proposal")
     args = ap.parse_args(argv)
+    if args.decide:
+        print(decide(*args.decide))
+        return 0
+    if args.review:
+        review()
+        return 0
     if args.list:
         for label, days in waiting_list():
             print(f"{days:>3}d  {label}")

@@ -3,6 +3,65 @@
 All notable changes to the public brainless engine. Dates are the day of the public
 push. The private vault this is exported from has its own history.
 
+## 0.8.0 (2026-09-26)
+
+The lite profile: brainless on one computer, with a folder of notes and any model. It is
+now what the installer sets up. The multi-machine setup is `install.sh --profile full`.
+Guide: `docs/lite.md`.
+
+- **Concepts decided in the terminal.** `brainless concepts review` shows each waiting
+  proposal and takes yes, no or skip (evet, hayır, atla); `brainless concepts decide`
+  does one from a script. The same effect as a Buzz reply.
+- **A lite command set.** The lite profile hides the commands that assume the full setup;
+  `brainless profile` lists them and `brainless profile enable <command>` turns one on.
+- **An install test on every push.** A second workflow installs on macOS and Ubuntu against
+  a stub model and runs `doctor --probe`, `add` and `tick`.
+- **Docs.** `docs/lite.md`; the README install section now describes `brainless init`.
+
+- **brainless.toml.** One settings file at the vault root (`tools/config.py`). It fills
+  the existing `BRAINLESS_*` variables as defaults, so the environment still wins and a
+  vault without the file behaves as before. `brainless config show` prints what it sets.
+  Template: `brainless.toml.example`.
+- **Keys in the OS keychain.** `brainless config secret set llm_api_key` stores a key in the
+  macOS Keychain, libsecret on Linux, or a mode 600 file elsewhere. A key written into
+  brainless.toml is ignored with a warning.
+- **Folders by role, not by name.** `tools/paths.py` resolves inbox, library, thinking,
+  daily, beliefs, decisions and ideas from `[folders]`, so a vault can call its notes
+  `Notlar`. Compile, digest, dialectic, calibrate, concepts and media import read the
+  roles. Localised names for new vaults live in `tools/locale/<lang>/folders.json`.
+- **Any model.** New providers in `tools/llm.py`: `anthropic` (API key), `ollama`,
+  `openai`, `grok`, `gemini`, `openrouter` (each with its own key, never another's),
+  `gemini-cli` and `codex-cli` (your own sign-in, run from an empty folder, Codex in its
+  read-only sandbox). One model setting, `BRAINLESS_LLM_MODEL`, per lane if needed.
+  `llm.py --models <provider>` lists models. Ollama and loopback endpoints count as local,
+  so the no-cloud-fallback rule covers them.
+- **`brainless init`.** The installer now asks instead of assuming. `install.sh` sets up
+  Python and the command, then hands over to `brainless init`: your name and language,
+  folders named in that language, other notes folders to read (linked, never changed),
+  the model (Ollama, which it can install; an API key, kept in the OS keychain; or a CLI
+  you are signed in to), one test call, optional semantic search, the background entry
+  and the permissions it needs, and a first run if you want one. `--yes` with flags runs
+  it unattended. Your folders go into `.git/info/exclude`, so notes never reach git.
+  Python 3.11 is now the minimum. `install.sh --profile full` keeps the old setup.
+- **`brainless doctor`.** One line per check: folders, model, key, Ollama, scheduler, failed
+  jobs, last compile. `--probe` sends one tiny prompt.
+- **One machine, one queue.** `brainless tick` runs what is due from a SQLite queue:
+  convert hourly, digest and compile each evening, lint and prune weekly. A night the
+  laptop slept through runs at the next wake; jobs that need the network or the model
+  wait for them; failures back off and then show in `brainless queue`.
+  `brainless schedule install` adds the single launchd, systemd or Task Scheduler entry
+  that calls it, on the lite profile only. `brainless add` captures a note or a file.
+  On the lite profile a document dropped in the inbox is converted there.
+- **Concept proposals wait without Buzz.** On a machine with no Buzz identity they stay
+  pending instead of going to an outbox nobody delivers.
+- **Summaries without write access.** `smart_processor.py` no longer lets the model write
+  files: the model returns text and the script writes it. Book summaries run on any
+  provider; photo OCR still needs the claude CLI and leaves photos in the inbox otherwise.
+- **The research lane says when it cannot search.** Without the claude CLI a web lane is
+  skipped with a note instead of failing.
+- **The vault is where the engine is.** With `BRAINLESS_VAULT` unset, tools use the
+  checkout they run from instead of a fixed home path.
+
 ## 0.7.0 (2026-09-26)
 
 Take a bad source back out, one document per source, concepts decided in Buzz, and

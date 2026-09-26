@@ -8,6 +8,8 @@
 *_token.json
 *.credentials.json
 .env
+# Per-install settings (brainless.toml.example is the template)
+brainless.toml
 
 # Privacy: personal identity, health and official documents anywhere in the tree
 **/Official Docs/

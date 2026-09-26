@@ -63,6 +63,31 @@ tuned its timeout against a cloud model.
                       flag, so the agent has zero tools and can only emit text.
                       That is the goose-side equivalent of --disallowedTools.
                       web=True is therefore NOT supported on this provider.
+  ollama, openai,   : shorthands for openai-compatible with a known address
+  grok, gemini,       (PRESETS below). Each reads its own key, so a lane on
+  openrouter          Grok never receives the OpenAI key: BRAINLESS_<NAME>_API_KEY,
+                      else the OS secret store (config.py) under "<name>_api_key".
+                      BRAINLESS_<NAME>_BASE_URL moves one, e.g. Ollama on
+                      another box. ollama, and openai-compatible pointed at a
+                      loopback address, count as local for the fallback rule.
+  anthropic         : the Claude API with a key, stdlib HTTP (/v1/messages).
+                      Key: BRAINLESS_ANTHROPIC_API_KEY, ANTHROPIC_API_KEY, or the
+                      secret store under "anthropic_api_key". Default model
+                      claude-opus-5. For people with an API key and no Claude
+                      subscription.
+  gemini-cli,       : the Gemini and Codex CLIs, signed in with the user's own
+  codex-cli           account. Both are agents, so each call runs in an empty
+                      temporary directory; Codex also in its read-only sandbox
+                      with no session saved. They are weaker boundaries than
+                      claude-cli's deny list: a poisoned note could make them
+                      read files the user can read. Prefer an API provider for
+                      lanes that carry untrusted text (captures, links, mail).
+                      gemini-cli is untested here; codex-cli was checked
+                      against codex 0.155.
+
+Models. BRAINLESS_LLM_MODEL[_<LANE>] names the model for every provider except
+claude-cli (BRAINLESS_CLAUDE_MODEL) and goose (BRAINLESS_GOOSE_MODEL). A model
+passed by a caller names a Claude model, so only claude-cli and anthropic use it.
 
 Every real call drops a one-line breadcrumb at .agents/state/llm_status
 (timestamp, outcome, detail). health_check reads it so a silent auth expiry
@@ -70,20 +95,27 @@ surfaces as red instead of the pipeline looking green while every call 401s.
 
 Ops: `python3 tools/llm.py --lanes` prints every lane with the provider it
 currently resolves to, and `--probe <lane>` sends one throwaway prompt through
-that lane and reports the wall time. Both are read-only.
+that lane and reports the wall time, and `--models <provider>` lists what an
+HTTP provider serves. All three are read-only.
 """
 import json
 import os
 import shutil
 import subprocess
+import sys
+import tempfile
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 from datetime import datetime
 
-from resolve_bin import resolve_claude
+from resolve_bin import resolve, resolve_claude
 
-VAULT = os.environ.get("BRAINLESS_VAULT") or os.path.expanduser("~/projects/brainless")
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from paths import vault_root  # noqa: E402
+import config  # noqa: E402,F401  brainless.toml sets env defaults before anything reads env
+VAULT = vault_root()
 STATUS_FILE = os.path.join(VAULT, ".agents", "state", "llm_status")
 # One line per call, kept short. STATUS_FILE holds only the latest outcome for
 # health_check; routing decisions need history to be readable at all.
@@ -104,7 +136,21 @@ _AUTH_HINTS = ("401", "403", "unauthorized", "authenticate",
 
 # Providers that run on the machine itself. A lane pinned to one of these is
 # pinned for privacy, so it never falls back to a cloud provider by accident.
-_LOCAL_PROVIDERS = {"goose"}
+# openai-compatible joins them when its address is loopback (see _is_local).
+_LOCAL_PROVIDERS = {"goose", "ollama"}
+
+# Shorthand providers: an OpenAI-style endpoint with a known address and its own
+# key name in the secret store (None: no key needed).
+PRESETS = {
+    "ollama":     ("http://localhost:11434/v1", None),
+    "openai":     ("https://api.openai.com/v1", "openai_api_key"),
+    "grok":       ("https://api.x.ai/v1", "xai_api_key"),
+    "gemini":     ("https://generativelanguage.googleapis.com/v1beta/openai", "gemini_api_key"),
+    "openrouter": ("https://openrouter.ai/api/v1", "openrouter_api_key"),
+}
+PROVIDERS = ("claude-cli", "anthropic", "openai-compatible", *PRESETS, "gemini-cli", "codex-cli", "goose")
+ANTHROPIC_URL = "https://api.anthropic.com/v1/messages"
+ANTHROPIC_DEFAULT_MODEL = "claude-opus-5"
 
 # Every call site, with the shape of its prompt. "short" lanes are the ones a
 # small local model can plausibly serve: bounded input, structured output, low
@@ -120,6 +166,7 @@ LANES = {
     "spiky-actions":       "medium action items from a meeting report, 9k cap, JSON out",
     "meeting-brief":       "long   pre-meeting brief from vault context",
     "compile":             "long   source document to wiki summary",
+    "smart-summary":       "long   summary or reading card of a converted book or report",
     "media-clean":         "long   punctuation and speaker turns on a raw transcript chunk, nothing cut",
     "compile-aliases":     "short  3 to 5 alternative names per wiki page, JSON out",
     "compile-concept":     "long   concept page updated in place from new summaries, or summary-to-concept assignment (JSON)",
@@ -183,7 +230,7 @@ def _resolve_fallback(lane: str | None, primary: str) -> str | None:
         return None
     if fb == primary:
         return None
-    if primary in _LOCAL_PROVIDERS and fb not in _LOCAL_PROVIDERS:
+    if _is_local(primary) and not _is_local(fb):
         if os.environ.get("BRAINLESS_LLM_ALLOW_CLOUD_FALLBACK", "").strip() != "1":
             return None
     return fb
@@ -192,6 +239,47 @@ def _resolve_fallback(lane: str | None, primary: str) -> str | None:
 def _clean(text: str) -> str:
     # House style: em/en dashes are banned in all vault output.
     return text.replace("\u2014", "-").replace("\u2013", "-")
+
+
+def _endpoint(provider: str) -> tuple[str, str | None]:
+    """(base URL, secret name) for openai-compatible or a preset."""
+    if provider in PRESETS:
+        base, secret = PRESETS[provider]
+        return (os.environ.get(f"BRAINLESS_{provider.upper()}_BASE_URL") or base).rstrip("/"), secret
+    return os.environ.get("BRAINLESS_LLM_BASE_URL", "").rstrip("/"), "llm_api_key"
+
+
+def _is_local(provider: str) -> bool:
+    if provider in _LOCAL_PROVIDERS:
+        return True
+    if provider == "openai-compatible":
+        host = urllib.parse.urlsplit(_endpoint(provider)[0]).hostname or ""
+        return host in ("localhost", "127.0.0.1", "::1") or host.endswith(".localhost")
+    return False
+
+
+_KEYS: dict = {}
+
+
+def _api_key(provider: str) -> str:
+    """The key for this provider: its own env variable(s), then the OS secret
+    store. Never another provider's key. Cached for the process."""
+    if provider in _KEYS:
+        return _KEYS[provider]
+    if provider == "anthropic":
+        env_names, secret = ("BRAINLESS_ANTHROPIC_API_KEY", "ANTHROPIC_API_KEY"), "anthropic_api_key"
+    elif provider in PRESETS:
+        env_names, secret = (f"BRAINLESS_{provider.upper()}_API_KEY",), PRESETS[provider][1]
+    else:
+        env_names, secret = ("BRAINLESS_LLM_API_KEY",), "llm_api_key"
+    key = next((os.environ[n].strip() for n in env_names if os.environ.get(n, "").strip()), "")
+    if not key and secret:
+        try:
+            key = config.get_secret(secret) or ""
+        except Exception:  # a broken keychain must not break the call path
+            key = ""
+    _KEYS[provider] = key
+    return key
 
 
 # The lane of the call in flight, so the breadcrumb and the log say which one
@@ -326,42 +414,153 @@ def _run_goose(prompt: str, timeout: int, model: str | None = None,
     return out
 
 
-def _run_openai_compatible(prompt: str, timeout: int) -> str | None:
-    base = os.environ.get("BRAINLESS_LLM_BASE_URL", "").rstrip("/")
-    key = os.environ.get("BRAINLESS_LLM_API_KEY", "")
-    model = os.environ.get("BRAINLESS_LLM_MODEL", "")
+def _run_openai_compatible(prompt: str, timeout: int, provider: str = "openai-compatible",
+                           lane: str | None = None) -> str | None:
+    base, secret = _endpoint(provider)
+    key = _api_key(provider) if secret else ""
+    model = _model_env("BRAINLESS_LLM_MODEL", lane, "")
     if not (base and model):
-        _record("error", "openai-compatible: BASE_URL/MODEL unset")
+        _record("error", f"{provider}: base URL or model unset (BRAINLESS_LLM_MODEL)")
+        return None
+    if provider in PRESETS and secret and not key:
+        _record("auth", f"{provider}: no key (brainless config secret set {secret})")
         return None
     body = json.dumps({
         "model": model,
         "messages": [{"role": "user", "content": prompt}],
         "temperature": 0.4,
     }).encode()
-    req = urllib.request.Request(
-        f"{base}/chat/completions", data=body,
-        headers={"Content-Type": "application/json",
-                 "Authorization": f"Bearer {key}"},
-    )
+    headers = {"Content-Type": "application/json"}
+    if key:
+        headers["Authorization"] = f"Bearer {key}"
+    req = urllib.request.Request(f"{base}/chat/completions", data=body, headers=headers)
     try:
         with urllib.request.urlopen(req, timeout=timeout) as resp:
             data = json.load(resp)
     except urllib.error.HTTPError as e:
         outcome = "auth" if e.code in (401, 403) else "error"
-        _record(outcome, f"openai-compatible HTTP {e.code}")
+        _record(outcome, f"{provider} HTTP {e.code}")
         return None
     except Exception as e:  # network, timeout, JSON
-        _record("error", f"openai-compatible {type(e).__name__}")
+        _record("error", f"{provider} {type(e).__name__}")
         return None
     try:
-        out = _clean(data["choices"][0]["message"]["content"].strip())
+        out = _clean((data["choices"][0]["message"]["content"] or "").strip())
     except (KeyError, IndexError, TypeError):
-        _record("error", "openai-compatible: unexpected response shape")
+        _record("error", f"{provider}: unexpected response shape")
         return None
     if not out:
-        _record("error", "openai-compatible empty output")
+        _record("error", f"{provider} empty output")
         return None
-    _record("ok", f"openai-compatible {model}")
+    _record("ok", f"{provider} {model}")
+    return out
+
+
+def _run_anthropic(prompt: str, timeout: int, model: str | None = None,
+                   lane: str | None = None) -> str | None:
+    """The Claude API over stdlib HTTP. One retry on 429/5xx, honouring a
+    short retry-after, because an overloaded minute should not cost a night."""
+    key = _api_key("anthropic")
+    if not key:
+        _record("auth", "anthropic: no key (brainless config secret set anthropic_api_key)")
+        return None
+    model = (model or _model_env("BRAINLESS_LLM_MODEL", lane, "") or ANTHROPIC_DEFAULT_MODEL).strip()
+    payload = {"model": model,
+               "max_tokens": int(os.environ.get("BRAINLESS_LLM_MAX_TOKENS", "16000")),
+               "messages": [{"role": "user", "content": prompt}]}
+    url = os.environ.get("BRAINLESS_ANTHROPIC_BASE_URL", "").rstrip("/")
+    url = f"{url}/v1/messages" if url else ANTHROPIC_URL
+    headers = {"Content-Type": "application/json", "x-api-key": key,
+               "anthropic-version": "2023-06-01"}
+    data = None
+    for attempt in (1, 2):
+        req = urllib.request.Request(url, data=json.dumps(payload).encode(), headers=headers)
+        try:
+            with urllib.request.urlopen(req, timeout=timeout) as resp:
+                data = json.load(resp)
+            break
+        except urllib.error.HTTPError as e:
+            if e.code in (401, 403):
+                _record("auth", f"anthropic HTTP {e.code}")
+                return None
+            if attempt == 1 and (e.code == 429 or e.code >= 500):
+                try:
+                    wait = float(e.headers.get("retry-after") or 5)
+                except ValueError:
+                    wait = 5.0
+                time.sleep(min(max(wait, 1.0), 30.0))
+                continue
+            _record("error", f"anthropic HTTP {e.code}")
+            return None
+        except Exception as e:  # network, timeout, JSON
+            _record("error", f"anthropic {type(e).__name__}")
+            return None
+    if not isinstance(data, dict):
+        _record("error", "anthropic: no response")
+        return None
+    if data.get("stop_reason") == "refusal":
+        _record("error", "anthropic: refused")
+        return None
+    out = _clean("".join(b.get("text", "") for b in data.get("content") or []
+                         if isinstance(b, dict) and b.get("type") == "text").strip())
+    if not out:
+        _record("error", "anthropic empty output")
+        return None
+    if data.get("stop_reason") == "max_tokens":
+        _log(f"{_CURRENT_LANE or '-'}\twarn\tanthropic hit max_tokens, output truncated")
+    _record("ok", f"anthropic {model}")
+    return out
+
+
+def _run_agent_cli(provider: str, prompt: str, timeout: int,
+                   lane: str | None = None) -> str | None:
+    """gemini-cli / codex-cli, signed in with the user's own account.
+
+    Each call starts in an empty temporary directory, so the agent's working
+    root holds nothing, and the prompt goes in on stdin, never argv.
+    """
+    name = "gemini" if provider == "gemini-cli" else "codex"
+    binary = resolve(name)
+    if not binary:
+        _record("error", f"{provider}: `{name}` not installed")
+        return None
+    model = _model_env("BRAINLESS_LLM_MODEL", lane, "")
+    with tempfile.TemporaryDirectory(prefix="brainless-llm-") as work:
+        out_file = os.path.join(work, ".last-message")
+        if provider == "codex-cli":
+            cmd = [binary, "exec", "--sandbox", "read-only", "--skip-git-repo-check",
+                   "--ephemeral", "--color", "never", "-C", work, "-o", out_file]
+        else:
+            cmd = [binary]
+        if model:
+            cmd += ["-m", model]
+        cmd += ["-"] if provider == "codex-cli" else ["-p", ""]
+        try:
+            r = subprocess.run(cmd, cwd=work, input=prompt.replace("\x00", ""),
+                               capture_output=True, text=True, timeout=timeout)
+        except subprocess.TimeoutExpired:
+            _record("timeout", provider)
+            return None
+        except OSError as e:
+            _record("error", f"{provider} {type(e).__name__}")
+            return None
+        if r.returncode != 0:
+            blob = (r.stdout or "") + (r.stderr or "")
+            # Agent CLIs print a banner first; the reason for the failure is at the end.
+            _record(_classify(blob), f"{provider}: " + " ".join(blob.split())[-180:])
+            return None
+        text = r.stdout
+        if provider == "codex-cli":
+            try:
+                with open(out_file, encoding="utf-8") as fh:
+                    text = fh.read()
+            except OSError:
+                pass  # older codex: the final message is on stdout
+    out = _clean(text.strip())
+    if not out:
+        _record("error", f"{provider} empty output")
+        return None
+    _record("ok", f"{provider} {model or 'default'}")
     return out
 
 
@@ -378,16 +577,23 @@ def _local_timeout(timeout: int) -> int:
 
 def _dispatch(provider: str, prompt: str, timeout: int, allowed_tools,
               web: bool, model: str | None, lane: str | None) -> str | None:
-    if provider in _LOCAL_PROVIDERS:
+    if _is_local(provider):
         timeout = _local_timeout(timeout)
         # A caller-supplied model names a Claude model (the research passes ask
         # for Opus 5). It means nothing to a local backend, so drop it and let
         # BRAINLESS_GOOSE_MODEL[_<LANE>] decide.
         model = None
-    if provider == "openai-compatible":
-        return _run_openai_compatible(prompt, timeout)
+    if provider == "openai-compatible" or provider in PRESETS:
+        return _run_openai_compatible(prompt, timeout, provider, lane=lane)
+    if provider == "anthropic":
+        return _run_anthropic(prompt, timeout, model, lane=lane)
+    if provider in ("gemini-cli", "codex-cli"):
+        return _run_agent_cli(provider, prompt, timeout, lane=lane)
     if provider == "goose":
         return _run_goose(prompt, timeout, model, lane=lane)
+    if provider != "claude-cli":
+        _record("error", f"unknown provider {provider!r}; one of: {', '.join(PROVIDERS)}")
+        return None
     return _run_claude_cli(prompt, timeout, allowed_tools, web=web, model=model, lane=lane)
 
 
@@ -417,6 +623,12 @@ def run_prompt(prompt: str, timeout: int = 300, allowed_tools=None,
     if web and primary != "claude-cli":
         _log(f"{lane or '-'}\troute\tweb call forced to claude-cli from {primary}")
         primary = "claude-cli"
+    if web and not resolve("claude"):
+        # Only claude-cli can read the web here. Without it the research lane is
+        # skipped with a clear note, never silently answered from memory.
+        _record("error", "web lane needs the claude CLI, which is not installed; skipped")
+        _CURRENT_LANE = None
+        return None
     try:
         started = time.time()
         out = _dispatch(primary, prompt, timeout, allowed_tools, web, model, lane)
@@ -435,6 +647,30 @@ def run_prompt(prompt: str, timeout: int = 300, allowed_tools=None,
         return out
     finally:
         _CURRENT_LANE = None
+
+
+def list_models(provider: str) -> list[str] | None:
+    """Model ids an HTTP provider offers (GET <base>/models), or None when it
+    cannot say. The installer uses it to offer a pick instead of a blank line."""
+    if provider == "anthropic":
+        base = os.environ.get("BRAINLESS_ANTHROPIC_BASE_URL", "").rstrip("/") or "https://api.anthropic.com"
+        url, key = f"{base}/v1/models", _api_key("anthropic")
+        headers = {"x-api-key": key, "anthropic-version": "2023-06-01"}
+    elif provider == "openai-compatible" or provider in PRESETS:
+        base, secret = _endpoint(provider)
+        if not base:
+            return None
+        url, key = f"{base}/models", _api_key(provider) if secret else ""
+        headers = {"Authorization": f"Bearer {key}"} if key else {}
+    else:
+        return None
+    try:
+        with urllib.request.urlopen(urllib.request.Request(url, headers=headers), timeout=20) as resp:
+            data = json.load(resp)
+    except Exception:
+        return None
+    rows = data.get("data") if isinstance(data, dict) else None
+    return sorted(str(r["id"]) for r in rows or [] if isinstance(r, dict) and r.get("id"))
 
 
 def _cli() -> int:
@@ -465,8 +701,15 @@ def _cli() -> int:
         print(f"lane={lane} provider={resolve_provider(lane)} {secs:.1f}s")
         print(f"reply: {(out or '(no answer)')[:200]}")
         return 0 if out else 1
+    if len(args) == 2 and args[0] == "--models":
+        models = list_models(args[1])
+        if models is None:
+            print(f"{args[1]}: no model list (not an HTTP provider, unreachable, or no key)")
+            return 1
+        print("\n".join(models))
+        return 0
     print(__doc__.strip().splitlines()[0])
-    print("usage: llm.py --lanes | --probe <lane>")
+    print("usage: llm.py --lanes | --probe <lane> | --models <provider>")
     return 2
 
 

@@ -31,7 +31,9 @@ import re
 import subprocess
 import sys
 
-VAULT = os.environ.get("BRAINLESS_VAULT") or os.path.expanduser("~/projects/brainless")
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from paths import vault_root  # noqa: E402
+VAULT = vault_root()
 sys.path.insert(0, os.path.join(VAULT, "tools"))
 import dialectic as D  # noqa: E402  reuse buzz(), channel_id, post, pubkey, read/write, log
 from net_wait import wait_for_network  # noqa: E402

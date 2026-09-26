@@ -4,38 +4,43 @@
 #   curl -fsSL https://raw.githubusercontent.com/ezapmar/brainless-public/main/install.sh | bash
 #
 # Or with options (run the script directly):
-#   bash install.sh --vault ~/brainless --schedule
+#   bash install.sh --vault ~/brainless
+#   bash install.sh --profile full --schedule     the multi-machine setup
 #
 # What it does, idempotently:
-#   1. checks git and python3 (3.10+)
+#   1. checks git and python3 (3.11+)
 #   2. clones the engine into the vault directory (or pulls if it is already there)
-#      and creates the content folders (Inbox, Work, Thinking and the rest)
 #   3. creates .venv and installs the core Python dependency (markitdown)
-#   4. checks the LLM backend: the claude CLI, or an OpenAI-compatible endpoint from env
-#   5. asks for your name and output language and writes _Agent-Context/PROFILE.md
-#   6. installs the `brainless` command into ~/.local/bin
-#   7. with --schedule: installs the hourly, nightly and weekly jobs (launchd on macOS,
-#      systemd user timers on Linux)
-#   8. runs a dry compile as a smoke test
+#   4. installs the `brainless` command into ~/.local/bin
+#   5. lite profile (default): hands over to `brainless init`, which asks for your
+#      name and language, names the folders, connects a model (Ollama, an API key,
+#      or a CLI you are signed in to), and offers the one background entry
+#      full profile: the original steps (English folders, PROFILE.md, --schedule
+#      installs every timer), for the always-on deployment in docs/reference-deployment.md
 #
 # Nothing here touches files outside the vault, ~/.local/bin, ~/.config/brainless and,
-# with --schedule, ~/Library/LaunchAgents or ~/.config/systemd/user.
+# if you agree to background runs, ~/Library/LaunchAgents or ~/.config/systemd/user.
 set -euo pipefail
 
 REPO="${BRAINLESS_REPO:-https://github.com/ezapmar/brainless-public.git}"
 VAULT="${BRAINLESS_VAULT:-$HOME/brainless}"
 SCHEDULE=0
 NONINTERACTIVE=0
+PROFILE_KIND=lite
+INIT_ARGS=()
 while [ $# -gt 0 ]; do
   case "$1" in
     --vault) VAULT="$2"; shift 2 ;;
     --repo) REPO="$2"; shift 2 ;;
+    --profile) PROFILE_KIND="$2"; shift 2 ;;
     --schedule) SCHEDULE=1; shift ;;
-    --yes) NONINTERACTIVE=1; shift ;;
-    -h|--help) sed -n 2,20p "$0"; exit 0 ;;
+    --yes) NONINTERACTIVE=1; INIT_ARGS+=(--yes); shift ;;
+    --) shift; INIT_ARGS+=("$@"); break ;;      # the rest goes to `brainless init`
+    -h|--help) sed -n 2,22p "$0"; exit 0 ;;
     *) echo "unknown option: $1" >&2; exit 2 ;;
   esac
 done
+case "$PROFILE_KIND" in lite|full) ;; *) echo "--profile is lite or full" >&2; exit 2 ;; esac
 VAULT="${VAULT/#\~/$HOME}"
 
 say() { printf '\033[1m==> %s\033[0m\n' "$*"; }
@@ -46,10 +51,10 @@ ok() { printf '    ok: %s\n' "$*"; }
 say "Checking prerequisites"
 command -v git >/dev/null 2>&1 || { echo "git is required" >&2; exit 1; }
 PY=""
-for cand in python3.13 python3.12 python3.11 python3.10 python3; do
-  if command -v "$cand" >/dev/null 2>&1 && "$cand" -c 'import sys; sys.exit(0 if sys.version_info >= (3, 10) else 1)'; then PY="$cand"; break; fi
+for cand in python3.14 python3.13 python3.12 python3.11 python3; do
+  if command -v "$cand" >/dev/null 2>&1 && "$cand" -c 'import sys; sys.exit(0 if sys.version_info >= (3, 11) else 1)'; then PY="$cand"; break; fi
 done
-[ -n "$PY" ] || { echo "python3 3.10 or newer is required" >&2; exit 1; }
+[ -n "$PY" ] || { echo "python3 3.11 or newer is required (macOS: brew install python)" >&2; exit 1; }
 ok "git $(git --version | awk '{print $3}'), $PY $($PY -c 'import sys; print(".".join(map(str, sys.version_info[:3])))')"
 
 # 2. clone or update
@@ -63,8 +68,7 @@ else
   git clone --quiet "$REPO" "$VAULT"
 fi
 cd "$VAULT"
-mkdir -p Work Personal Library Inbox raw Archive "Daily Briefings" logs \
-  Thinking/Daily Thinking/Ideas Thinking/Beliefs Thinking/Decisions
+mkdir -p logs
 
 # 3. venv + core dependency
 say "Python environment (.venv)"
@@ -77,7 +81,34 @@ else
   warn "markitdown document extras missing; PDF and Office conversion will fail until fixed"
 fi
 
-# 4. LLM backend
+# 4. brainless command
+say "Installing the brainless command"
+mkdir -p "$HOME/.local/bin" "$HOME/.config/brainless"
+POINTER="$HOME/.config/brainless/vault"
+if [ -s "$POINTER" ] && [ "$(head -n1 "$POINTER")" != "$VAULT" ]; then
+  # Another vault is already the default; a test install must not take it over.
+  warn "the brainless command stays on $(head -n1 "$POINTER")"
+  warn "to switch: echo '$VAULT' > $POINTER   (or run with BRAINLESS_VAULT=$VAULT)"
+else
+  printf '%s\n' "$VAULT" > "$POINTER"
+fi
+install -m 0755 bin/brainless "$HOME/.local/bin/brainless"
+case ":$PATH:" in *":$HOME/.local/bin:"*) ok "brainless -> $HOME/.local/bin/brainless" ;;
+  *) warn "add \$HOME/.local/bin to your PATH to use the brainless command" ;; esac
+
+# 5. lite: the questions live in `brainless init`. It reads the terminal itself, so it
+# works when this script arrived through `curl | bash` and stdin is the script.
+if [ "$PROFILE_KIND" = "lite" ]; then
+  say "Setting up (brainless init)"
+  export BRAINLESS_VAULT="$VAULT"
+  exec .venv/bin/python tools/init_wizard.py ${INIT_ARGS[@]+"${INIT_ARGS[@]}"}
+fi
+
+# Full profile from here on: the multi-machine deployment's original steps.
+mkdir -p Work Personal Library Inbox raw Archive "Daily Briefings" \
+  Thinking/Daily Thinking/Ideas Thinking/Beliefs Thinking/Decisions
+
+# LLM backend
 say "LLM backend"
 if [ "${BRAINLESS_LLM_PROVIDER:-claude-cli}" = "openai-compatible" ]; then
   if [ -n "${BRAINLESS_LLM_BASE_URL:-}" ] && [ -n "${BRAINLESS_LLM_MODEL:-}" ]; then
@@ -92,7 +123,7 @@ else
   warn "or export BRAINLESS_LLM_PROVIDER=openai-compatible with BRAINLESS_LLM_BASE_URL and BRAINLESS_LLM_MODEL."
 fi
 
-# 5. profile
+# profile
 PROFILE="_Agent-Context/PROFILE.md"
 if grep -q '^owner_name: the owner' "$PROFILE" 2>/dev/null; then
   say "Owner profile"
@@ -111,15 +142,7 @@ else
   ok "PROFILE.md already set"
 fi
 
-# 6. brainless command
-say "Installing the brainless command"
-mkdir -p "$HOME/.local/bin" "$HOME/.config/brainless"
-printf '%s\n' "$VAULT" > "$HOME/.config/brainless/vault"
-install -m 0755 bin/brainless "$HOME/.local/bin/brainless"
-case ":$PATH:" in *":$HOME/.local/bin:"*) ok "brainless -> $HOME/.local/bin/brainless" ;;
-  *) warn "add \$HOME/.local/bin to your PATH to use the brainless command" ;; esac
-
-# 7. schedulers
+# schedulers
 if [ "$SCHEDULE" -eq 1 ]; then
   say "Installing scheduled jobs"
   if [ "$(uname -s)" = "Darwin" ]; then
@@ -154,7 +177,7 @@ EOF
   fi
 fi
 
-# 8. smoke test
+# smoke test
 say "Smoke test (dry compile, no LLM calls)"
 BRAINLESS_VAULT="$VAULT" .venv/bin/python tools/compile_resources.py --dry-run --only summaries | tail -1
 

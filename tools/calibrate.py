@@ -12,9 +12,13 @@ import os
 import re
 from datetime import date, datetime
 from pathlib import Path
+import sys
 
-VAULT = Path(os.environ.get("BRAINLESS_VAULT") or Path(__file__).resolve().parents[1])
-DEC = VAULT / "Thinking" / "Decisions"
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from paths import folder, vault_root  # noqa: E402
+
+VAULT = Path(vault_root())
+DEC = VAULT / folder("decisions")
 FM_RE = re.compile(r"^---\n(.*?)\n---\n", re.S)
 
 

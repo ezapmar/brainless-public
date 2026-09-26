@@ -109,5 +109,35 @@ class ConceptReview(unittest.TestCase):
         self.assertEqual(self.cr.room(), 0)
 
 
+
+class TerminalReview(ConceptReview):
+    """The lite profile decides proposals in the terminal, with the Buzz words."""
+
+    def test_review_one_by_one(self):
+        answers, shown = iter(["evet", "skip"]), []
+        n = self.cr.review(ask=lambda q: next(answers), out=shown.append, catalogue=self.catalogue)
+        self.assertEqual(n, 1)
+        self.assertEqual(self.status("takim"), "active")
+        self.assertEqual(self.status("okul"), "proposed")
+        self.assertFalse(any("Okul" in s for s in shown))     # personal: still no title
+        self.assertFalse(any("reply" in s.lower() for s in shown[:1]))
+
+    def test_decide_words(self):
+        self.cr.decide("takim", "no")
+        self.assertEqual(self.status("takim"), "retired")
+        self.assertIn("already", self.cr.decide("takim", "yes"))
+        self.assertIn("No proposal", self.cr.decide("nope", "yes"))
+        self.cr.decide("okul", "banana")
+        self.assertEqual(self.status("okul"), "proposed")
+
+    def test_announce_without_buzz_changes_nothing(self):
+        home = Path(self.tmp.name) / "home"
+        home.mkdir()
+        from unittest import mock
+        with mock.patch.object(Path, "home", return_value=home):
+            self.assertEqual(self.cr.announce(catalogue=self.catalogue), 0)
+        self.assertEqual(self.status("takim"), "proposed")
+        self.assertFalse(self.cr.STATE.exists())
+
 if __name__ == "__main__":
     unittest.main()

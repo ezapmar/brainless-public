@@ -160,7 +160,9 @@ busy head.
 
 ## What it runs on
 
-One laptop is enough to start. Mine grew into three devices:
+One laptop is enough, and it is what the installer sets up: a folder, any model, one
+background entry. That is the [Lite](https://github.com/ezapmar/brainless-public/wiki/Lite)
+profile. Mine grew into three devices:
 
 - **iPhone 16 Pro.** Capture goes in through a Telegram bot (voice, photos, links, text).
   Everything that comes back (receipts, the morning three, the six voices, alerts) arrives
@@ -249,35 +251,35 @@ you are wrong by a script at 21:20.
 
 ## Install
 
-Requirements: git, Python 3.10 or newer, and one LLM backend.
+Requirements: git and Python 3.11 or newer. A model comes during setup.
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/ezapmar/brainless-public/main/install.sh | bash
 ```
 
 Yes, that is curl piped into bash, on a page with a whole section about trust. The
-script is short enough to read first, and I would. What it does, in order:
+script is short enough to read first, and I would. It checks git and Python, clones the
+engine into `~/brainless` (`--vault <dir>` for another place), creates `.venv` with the
+document converter, installs the `brainless` command into `~/.local/bin`, and hands over
+to `brainless init`, which asks:
 
-1. Checks git and Python.
-2. Clones the engine into `~/brainless`. Pass `--vault <dir>` for another place.
-3. Creates `.venv` and installs the one core dependency, the document converter.
-4. Checks the LLM backend. Default is the `claude` CLI signed in with a subscription.
-   Any OpenAI-compatible endpoint works instead: OpenAI, Together, Grok, Ollama, LM
-   Studio. Set `BRAINLESS_LLM_PROVIDER=openai-compatible`, `BRAINLESS_LLM_BASE_URL` and
-   `BRAINLESS_LLM_MODEL`. A third option, `goose`, runs a model on the machine itself
-   through the Goose CLI, and routing is per lane, so the private short prompts can stay
-   local while long prose goes to a large model. See
-   [Local Inference](https://github.com/ezapmar/brainless-public/wiki/Local-Inference).
-5. Asks your first name and output language, `en` or `tr`, and writes
-   `_Agent-Context/PROFILE.md`.
-6. Installs the `brainless` command into `~/.local/bin`.
-7. Runs a dry compile as a smoke test.
+1. Your first name and the language it writes in.
+2. The folder names, in that language (`Gelen`, `Notlar`, `Kütüphane`, `Düşünce` in
+   Turkish), and other notes folders to read, such as an old Obsidian vault. Those are
+   linked and never written to. Obsidian itself is optional.
+3. The model: Ollama on your own machine (it can install it), a cloud API with a key
+   (Claude, OpenAI, Grok, Gemini, OpenRouter; the key goes into the macOS Keychain or
+   libsecret, never into the vault), or a CLI you are signed in to (Claude Code, Codex,
+   Gemini CLI). Then one test call.
+4. Background runs: one launchd or systemd entry that runs whatever is due every 15
+   minutes, and catches up after the laptop slept.
 
-It is safe to re-run. Add `--schedule` to install the hourly conversion, the nightly
-digest and the weekly lint, as launchd agents on macOS and systemd user timers on Linux.
-Add `--yes` to skip the questions.
+Everything lands in `brainless.toml`. It is safe to re-run. `--yes -- --provider ollama`
+and friends skip the questions; `brainless doctor` checks the result. The details, the
+model table and the limits are in [Lite](https://github.com/ezapmar/brainless-public/wiki/Lite).
+`bash install.sh --profile full --schedule` installs my multi-machine setup instead.
 
-**Optional inputs.** Step 3 covers documents: markitdown is installed with its PDF, DOCX,
+**Optional inputs.** Documents need nothing more: markitdown is installed with its PDF, DOCX,
 XLSX and PPTX extras, so a dropped file becomes Markdown with nothing more to install.
 The other doors need something extra on the machine that runs the capture:
 
@@ -324,12 +326,15 @@ To run the script with options instead of piping it:
 
 ```bash
 git clone https://github.com/ezapmar/brainless-public.git ~/brainless
-bash ~/brainless/install.sh --vault ~/brainless --schedule
+bash ~/brainless/install.sh --vault ~/brainless
 ```
 
 ## The first ten minutes
 
 ```bash
+brainless add "the thing you keep thinking about"   # a note, where the digest reads
+brainless add ~/Downloads/some-report.pdf        # a document into the inbox
+brainless tick                                   # run what is due now
 brainless compile --dry-run                      # what would be compiled
 brainless compile                                # build .wiki/
 brainless search "the thing you keep thinking about"
@@ -340,6 +345,15 @@ brainless calibrate                              # decisions due for grading
 That is the start. The whole shell command, from `brainless help`:
 
 ```text
+init       set up this vault: language, folders, model, background runs
+doctor     check the setup, one line per check (--probe calls the model)
+add        capture a note, or copy a document into the inbox
+tick       run what is due from the queue (the background entry calls this)
+queue      what ran, what waits, what failed; retry
+schedule   install or remove the one background entry
+concepts   decide concept proposals (review, decide)
+config     what brainless.toml sets; keys in the OS keychain (secret set)
+profile    lite or full; enable a hidden command
 compile    build .wiki/ from your notes (--dry-run, --full-rebuild, --only <phase>)
 search     search the compiled wiki
 dialectic  six personas argue a thesis; --scorecard prints the rolling 30 day scorecard
@@ -358,6 +372,9 @@ eval       ask the golden questions and score the search
 chats      bring Claude or ChatGPT history in, filtered
 export     produce the public engine tree from a private vault
 update     git pull and refresh dependencies
+
+On the lite profile, today, closeout, dashboard, health, media, backup, graph, eval,
+chats and export are hidden until `brainless profile enable <command>`.
 vault      print the vault path
 version    print the engine version
 ```
@@ -388,6 +405,7 @@ built against: [Commands](https://github.com/ezapmar/brainless-public/wiki/Comma
 The full story, with the mechanics and the file names, lives in the
 [wiki](https://github.com/ezapmar/brainless-public/wiki).
 
+- [Lite](https://github.com/ezapmar/brainless-public/wiki/Lite): one computer, any model, the installer and the queue.
 - [How it works](https://github.com/ezapmar/brainless-public/wiki/How-It-Works): the loop step by step, the privacy rules, the addons.
 - [Reference Deployment](https://github.com/ezapmar/brainless-public/wiki/Reference-Deployment): the exact three-device setup I run.
 - [The Loop](https://github.com/ezapmar/brainless-public/wiki/The-Loop) and [Method](https://github.com/ezapmar/brainless-public/wiki/Method): how a note moves from capture to

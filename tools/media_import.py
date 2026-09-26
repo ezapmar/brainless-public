@@ -42,11 +42,12 @@ import urllib.request
 from datetime import datetime
 from pathlib import Path
 
-VAULT = Path(os.environ.get("BRAINLESS_VAULT") or Path(__file__).resolve().parents[1])
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+from paths import folder, vault_root  # noqa: E402
+VAULT = Path(vault_root())
 QUEUE = VAULT / ".agents" / "state" / "media_queue"
 DONE_LOG = VAULT / ".agents" / "state" / "media_done.jsonl"
-OUT_DIR = VAULT / "Inbox" / "Media"
+OUT_DIR = VAULT / folder("inbox") / "Media"
 MAX_ATTEMPTS = 3
 MAX_SECONDS = 4 * 3600            # longer than this is a backfill, not a capture
 MAX_AUDIO_BYTES = 600 * 1024 * 1024

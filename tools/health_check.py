@@ -14,7 +14,10 @@ import subprocess
 import time
 from datetime import datetime, timedelta
 
-VAULT = os.environ.get("BRAINLESS_VAULT") or os.path.expanduser("~/projects/brainless")
+import sys
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from paths import vault_root  # noqa: E402
+VAULT = vault_root()
 import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from owner_profile import WORKER  # noqa: E402
