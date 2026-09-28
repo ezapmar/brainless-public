@@ -9,7 +9,7 @@ prompts never leave the machine.
 
 Two reasons to want it, and they pull in different directions:
 
-- **Privacy.** A voice note about a child's therapy session, a meeting transcript, a
+- **Privacy.** A voice note about a doctor's appointment, a meeting transcript, a
   folder classification decision. Content that is nobody else's business, going through
   a model that runs on hardware you own.
 - **Resilience.** A subscription that expires, a token that rotates, an outage, a flight

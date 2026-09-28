@@ -35,7 +35,7 @@ exists as a paraphrase in your head bends to fit the case at hand. A quote does 
 call before you make it, when you can still see it.
 
 **A base rate before a confidence.** `/decide` and `/calibrate` refuse a confidence
-figure that did not start from a reference class ("new UK Ltds with no trading history
+figure that did not start from a reference class ("new companies with no trading history
 applying for a lease") and its rough base rate, then adjust for the specifics and say
 why. The command's own words: a confidence that did not start from a base rate is a mood.
 

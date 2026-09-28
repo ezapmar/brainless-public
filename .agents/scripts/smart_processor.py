@@ -16,6 +16,7 @@ BRAINLESS_ROOT = vault_root()
 import llm  # noqa: E402
 from owner_profile import COMPANY_AREA, LANG, lang_name, output_lang_directive  # noqa: E402
 from i18n import t  # noqa: E402
+import mac_notify  # noqa: E402
 from markitdown_native import convert_to_file  # noqa: E402
 
 # Documents longer than this reach a non-Claude provider cut, with a note saying so.
@@ -37,14 +38,8 @@ MAX_BACKOFF = 7 * 24 * 3600
 
 def notify(message, title="brainless / smart_processor"):
     """Best-effort macOS notification; never raises."""
-    try:
-        subprocess.run(
-            ["osascript", "-e",
-             f'display notification "{message}" with title "{title}"'],
-            check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-        )
-    except Exception:
-        pass
+    # The message carries a document's file name: argv only, never AppleScript source.
+    mac_notify.notify(message, title)
 
 
 def load_quarantine():

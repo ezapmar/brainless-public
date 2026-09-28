@@ -180,11 +180,11 @@ def self_test():
     bots = {"botpub_moderator", "botpub_skeptic"}
     seen = {"old1"}
     msgs = [
-        {"id": "a1", "pubkey": "human", "content": "!dialectic We should delay the UK move", "created_at": "10"},
+        {"id": "a1", "pubkey": "human", "content": "!dialectic We should delay the office move", "created_at": "10"},
         {"id": "a2", "pubkey": "botpub_skeptic", "content": "!dialectic bot echo should not fire", "created_at": "11"},
         {"id": "old1", "pubkey": "human", "content": "!dialectic already seen", "created_at": "9"},
         {"id": "a3", "pubkey": "human", "content": "just chatting, no command", "created_at": "12"},
-        {"id": "a4", "pubkey": "human", "content": "!dialectic Ship the SGK product first", "created_at": "13"},
+        {"id": "a4", "pubkey": "human", "content": "!dialectic Ship the mobile app first", "created_at": "13"},
         {"id": "b1", "pubkey": "human", "content": "!dialectic", "created_at": "14"},
         {"id": "b2", "pubkey": "human", "content": "  !DIALECTIC   Buy vs build  ", "created_at": "15"},
     ]

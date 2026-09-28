@@ -3,6 +3,35 @@
 All notable changes to the public brainless engine. Dates are the day of the public
 push. The private vault this is exported from has its own history.
 
+## 0.8.2 (2026-09-28)
+
+Security. A full audit after the repo went out more widely; if you run an earlier version,
+update.
+
+- **A file name can no longer run commands on a Mac.** Notifications put the name of a
+  document that failed to convert straight into AppleScript, so a file named with a quote
+  and `do shell script` ran a shell command on the next hourly job. The text now reaches
+  `osascript` as an argument, never as script. Same fix in health check, worker reach and
+  the compiler.
+- **Automated Claude calls get exactly the tools they are granted.** A deny list left Read,
+  Glob and Grep open, so the research lane could read the vault and hand it to WebFetch if
+  a page it read told it to. Every call now passes `--tools` with its grant (none by
+  default, WebSearch and WebFetch for research, Read for photos) and `--strict-mcp-config`,
+  so the MCP servers you use interactively (mail, chat, drives) never load in a timer.
+- **The personas and writing agents read only your vault.** Their settings named the
+  author's home directory, so on anyone else's machine nothing was denied, and the persona
+  installer did not template them. Read is now scoped to the vault, every dotfile in home
+  is denied (keys, tokens, shell history), and the unit, env file and team rules are filled
+  in for the installing user. The writing agents lost WebFetch: an injected page could
+  otherwise carry vault text out in a URL. WebSearch stays.
+- **The backup never pushes a vault to a public repo.** It commits everything, and a clone
+  of the engine (or a public fork) has the public repo as origin. It now pushes only when
+  GitHub answers 404 to an anonymous request for the remote, and keeps the commit local
+  otherwise.
+- **The leak scan passes when clean.** It no longer reads `__pycache__`, and its private
+  word lists live next to the registry instead of in the shipped script.
+- Examples and fixtures use invented names and topics.
+
 ## 0.8.1 (2026-09-26)
 
 What the first full lite install found, from the published one-liner to an uninstall.

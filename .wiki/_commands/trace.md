@@ -15,7 +15,7 @@ If no argument is provided, ask: "Which topic should I trace?"
 - Excludes: `_Templates/`, `.obsidian/`, `.smart-env/`, `.git/`, `venv/`, `.claude/`, `.gemini/`, `.agents/`, `tools/logs/`, `raw/_attachments/`, `_Backup/`.
 
 ## Behavior
-1. Find every note whose **content or title** mentions the topic (case-insensitive, handle obvious variants, e.g. "ticket" also matches "ticket-system", "Kolay Ticket").
+1. Find every note whose **content or title** mentions the topic (case-insensitive, handle obvious variants, e.g. "ticket" also matches "ticket-system", "Support Ticket").
 2. For each match, read its `date` frontmatter. If no frontmatter date, fall back to the filename date (for dailies) or file mtime.
 3. Sort chronologically, oldest first.
 4. For each entry, extract the 1-2 sentences where the topic appears, quote exactly.

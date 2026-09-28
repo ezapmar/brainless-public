@@ -23,6 +23,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from owner_profile import WORKER  # noqa: E402
 from owner_profile import PROTECTED_HOMES as profile_protected_homes  # noqa: E402
 from i18n import t  # noqa: E402
+import mac_notify  # noqa: E402
 HEALTH_FILE = os.path.join(VAULT, "_Agent-Context", "HEALTH.md")
 RED_FLAG_SECONDS = 2 * 24 * 3600
 PILE_INBOX_RED = 10  # tools/wiki_prune.py INBOX_STALE_RED, the belief's own criterion
@@ -610,11 +611,8 @@ def main():
         reds = "; ".join(f"{l}: {d}" for l, s, d in CHECKS if s == "RED")[:180]
         title = t("health_check.notify_title")
         if shutil.which("osascript"):  # macOS-only notification
-            subprocess.run(
-                ["osascript", "-e",
-                 f'display notification "{reds}" with title "{title}"'],
-                check=False,
-            )
+            # reds holds LLM error text and paths: argv only, never AppleScript source.
+            subprocess.run(mac_notify.command(reds, title), check=False)
         elif shutil.which("notify-send"):  # Linux worker
             subprocess.run(["notify-send", title, reds], check=False)
 

@@ -1,22 +1,23 @@
 {
   "permissions": {
     "allow": [
-      "Read",
+      "Read(//__VAULT__/**)",
       "Glob",
       "Grep",
-      "Bash(python3 /home/tunca/projects/brainless/tools/wiki_search.py *)",
-      "Bash(/home/tunca/.cargo/bin/buzz messages send *)",
-      "Bash(/home/tunca/.cargo/bin/buzz messages get *)",
-      "Bash(/home/tunca/.cargo/bin/buzz messages thread *)"
+      "Bash(python3 __VAULT__/tools/wiki_search.py *)",
+      "Bash(__BUZZ_BIN__ messages send *)",
+      "Bash(__BUZZ_BIN__ messages get *)",
+      "Bash(__BUZZ_BIN__ messages thread *)"
     ],
     "deny": [
       "Write", "Edit", "MultiEdit", "NotebookEdit", "WebFetch", "WebSearch",
       "Bash(git push *)", "Bash(git commit *)", "Bash(rm *)", "Bash(mv *)", "Bash(cp *)",
       "Bash(sudo *)", "Bash(ssh *)", "Bash(curl *)", "Bash(wget *)",
-      "Read(/home/tunca/.config/**)", "Read(/home/tunca/.ssh/**)", "Read(/home/tunca/.claude/**)",
-      "Read(/home/tunca/.aws/**)", "Read(/home/tunca/.gnupg/**)", "Read(/home/tunca/.netrc)",
-      "Read(/home/tunca/.git-credentials)", "Read(/home/tunca/.npmrc)", "Read(/home/tunca/.docker/**)",
-      "Read(/home/tunca/.kube/**)", "Read(/home/tunca/.cargo/credentials)", "Read(/home/tunca/.cargo/credentials.toml)"
+      "Read(~/.*)", "Read(~/.*/**)",
+      "Read(~/.config/**)", "Read(~/.ssh/**)", "Read(~/.claude/**)",
+      "Read(~/.aws/**)", "Read(~/.gnupg/**)", "Read(~/.netrc)",
+      "Read(~/.git-credentials)", "Read(~/.npmrc)", "Read(~/.docker/**)",
+      "Read(~/.kube/**)", "Read(~/.cargo/credentials)", "Read(~/.cargo/credentials.toml)"
     ]
   }
 }

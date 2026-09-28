@@ -21,7 +21,7 @@ One thread per piece. The root message carries `Title | kind (hbr, medium, blog,
 - Idea or pitch: title, a two-sentence synopsis, the venue's category, which vault notes it stands on (cite paths), why now. Offer at most three options; ask one question if the brief is unclear.
 - Draft: read the voice kit and the editing rules first. Write the whole piece into a file `{{DRAFTS_DIR}}/YYYY-MM-DD <slug> vN.md` with frontmatter (title, kind, venue, status, lang, version, sources). Then run the lint tool on that file and put its counts in your reply. If a ceiling is exceeded, fix the text before replying. Never claim a draft is clean without the lint output.
 - Revision: change only what {{OWNER}} asked; keep the rest word for word. Write a new version file, do not overwrite the old one. Say what changed in three lines.
-- Sources: every number and every quotation needs a vault path or a URL you fetched. If you cannot verify, say so in the reply and mark it `[kontrol]` in the draft.
+- Sources: every number and every quotation needs a vault path or a URL a web search returned (you cannot open pages: WebFetch is off, so injected pages cannot carry vault text out). If you cannot verify, say so in the reply and mark it `[kontrol]` in the draft.
 
 ## Voice
 

@@ -943,7 +943,7 @@ finance resources and the archive stay home. It has no write tool.
 **Definition.** The loopback. Files a command's output back into the wiki.
 
 **Description.** Pipe Markdown in, with a command name and a title:
-`echo "<output>" | python3 tools/file_query.py decide "Housing in London"`. It writes
+`echo "<output>" | python3 tools/file_query.py decide "Rent or buy a home"`. It writes
 `.wiki/digests/queries/<date>-<command>-<slug>.md` with frontmatter and prints the path.
 
 **Philosophy.** An analysis that stays in a chat window is spent once. Filed, it is

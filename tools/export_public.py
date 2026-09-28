@@ -65,6 +65,14 @@ EXCLUDE = [
     ".agents/scripts/__pycache__",
     ".agents/scripts/omarchy_job.sh",
     ".agents/scripts/omarchy_backup.sh",
+    # Built for one company's sales pipeline and one exam; not engine features.
+    "tools/lead_machine",
+    "tools/tests/test_lead_machine.py",
+    ".agents/skills/lead-machine",
+    ".agents/skills/whitepaper-machine",
+    ".agents/scripts/pte_countdown.py",
+    ".agents/systemd/brainless-pte-countdown.service",
+    ".agents/systemd/brainless-pte-countdown.timer",
 ]
 # Empty machine folders the tools expect on first clone. The content homes (Work,
 # Inbox, Thinking and the rest) do not ship: install.sh makes them, so the repo root
@@ -185,7 +193,23 @@ LEAK_PATTERNS = [
     ("phone (+90)", re.compile(r"\+90\d{10}")),
     ("e-mail address", re.compile(r"[\w.+-]+@(?!example\.|github\.com|report\.spiky\.ai)[\w-]+\.[\w.]+")),
 ]
-OWNER_WORDS = ("Tunca", "Üçer", "tuncaucer", "kolayik", "Kolay İK", "Kolay IK", "omarchy", "ucer.us")
+# The owner's public name only. The private words (company, machines, domains,
+# partners) are read at scan time from a file that never ships, so the public
+# scanner does not itself publish the list it guards.
+OWNER_WORDS_FILE = "_Agent-Context/leak-words.txt"
+
+
+def _owner_words(vault=VAULT):
+    words = ["Tunca", "Üçer", "tuncaucer"]
+    try:
+        with open(os.path.join(vault, OWNER_WORDS_FILE), encoding="utf-8") as fh:
+            words += [w.strip() for w in fh if w.strip() and not w.startswith("#")]
+    except OSError:
+        pass
+    return tuple(dict.fromkeys(words))
+
+
+OWNER_WORDS = _owner_words()
 # Files where the owner may legitimately appear (docs about this deployment).
 # README.md is authored in the owner's voice and reviewed by hand; the rest is code.
 # The .agents/buzz deployment config carries the worker's real home path as a functional
@@ -229,7 +253,19 @@ OWNER_ALLOW = (
 REGISTRY_FILES = ("_Agent-Context/entities.md", "_Agent-Context/entity-candidates.md")
 PEOPLE_GLOB_DIR = "About People"  # Work/<company>/About People/<team>/<Full Name>.md
 # Registered names that are also everyday words in the shipped code and docs.
-NAME_COMMON = {"Can", "Doğan", "Zafer", "Metin", "Deniz", "Elif", "Su", "Bayrak", "Advisors", "Financial", "Core"}
+# Kept in a private file next to the registry, since the list is itself registry names.
+NAME_COMMON_FILE = "_Agent-Context/name-common.txt"
+
+
+def _name_common(vault=VAULT):
+    try:
+        with open(os.path.join(vault, NAME_COMMON_FILE), encoding="utf-8") as fh:
+            return {w.strip() for w in fh if w.strip() and not w.startswith("#")}
+    except OSError:
+        return set()
+
+
+NAME_COMMON = _name_common()
 
 
 def registry_names(vault=VAULT):
@@ -397,8 +433,10 @@ def leak_scan(out, names=None):
     findings = []
     name_rx = name_patterns(registry_names() if names is None else names)
     for dirpath, dirnames, filenames in os.walk(out):
-        dirnames[:] = [d for d in dirnames if d != ".git"]  # git's own metadata is not content
+        dirnames[:] = [d for d in dirnames if d not in (".git", "__pycache__")]  # not content
         for fn in filenames:
+            if fn.endswith(".pyc"):
+                continue
             p = os.path.join(dirpath, fn)
             r = os.path.relpath(p, out)
             # Raster images are compressed bytes: a word scan of them only finds noise

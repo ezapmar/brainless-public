@@ -350,6 +350,11 @@ def _run_claude_cli(prompt: str, timeout: int, allowed_tools=None,
     safe = [x for x in dict.fromkeys(granted) if x not in denied]
     if safe:
         cmd += ["--allowedTools", *safe]
+    # A deny list leaves every tool it does not name. Read, Glob and Grep need no
+    # permission, so a web call could read the vault and hand it to WebFetch. The
+    # built-in tool set is therefore exactly the grant (none by default), and the
+    # user's own MCP servers (mail, chat, drives) never load in an automated call.
+    cmd += ["--tools", ",".join(safe), "--strict-mcp-config"]
     try:
         r = subprocess.run(
             cmd,

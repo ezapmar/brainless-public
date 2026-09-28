@@ -143,11 +143,11 @@ class WhitelistTest(PollerFixture):
 class ReceiptTest(PollerFixture):
     def test_receipt_is_plain_and_not_repeated(self):
         self.chat.write_text(OWNER)
-        self.handle.return_value = "[[TEGV]] ile [[Ebru Hanım|Ebru]] toplantısı"
+        self.handle.return_value = "[[Acme]] ile [[Leyla Hanım|Leyla]] toplantısı"
         self.poll([update(1, OWNER)])
         (receipt,) = self.sent()
         self.assertNotIn("[[", receipt["text"])
-        self.assertIn("TEGV ile Ebru toplantısı", receipt["text"])
+        self.assertIn("Acme ile Leyla toplantısı", receipt["text"])
         self.assertNotIn("[[", self.buzz.call_args.args[1])
         self.poll([])
         self.assertEqual(len(self.sent()), 0, "a finished record is gone; nothing to repeat")

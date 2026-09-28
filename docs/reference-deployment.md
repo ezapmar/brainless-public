@@ -150,12 +150,13 @@ Restart=on-failure
 
 ```jsonc
 // .agents/buzz/personas/settings.json  (the whole security model in one file)
-"allow": [ "Read", "Glob", "Grep",
-           "Bash(python3 .../tools/wiki_search.py *)",
-           "Bash(.../buzz messages send *)" ],
+// install_personas.sh fills __VAULT__ and __BUZZ_BIN__ for the installing user.
+"allow": [ "Read(//__VAULT__/**)", "Glob", "Grep",
+           "Bash(python3 __VAULT__/tools/wiki_search.py *)",
+           "Bash(__BUZZ_BIN__ messages send *)" ],
 "deny":  [ "Write", "Edit", "WebFetch", "WebSearch",
            "Bash(git push *)", "Bash(rm *)", "Bash(sudo *)", "Bash(ssh *)",
-           "Read(~/.config/**)", "Read(~/.ssh/**)", "Read(~/.claude/**)" ]
+           "Read(~/.*)", "Read(~/.*/**)" ]   // every dotfile in home: keys, tokens, history
 ```
 
 **5. Addon secrets, never in the repo.** Each persona reads one env file under

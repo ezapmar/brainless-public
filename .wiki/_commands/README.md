@@ -34,10 +34,10 @@ From the vault root, launch Claude Code (or Gemini CLI) and type:
 ```
 /context
 /trace ticket-system
-/connect "Kolay Ticket" "Emergency Helper"
+/connect "Customer Portal" "Incident Response"
 /ideas health
 /graduate 30
-/decide "Should I lease or buy in London?"
+/decide "Should I rent or buy a home?"
 /weekly
 /contradict
 ```

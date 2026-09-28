@@ -6,8 +6,8 @@ argument-hint: <decision question, in quotes>
 
 ## Inputs
 A decision question. Examples:
-- `/decide "Should we build Kolay Ticket on the consultant panel or integrate into prod DB?"`
-- `/decide "Lease or buy a home in London?"`
+- `/decide "Should we build the ticketing module on the vendor panel or integrate it into the prod DB?"`
+- `/decide "Rent or buy a home?"`
 
 If no question is given, ask for one.
 
@@ -30,7 +30,7 @@ If no question is given, ask for one.
    - Second-order effects (what happens after the obvious first effect)
    - What would need to be true for this to be right
 5. End with a "What would change my mind?" section, the information or event that would flip the decision.
-6. **Prediction with a base rate.** Before any confidence figure, name the **reference class** (e.g. "new UK Ltds with no trading history applying for a lease") and its rough **base rate**. The Confidence% must start from that base rate and then adjust for the specifics, and the note must say what the adjustment was and why. A confidence that did not start from a base rate is not a confidence, it is a mood; do not emit one.
+6. **Prediction with a base rate.** Before any confidence figure, name the **reference class** (e.g. "new companies with no trading history applying for a lease") and its rough **base rate**. The Confidence% must start from that base rate and then adjust for the specifics, and the note must say what the adjustment was and why. A confidence that did not start from a base rate is not a confidence, it is a mood; do not emit one.
 7. **One dated action.** The note must end with exactly one sentence of the form "On <date>, I will <action>." If that sentence cannot be written, the decision is not made: say so, and name what is missing. The date is mandatory. Deleting it later is itself a signal about the decision, not about the calendar.
 8. **Do not pick.** The owner picks. Your job is to load the frame, not choose.
 

@@ -42,6 +42,7 @@ from owner_profile import WORKER  # noqa: E402
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from paths import vault_root  # noqa: E402
+import mac_notify  # noqa: E402
 VAULT = vault_root()
 STATE = os.path.join(VAULT, ".agents", "state", "worker_reach.json")
 LLM_MIRROR = os.path.join(VAULT, ".agents", "state", "worker_llm_status.json")
@@ -143,8 +144,7 @@ def load():
 
 def notify(message):
     """Best-effort macOS notification; never raises."""
-    msg = message.replace('"', "'")
-    run(["osascript", "-e", f'display notification "{msg}" with title "brainless: {WORKER}"'], timeout=10)
+    run(mac_notify.command(message, f"brainless: {WORKER}"), timeout=10)
 
 
 def step(prev, reason, now):

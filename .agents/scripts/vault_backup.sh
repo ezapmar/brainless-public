@@ -76,6 +76,25 @@ if [ -n "$(git status --porcelain)" ]; then
   git commit -m "vault backup: $(date '+%Y-%m-%d %H:%M:%S')" || true
 fi
 
+# Public remote guard: `git add -A` above holds the whole vault, and install.sh
+# points origin at the public engine repo. A user who cloned the engine (or a
+# public fork of it) would publish every note on the first night. Push only to a
+# GitHub repo that answers 404 to an anonymous request, i.e. a private one. If
+# that cannot be checked (offline, rate limit), keep the commit local this run.
+origin_url=$(git remote get-url origin 2>/dev/null || true)
+slug=$(printf '%s' "$origin_url" | sed -nE 's#^(git@github\.com:|https://github\.com/|ssh://git@github\.com/)([^/]+/[^/]+)$#\2#p' | sed 's/\.git$//')
+if printf '%s' "$origin_url" | grep -qi 'brainless-public'; then
+  echo "$(date '+%Y-%m-%d %H:%M:%S') push refused: origin is the public engine repo ($origin_url); set a private backup remote"
+  exit 0
+fi
+if [ -n "$slug" ]; then
+  code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 "https://api.github.com/repos/$slug" || true)
+  if [ "$code" != "404" ]; then
+    echo "$(date '+%Y-%m-%d %H:%M:%S') push refused: github.com/$slug is public or unverifiable (HTTP $code)"
+    exit 0
+  fi
+fi
+
 # Push pause: while .agents/state/no_push exists, back up locally only.
 # (Set 2026-08-04: first push after history rewrite is ~2 GB; the owner will
 # trigger it manually when on a suitable connection, then delete the flag.)

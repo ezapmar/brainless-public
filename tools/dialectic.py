@@ -75,6 +75,7 @@ import argparse
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 import time
@@ -652,7 +653,8 @@ def persona_prompt(slug):
 
 def team_rules_local():
     """Team rules without the Buzz posting contract (local mode)."""
-    text = read_file(TEAM_FILE).replace("{{OWNER}}", OWNER)
+    text = (read_file(TEAM_FILE).replace("{{OWNER}}", OWNER).replace("{{VAULT}}", VAULT)
+            .replace("{{BUZZ_BIN}}", shutil.which("buzz") or "buzz"))
     return text.split("## Buzz contract")[0]
 
 

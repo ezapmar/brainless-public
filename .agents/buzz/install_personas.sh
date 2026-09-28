@@ -19,6 +19,10 @@ OWNER="$(grep -h '^BUZZ_ACP_AGENT_OWNER=' "$BUZZ_DIR/assistant.env" | cut -d= -f
 # Owner display name for the persona prompts ({{OWNER}} placeholder), from PROFILE.md.
 OWNER_NAME="$(grep -m1 '^owner_name:' "$VAULT/_Agent-Context/PROFILE.md" 2>/dev/null | cut -d: -f2- | xargs)"; OWNER_NAME="${OWNER_NAME:-the owner}"
 export PATH="$HOME/.cargo/bin:$PATH"
+BUZZ_BIN="$(command -v buzz || echo "$HOME/.cargo/bin/buzz")"
+AGENT_COMMAND="$(grep -h '^BUZZ_ACP_AGENT_COMMAND=' "$BUZZ_DIR/assistant.env" | cut -d= -f2)"
+CLAUDE_EXE="$(grep -h '^CLAUDE_CODE_EXECUTABLE=' "$BUZZ_DIR/assistant.env" | cut -d= -f2)"
+[ -n "$OWNER" ] && [ -n "$AGENT_COMMAND" ] || { echo "assistant.env must define the owner pubkey and the agent command" >&2; exit 1; }
 if [ -s "$BUZZ_DIR/relay_url" ]; then export BUZZ_RELAY_URL="$(head -1 "$BUZZ_DIR/relay_url")"; fi
 export BUZZ_RELAY_URL="${BUZZ_RELAY_URL:-http://localhost:3000}"
 
@@ -73,13 +77,17 @@ for slug in "${SLUGS[@]}"; do
 
   dir="$HOME/buzz-$slug"
   mkdir -p "$dir/.claude"
-  { cat "$VAULT/.agents/buzz/personas/$slug/system_prompt.md"; echo; cat "$VAULT/.agents/buzz/team_instructions.md"; } | sed "s/{{OWNER}}/$OWNER_NAME/g" > "$dir/system_prompt.md"
-  cp -f "$VAULT/.agents/buzz/personas/settings.json" "$dir/.claude/settings.json"
+  { cat "$VAULT/.agents/buzz/personas/$slug/system_prompt.md"; echo; cat "$VAULT/.agents/buzz/team_instructions.md"; } \
+    | sed -e "s|{{OWNER}}|$OWNER_NAME|g" -e "s|{{VAULT}}|$VAULT|g" -e "s|{{BUZZ_BIN}}|$BUZZ_BIN|g" > "$dir/system_prompt.md"
+  # Read is scoped to this vault and home dotfiles are denied, for whoever installs it.
+  sed -e "s|__VAULT__|$VAULT|g" -e "s|__BUZZ_BIN__|$BUZZ_BIN|g" \
+    "$VAULT/.agents/buzz/personas/settings.json" > "$dir/.claude/settings.json"
 
   env="$BUZZ_DIR/$slug.env"
   sed -e "s|__SECRET__|$(secret_of "$slug")|" -e "s|__OWNER_PUBKEY__|$OWNER|" -e "s|__RELAY_URL__|${BUZZ_RELAY_URL/https:/wss:}|" \
       -e "s|__DISPLAY_NAME__|${NAMES[$slug]:-$slug}|" -e "s|__SLUG__|$slug|" \
       -e "s|__MODERATOR_PUBKEY__|$MOD_PUB|" -e "s|__CHANNEL_UUID__|$CID|" \
+      -e "s|__AGENT_COMMAND__|$AGENT_COMMAND|" -e "s|__CLAUDE_EXE__|${CLAUDE_EXE:-claude}|" -e "s|__HOME__|$HOME|g" \
       "$VAULT/.agents/buzz/personas/env.template" > "$env"
   chmod 600 "$env"
   log "persona $slug ready ($PUB)"

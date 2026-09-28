@@ -7,7 +7,7 @@ command outputs are persisted under .wiki/digests/queries/ so future queries
 
 Usage:
   echo "<markdown output>" | python3 tools/file_query.py <command> "<title>"
-  python3 tools/file_query.py decide "Housing in London" --summary "..." < out.md
+  python3 tools/file_query.py decide "Rent or buy a home" --summary "..." < out.md
 
 Writes: .wiki/digests/queries/<YYYY-MM-DD>-<command>-<slug>.md  (with frontmatter)
 Prints the relative path of the file written.

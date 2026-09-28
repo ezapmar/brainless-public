@@ -28,12 +28,12 @@ class Passage(unittest.TestCase):
 
     def test_line_points_at_the_match_deep_in_a_long_page(self):
         filler = "\n".join(f"line {i} about something else entirely here" for i in range(120))
-        d = doc(filler + "\nThe garanti integration scope was agreed in April with the bank.\n" + filler)
-        r = wiki_search.passage(d, "garanti integration scope")
+        d = doc(filler + "\nThe billing integration scope was agreed in April with the vendor.\n" + filler)
+        r = wiki_search.passage(d, "billing integration scope")
         want = d["text"].split("\n").index(
-            "The garanti integration scope was agreed in April with the bank.") + 1
+            "The billing integration scope was agreed in April with the vendor.") + 1
         self.assertEqual(r["line"], want)
-        self.assertIn("garanti integration scope", r["snippet"])
+        self.assertIn("billing integration scope", r["snippet"])
         self.assertGreater(r["passage_no"], 0)
 
     def test_the_embedding_choice_wins(self):

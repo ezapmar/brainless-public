@@ -192,7 +192,7 @@ def next_kill_criterion(text):
 
 def last_log_date(text):
     """Latest dated log entry. Headings (`### YYYY-MM-DD`) and list lines
-    (`- [YYYY-MM-DD]`) both count; UK Relocation uses the list form."""
+    (`- [YYYY-MM-DD]`) both count; some project notes use the list form."""
     body = section(text, "Log") or section(text, "Logs")
     haystack = body or text
     dates = LOG_DATE_RE.findall(haystack)

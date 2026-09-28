@@ -7,7 +7,7 @@ argument-hint: <note A> <note B>
 ## Inputs
 Two note titles or concepts. Titles may be quoted if they contain spaces.
 Examples:
-- `/connect "Kolay Ticket" "Emergency Helper"`
+- `/connect "Customer Portal" "Incident Response"`
 - `/connect beliefs decisions`
 - `/connect "Ada Lovelace" "Product Team"`
 

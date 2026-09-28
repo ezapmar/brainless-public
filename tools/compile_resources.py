@@ -45,6 +45,7 @@ from owner_profile import LANG, lang_name, output_lang_directive, CROSS_LINK_RUL
 from owner_profile import COMPANY_AREA, GENERIC_PRIVATE_SEGMENTS, PRIVATE_SEGMENTS as PROFILE_PRIVATE_SEGMENTS  # noqa: E402
 from owner_profile import PRIVATE_NAME_PARTS as PROFILE_PRIVATE_NAME_PARTS  # noqa: E402
 from i18n import t, t_list  # noqa: E402
+import mac_notify  # noqa: E402
 import concepts as C  # noqa: E402
 import output_guard  # noqa: E402
 
@@ -1615,9 +1616,8 @@ def main():
             msg = f"compile_resources: {_CLAUDE_FAILURES}/{_CLAUDE_CALLS} claude calls failed"
             print(f"[WARN] {msg}", file=sys.stderr)
             try:
-                subprocess.run(["osascript", "-e",
-                                f'display notification "{msg}" with title "brainless"'],
-                               check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                subprocess.run(mac_notify.command(msg), check=False,
+                               stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             except Exception:
                 pass
             sys.exit(1)
