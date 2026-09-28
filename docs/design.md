@@ -49,7 +49,7 @@ Contrast: bone, cream, marigold and saffron read well on night. On a light groun
 | `assets/brainless-icon.svg`, `.png` (1024 square) | Mark on night. Avatars: GitHub, Telegram, Buzz |
 | `assets/favicon.ico` | 16, 32, 48, 256 |
 | `assets/brainless-banner.png`, `.webp` | Wordmark plus mark on night. README and wiki headers |
-| `assets/brainless-social.png` (1280x640) | GitHub social preview |
+| `assets/brainless-social.png` (1280x640) | GitHub social preview. The banner padded to 2:1 with its own ground, never cropped |
 
 Rules:
 
@@ -58,6 +58,14 @@ Rules:
 - Minimum size: 64 px for the mark, 16 px for the icon (the favicon).
 - On light grounds use the transparent mark; on dark grounds use it as is or the icon.
 - Wordmark: a heavy geometric sans, lowercase, bone on night, with a vermilion dot for the tittle of the i. Until a typeface is chosen, the banner is the only wordmark; do not typeset one.
+
+## Where the logo is set
+
+Three places take the icon outside this repo, and none of them reads it from here, so each is set once by hand or by an installer.
+
+- **GitHub social preview.** Repository Settings, Social preview, upload `brainless-social.png`. There is no API for it; `openGraphImageUrl` in the GraphQL API shows what is live.
+- **Telegram bot.** The Bot API `setMyProfilePhoto` method takes a static JPG. Render `brainless-icon.svg` at 640 px and upload it as `{"type":"static","photo":"attach://p"}`.
+- **Buzz agents.** The installers in `.agents/buzz/` pass `--avatar` with `--name`, pointing at `brainless-icon.png` on GitHub; set `BUZZ_AVATAR_URL` to use another address. A Buzz profile update replaces the whole profile, so any manual `buzz users set-profile` must pass the name and about text again, or they are wiped.
 
 ## Command line
 

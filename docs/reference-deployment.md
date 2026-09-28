@@ -172,6 +172,9 @@ BUZZ_ACP_RESPOND_TO_ALLOWLIST=__MODERATOR_PUBKEY__
 BUZZ_ACP_CHANNELS=__CHANNEL_UUID__
 ```
 
+The same installers give every identity its display name and the brainless icon as its
+avatar in one profile write (see [Design](design.md#where-the-logo-is-set)).
+
 **6. The Mac side, launchd.** `install.sh --schedule` writes four agents into
 `~/Library/LaunchAgents`: the hourly job (`StartInterval 3600`), the nightly processor
 at 23:00, the nightly compile at 23:20, and the weekly lint on Sunday at 22:00. Same jobs as the worker's systemd timers,
