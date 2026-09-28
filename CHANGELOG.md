@@ -3,6 +3,21 @@
 All notable changes to the public brainless engine. Dates are the day of the public
 push. The private vault this is exported from has its own history.
 
+## 0.8.3 (2026-09-28)
+
+A face. No behaviour changes.
+
+- **A new mark: the kilim brain.** Anatolian weaving motifs on the nodes of a network,
+  notes as motifs, links as threads. The README and the wiki open with the banner.
+- **One palette, written down.** [docs/design.md](docs/design.md) holds the design point
+  of view: eleven colours with their roles, logo rules, terminal colour rules, and CSS
+  variables for an interface that does not exist yet. `tools/brand.py` is the code copy.
+- **Logo files for every place a logo goes:** SVG and PNG mark in four sizes, WebP, a
+  square icon on night blue for avatars, a favicon, the banner, and a 1280x640 social
+  preview, all in `docs/assets/`.
+- **The installer speaks in the same colours**, and only on a real terminal. `NO_COLOR`,
+  pipes and `TERM=dumb` get plain text as before.
+
 ## 0.8.2 (2026-09-28)
 
 Security. A full audit after the repo went out more widely; if you run an earlier version,

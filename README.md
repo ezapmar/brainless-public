@@ -1,11 +1,25 @@
 <p align="center">
-  <img src="docs/assets/brainless-logo.svg" alt="brainless logo" width="180">
+  <img src="docs/assets/brainless-banner.png" alt="brainless" width="760">
 </p>
 
-# brainless
+<p align="center">
+  <b>Notes arrive from everywhere, collect in one place, link themselves to each other,<br>
+  and come back to you when they are relevant. Then they argue with you.</b>
+</p>
 
-**Notes arrive from everywhere, collect in one place, link themselves to each other, and
-come back to you when they are relevant. Then they argue with you.**
+<p align="center">
+  <a href="https://github.com/ezapmar/brainless-public/releases"><img alt="release" src="https://img.shields.io/github/v/release/ezapmar/brainless-public?style=flat-square&labelColor=0A1825&color=F24B1E&label=release"></a>
+  <a href="LICENSE"><img alt="licence" src="https://img.shields.io/badge/licence-MIT-0C9794?style=flat-square&labelColor=0A1825"></a>
+  <img alt="python" src="https://img.shields.io/badge/python-3.11%2B-FBA335?style=flat-square&labelColor=0A1825">
+  <img alt="local first" src="https://img.shields.io/badge/runs-on%20your%20machine-FBDEA5?style=flat-square&labelColor=0A1825">
+</p>
+
+<p align="center">
+  <a href="#install">Install</a> &nbsp;·&nbsp;
+  <a href="#the-first-ten-minutes">First ten minutes</a> &nbsp;·&nbsp;
+  <a href="https://github.com/ezapmar/brainless-public/wiki">Wiki</a> &nbsp;·&nbsp;
+  <a href="docs/design.md">Design</a>
+</p>
 
 It runs on your own machine. A folder of plain text notes, a handful of small scripts and
 whichever AI model you point them at. No server, no account, nothing to sign up for. Your
@@ -260,6 +274,12 @@ You need git and Python 3.11 or newer. The model comes during setup.
 curl -fsSL https://raw.githubusercontent.com/ezapmar/brainless-public/main/install.sh | bash
 ```
 
+On Windows, in PowerShell:
+
+```powershell
+irm https://raw.githubusercontent.com/ezapmar/brainless-public/main/install.ps1 | iex
+```
+
 Yes, that is curl piped into bash, on a page with a whole section about trust. The
 script is short enough to read first, and I would. It sets up Python and the `brainless`
 command in `~/brainless` (`--vault <dir>` for another place), then hands over to
@@ -271,7 +291,7 @@ command in `~/brainless` (`--vault <dir>` for another place), then hands over to
    folders are linked in and read, never written to. Obsidian itself is optional.
 3. The model. Ollama on your own machine (it asks before installing it), a cloud API with
    a key, or a command-line tool you are already signed in to. Keys go to the macOS
-   Keychain, or libsecret on Linux, and never into the folder.
+   Keychain, libsecret on Linux or Credential Manager on Windows, and never into the folder.
 4. Whether it may run in the background. One scheduler entry, every 15 minutes. If the
    laptop slept through the evening, the evening's work runs when it wakes.
 
@@ -420,6 +440,7 @@ The full story, with the mechanics and the file names, lives in the
 - [Today Queue](https://github.com/ezapmar/brainless-public/wiki/Today-Queue) and [Buzz Interactions](https://github.com/ezapmar/brainless-public/wiki/Buzz-Interactions): the
   morning three and the threads.
 - [References](https://github.com/ezapmar/brainless-public/wiki/References): the books, papers and tools it is built on.
+- [Design](docs/design.md): the kilim brain, the palette, the logo files and the terminal colour rules.
 
 ## Honest limits
 
@@ -450,4 +471,7 @@ MIT. See `LICENSE`.
 
 ---
 
-Capture everything. Argue at night. Grade yourself in the morning.
+<p align="center">
+  <img src="docs/assets/brainless-logo-64.png" alt="" width="40"><br>
+  <sub>Capture everything. Argue at night. Grade yourself in the morning.</sub>
+</p>

@@ -29,6 +29,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from paths import FOLDER_KEYS, skeleton, vault_root  # noqa: E402
 import config  # noqa: E402
+from brand import paint  # noqa: E402
 
 ENGINE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PROTECTED = ("~/Documents", "~/Desktop", "~/Library/Mobile Documents")
@@ -104,15 +105,15 @@ class Prompter:
 
 
 def say(msg):
-    print(f"\033[1m==> {msg}\033[0m" if sys.stdout.isatty() else f"==> {msg}")
+    print(paint(f"==> {msg}", "vermilion", bold=True))
 
 
 def ok(msg):
-    print(f"    ok: {msg}")
+    print(f"    {paint('ok', 'teal')}: {msg}")
 
 
 def warn(msg):
-    print(f"    ! {msg}")
+    print(f"    {paint('!', 'saffron', bold=True)} {msg}")
 
 
 # ─── steps ────────────────────────────────────────────────────────
