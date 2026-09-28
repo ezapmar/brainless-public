@@ -49,7 +49,7 @@ ensure_key moderator
 MOD_PUB="$(pubkey_of moderator)"
 ensure_member "$MOD_PUB"
 # Give the script identity a display name so threads do not show a bare pubkey.
-BUZZ_PRIVATE_KEY="$(secret_of moderator)" buzz users set-profile --name "Moderator" >/dev/null 2>&1 \
+BUZZ_PRIVATE_KEY="$(secret_of moderator)" buzz users set-profile --name "Moderator" --avatar "${BUZZ_AVATAR_URL:-https://raw.githubusercontent.com/ezapmar/brainless-public/main/docs/assets/brainless-icon.png}" >/dev/null 2>&1 \
   || log "moderator profile name not set (check: buzz users set-profile --help)"
 
 # Channel: create with the moderator identity if missing; cache uuid in channels.json.

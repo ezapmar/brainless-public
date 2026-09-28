@@ -38,7 +38,7 @@ ensure_key() {  # $1 = identity
 ensure_key "$IDENTITY"
 DUS_PUB="$(pubkey_of "$IDENTITY")"
 docker exec "$RELAY_CONTAINER" buzz-admin add-member --pubkey "$DUS_PUB" >/dev/null 2>&1 || true
-BUZZ_PRIVATE_KEY="$(secret_of "$IDENTITY")" buzz users set-profile --name "Dreaming" >/dev/null 2>&1 \
+BUZZ_PRIVATE_KEY="$(secret_of "$IDENTITY")" buzz users set-profile --name "Dreaming" --avatar "${BUZZ_AVATAR_URL:-https://raw.githubusercontent.com/ezapmar/brainless-public/main/docs/assets/brainless-icon.png}" >/dev/null 2>&1 \
   || log "dreaming profile name not set (check: buzz users set-profile --help)"
 
 channel_id() {

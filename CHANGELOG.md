@@ -3,6 +3,17 @@
 All notable changes to the public brainless engine. Dates are the day of the public
 push. The private vault this is exported from has its own history.
 
+## 0.8.4 (2026-09-28)
+
+Two fixes to the new brand.
+
+- **The social card keeps the whole name.** The 0.8.3 card was cropped to 2:1 and lost
+  the b of brainless. It is now the full banner, padded top and bottom with its own
+  night-blue ground.
+- **Buzz agents keep their avatar.** The installers set the kilim icon together with the
+  display name. A Buzz profile update replaces the whole profile, so a reinstall that
+  set only the name would have wiped the picture. `BUZZ_AVATAR_URL` points it elsewhere.
+
 ## 0.8.3 (2026-09-28)
 
 A face. No behaviour changes.

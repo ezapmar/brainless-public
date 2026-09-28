@@ -58,7 +58,7 @@ MOD="$(secret_of moderator)"
 ensure_key "$SLUG"
 PUB="$(pubkey_of "$SLUG")"
 docker exec "$RELAY_CONTAINER" buzz-admin add-member --pubkey "$PUB" >/dev/null 2>&1 || true
-BUZZ_PRIVATE_KEY="$(secret_of "$SLUG")" buzz users set-profile --name "$DISPLAY_NAME" >/dev/null 2>&1 || log "profile name not set"
+BUZZ_PRIVATE_KEY="$(secret_of "$SLUG")" buzz users set-profile --name "$DISPLAY_NAME" --avatar "${BUZZ_AVATAR_URL:-https://raw.githubusercontent.com/ezapmar/brainless-public/main/docs/assets/brainless-icon.png}" >/dev/null 2>&1 || log "profile name not set"
 
 channel_id() {
   BUZZ_PRIVATE_KEY="$MOD" buzz channels list 2>/dev/null \
