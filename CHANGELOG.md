@@ -3,6 +3,18 @@
 All notable changes to the public brainless engine. Dates are the day of the public
 push. The private vault this is exported from has its own history.
 
+## 0.8.5 (2026-09-28)
+
+Docs, and one line of tidying.
+
+- **Where the logo is set, written down.** [Design](https://github.com/ezapmar/brainless-public/blob/main/docs/design.md#where-the-logo-is-set)
+  now says how the icon reaches the three places outside the repo: the GitHub social
+  preview (by hand, no API), the Telegram bot (`setMyProfilePhoto`) and the Buzz agents
+  (the installers). A manual Buzz profile write must repeat the name and about text, or
+  they are wiped. The reference deployment points to it from the persona install step.
+- **One deny rule less.** The persona settings no longer deny `MultiEdit`, a tool Claude
+  Code no longer has. Nothing else in the sandbox changes.
+
 ## 0.8.4 (2026-09-28)
 
 Two fixes to the new brand.
