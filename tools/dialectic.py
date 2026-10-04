@@ -969,13 +969,20 @@ def split_synthesis(text):
     """{'synthesis': ..., 'method trace': ..., 'proposal': ...} from the
     moderator's fixed format; whatever is not under a known heading lands in
     'synthesis' so nothing the LLM wrote is lost."""
-    out, key = {}, "synthesis"
+    out, key, fenced = {}, "synthesis", False
     for line in (text or "").splitlines():
-        m = re.match(r"^#{2,4}\s+(.+?)\s*$", line)
+        if line.lstrip().startswith("```"):
+            fenced = not fenced
+        # A heading inside a fenced draft belongs to the draft. Read as a
+        # section break, it cut the proposal short and lost its closing fence,
+        # and the rest of the filed page rendered as code (23/09, 01/10/2026).
+        m = None if fenced else re.match(r"^#{2,4}\s+(.+?)\s*$", line)
         if m:
             key = m.group(1).strip().lower()
             continue
         out.setdefault(key, []).append(line)
+    if fenced:                      # the model stopped mid-draft: close what it opened
+        out.setdefault(key, []).append("```")
     return {k: "\n".join(v).strip() for k, v in out.items()}
 
 

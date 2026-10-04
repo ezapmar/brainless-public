@@ -4,6 +4,15 @@
 # stopped on 2026-07-21. Runs from launchd (<prefix>.brainless.backup).
 cd "${BRAINLESS_VAULT:-$HOME/projects/brainless}" || exit 1
 
+# Scoped run: `vault_backup.sh --only <path>...` commits those paths alone and
+# pushes, with the same network wait, remote guard and retry as the full run.
+# cron_wrapper.sh uses it to push the morning briefing within the hour.
+ONLY=()
+if [ "${1:-}" = "--only" ]; then
+  shift
+  ONLY=("$@")
+fi
+
 # 2026-09-03: for two days local commits were made but the push failed. The log
 # showed "ssh: connect to host github.com port 22": launchd fires the job while
 # the Mac is waking from sleep and Wi-Fi is not connected yet. The watchdog
@@ -44,7 +53,7 @@ refresh_index() {
     && echo "$(date '+%Y-%m-%d %H:%M:%S') semantic index and link suggestions refreshed" \
     || echo "$(date '+%Y-%m-%d %H:%M:%S') semantic index refresh skipped"
 }
-trap refresh_index EXIT
+[ "${#ONLY[@]}" -eq 0 ] && trap refresh_index EXIT
 
 if wait_for_github; then
   # Fetch the captures the worker pushed (since 2026-08-26 the Telegram
@@ -71,7 +80,12 @@ find . -type f -size +95M -not -path "./.git/*" -not -path "./_Backup/*" -not -p
   fi
 done
 
-if [ -n "$(git status --porcelain)" ]; then
+if [ "${#ONLY[@]}" -gt 0 ]; then
+  git add -- "${ONLY[@]}"
+  if ! git diff --cached --quiet -- "${ONLY[@]}"; then
+    git commit --quiet -m "vault backup: $(date '+%Y-%m-%d %H:%M:%S') (briefing)" -- "${ONLY[@]}" || true
+  fi
+elif [ -n "$(git status --porcelain)" ]; then
   git add -A
   git commit -m "vault backup: $(date '+%Y-%m-%d %H:%M:%S')" || true
 fi

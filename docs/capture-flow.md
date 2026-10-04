@@ -97,7 +97,7 @@ the source.
 | On Inbox image change | `inbox_watch_wrapper.sh` | OCRs a handwritten or printed image immediately; `smart_processor.py --images` is also the hourly backstop. |
 | Every 2 minutes on the worker | `telegram_worker.sh` | Polls Telegram, transcribes voice locally, reads photos, fetches links, and writes `Thinking/Daily/` or `Inbox/Links/`. |
 | Every 2 minutes on the worker | `buzz_capture_worker.sh` | Reads owner posts in Buzz `#inbox`, handles text, voice, images, links and documents, and writes the same capture homes (documents to `Inbox/Documents/`). |
-| Hourly | `cron_wrapper.sh` -> `smart_processor.py` | Converts documents, OCRs missed Inbox images, validates outputs, and records retry state. |
+| Hourly | `cron_wrapper.sh` -> `smart_processor.py` | Converts documents, OCRs missed Inbox images, validates outputs, and records retry state. It also pushes today's briefing on its own (`vault_backup.sh --only`), so the worker's 21:00 close-out appends to it and does not create a second file on the same path. |
 | Every 10 minutes on the worker | `tools/media_import.py run` | Works the YouTube and podcast queue one link at a time and writes `Inbox/Media/`. |
 | 12:30 and 21:20 | `tools/dialectic.py` | Clusters that day's Telegram and Buzz captures, asks six critical personas to argue them in `#dialectic`, and files the synthesis. |
 | 21:00 | `tools/evening_closeout.py` | Reads the day's captures and proposes one seed, one decision and one contradiction. |

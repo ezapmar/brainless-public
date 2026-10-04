@@ -3,6 +3,40 @@
 All notable changes to the public brainless engine. Dates are the day of the public
 push. The private vault this is exported from has its own history.
 
+## 0.8.6 (2026-10-04)
+
+Runs that did nothing now say so.
+
+- **A failed model call fails the run.** `weekly_reconcile.py` and `evening_closeout.py`
+  returned 0 when the model gave nothing back, so the run log read "ok" over a drift
+  report that was two weeks old. Both now exit 1, name the cause (timeout, auth, error)
+  and report `report=0` or `closeout=0`. An idle day is still a clean exit.
+- **Scans are parked, not retried for good.** A document with no text in it, or in a
+  format the converter does not know, failed the same way every week and raised the same
+  notification. `smart_processor.py` now parks it: one notice, then nothing until the file
+  itself changes. The empty `_raw.md` a failed conversion left behind is removed, and
+  records of files that are gone are pruned.
+- **The briefing is pushed within the hour.** With two machines, the laptop held the
+  morning briefing until the evening backup while the worker's 21:00 close-out created
+  the same file. Two new files on one path, and every pull failed. `vault_backup.sh
+  --only <path>` commits and pushes named paths alone, with the same remote guard and
+  retry, and `cron_wrapper.sh` uses it for today's briefing.
+- **Scores no longer add up.** The run log summed every number in a day, so two compiles
+  at hit@5 88 read 176 and the next single run looked like a fall. Scores and levels keep
+  the day's last value; tallies still add up.
+- **An idea is written once.** The compiler took whatever slug the model chose, night
+  after night, and one idea ended up on four pages. The prompt now names the ideas
+  already held, and a proposal is skipped when a page has its slug, answers to its title
+  or alias, or was archived by a merge. Existing idea pages are no longer rewritten.
+- **`lint --fix-links` follows titles and aliases.** A link that names a page by its
+  title, an alias or another spelling is repointed when one page alone answers to that
+  name, and keeps its wording as the display text.
+- **Fenced drafts survive the dialectic.** The splitter read a heading inside a fenced
+  proposal as a section break, cut the draft and lost its closing fence, so the rest of
+  the filed page rendered as code.
+- **The pile count skips machine ledgers.** `Inbox/CRM`, the per-organisation log that
+  `crm_capture.py` keeps, no longer counts as Inbox files waiting on anyone.
+
 ## 0.8.5 (2026-09-28)
 
 Docs, and one line of tidying.

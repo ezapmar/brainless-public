@@ -34,6 +34,10 @@ KEEP_DAYS = 30
 SHOW_DAYS = 14
 # Keys may carry digits (hit5): a key the pattern refused dropped the whole
 # line, and the job was recorded with the previous line's counts instead.
+# Levels, not tallies: a second run in the day replaces the value, it does not
+# add to it. Summed, two compiles at hit5=88 read 176, and the next single run
+# at 91 raised a retrieval alarm for a score that had gone up (04/10/2026).
+GAUGES = {"hit1", "hit5", "mrr", "compile_rc", "broken", "orphans", "dupes", "junk"}
 RUNLOG_RE = re.compile(r"^RUNLOG((?:\s+[a-z_][a-z0-9_]*=\S+)+)\s*$")
 
 
@@ -107,7 +111,8 @@ def record(job: str, status: str, secs: float, counts: dict, *, now: datetime | 
 
 
 def rollup(rows: list[dict], *, now: datetime | None = None, days: int = SHOW_DAYS) -> list[dict]:
-    """One entry per (day, job): runs, fails, last time and status, summed counts."""
+    """One entry per (day, job): runs, fails, last time and status, summed counts
+    (the day's last value for the GAUGES)."""
     now = now or datetime.now()
     since = (now - timedelta(days=days)).strftime("%Y-%m-%d")
     out = {}
@@ -124,7 +129,7 @@ def rollup(rows: list[dict], *, now: datetime | None = None, days: int = SHOW_DA
         for k, v in (r.get("counts") or {}).items():
             if k == "status":
                 continue
-            if isinstance(v, int):
+            if isinstance(v, int) and k not in GAUGES:
                 e["counts"][k] = e["counts"].get(k, 0) + v
             else:
                 e["counts"][k] = v

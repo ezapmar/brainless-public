@@ -74,4 +74,15 @@ if [ "${#GEN_FILES[@]}" -gt 0 ] && ! git diff --cached --quiet -- "${GEN_FILES[@
   git commit --quiet -m "context refresh: $(date '+%F-%H%M')" -- "${GEN_FILES[@]}" 2>/dev/null || true
 fi
 
+# Push today's morning briefing as soon as it exists. The worker's 21:00
+# close-out appends to that file, and creates it when its pull did not bring
+# one. Held back until the 21:30 backup, the Mac's copy and the worker's stub
+# were both new files on the same path, and every pull failed on the conflict
+# (04/09 and 02/10/2026). Runs only while the file differs from origin.
+BRIEFING="Daily Briefings/daily-briefing-$(date '+%F').md"
+if [ -f "$BRIEFING" ] && { [ -n "$(git status --porcelain -- "$BRIEFING")" ] \
+    || ! git diff --quiet origin/master HEAD -- "$BRIEFING" 2>/dev/null; }; then
+  bash .agents/scripts/vault_backup.sh --only "$BRIEFING" >> logs/vault_backup.log 2>&1
+fi
+
 exit "$status"

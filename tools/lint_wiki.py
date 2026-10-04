@@ -341,13 +341,37 @@ def orphan_pages(files, graph):
 FIX_LINK_RE = re.compile(r"\[\[([^\]\|#]+)(#[^\]\|]+)?(\|[^\]]+)?\]\]")
 
 
+def fold_name(name: str) -> str:
+    """'Köprü Çayı', 'kopru-cayi' and 'Kopru Cayi' fold to one key."""
+    import unicodedata
+    s = name.replace("ı", "i").replace("İ", "i")
+    s = "".join(c for c in unicodedata.normalize("NFKD", s) if not unicodedata.combining(c))
+    return re.sub(r"[^a-z0-9]+", " ", s.lower()).strip()
+
+
+def name_index(files) -> dict:
+    """Folded name -> the one page that answers to it: file name, H1 title or a
+    frontmatter alias. A name two pages claim is left out; a guess there would
+    point a link at the wrong page."""
+    from wiki_dedupe import aliases_of, title_of     # imports this module, so not at the top
+    claims: dict[str, set] = {}
+    for p in files:
+        text = p.read_text(errors="replace")
+        for name in {p.stem, title_of(p, text), *aliases_of(parse_fm(text))}:
+            key = fold_name(str(name))
+            if key:
+                claims.setdefault(key, set()).add(p)
+    return {k: next(iter(v)) for k, v in claims.items() if len(v) == 1}
+
+
 def fix_links_in_file(path: Path, broken_targets: set, remap, dry_run: bool = False,
                       prune: bool = False) -> dict:
     """Repair the broken links in one file.
 
     Only targets in `broken_targets` (the linter's own real-broken set for this
     file) are touched. A target that `remap` can resolve becomes a working
-    `[[stem]]` link. Unresolved targets are LEFT ALONE by default: an unresolved
+    `[[stem]]` link, and keeps its wording as the display text when the page's
+    file name reads differently. Unresolved targets are LEFT ALONE by default: an unresolved
     wikilink is a missing-page signal (and harmless in Obsidian), not an error.
     Only with `prune` are they de-linked to plain display text.
     """
@@ -362,6 +386,8 @@ def fix_links_in_file(path: Path, broken_targets: set, remap, dry_run: bool = Fa
         hit = remap(target)
         if hit is not None:
             counts["remapped"] += 1
+            if not alias and Path(target).name.lower() != hit.stem.lower():
+                alias = target               # reached by title or alias: the sentence reads as before
             return f"[[{hit.stem}|{alias}]]" if alias else f"[[{hit.stem}]]"
         if not prune:
             return m.group(0)
@@ -403,7 +429,9 @@ def main():
         def resolve(target):
             return _resolve(target, by_relpath, by_stem)
 
-        def remap(target):
+        names = name_index(files)
+
+        def remap(target, source=None):
             variants = []
             low = target.lower()
             for pre in ("wiki/", "raw/", ".wiki/"):
@@ -416,13 +444,17 @@ def main():
                 hit = resolve(v)
                 if hit is not None:
                     return hit
-            return None
+            # A page that exists under another spelling, its title or an alias.
+            # Obsidian does not follow an alias on its own. A page that links to
+            # its own alias is left alone.
+            hit = names.get(fold_name(target))
+            return hit if hit is not None and hit != source else None
 
         broken_by_file: dict[Path, set] = {}
         for p, target in real_broken:
             broken_by_file.setdefault(p, set()).add(target)
         for p, targets in broken_by_file.items():
-            c = fix_links_in_file(p, targets, remap, dry_run=args.dry_run,
+            c = fix_links_in_file(p, targets, lambda t, p=p: remap(t, p), dry_run=args.dry_run,
                                   prune=args.prune_links)
             links_remapped += c["remapped"]
             links_delinked += c["delinked"]

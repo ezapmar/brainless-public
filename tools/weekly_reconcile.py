@@ -24,9 +24,11 @@ sys.path.insert(0, os.path.join(VAULT, "tools"))
 from llm import run_prompt
 from owner_profile import OWNER, output_lang_directive  # noqa: E402
 from i18n import t, t_list  # noqa: E402
+from run_log import emit  # noqa: E402
 
 CONTEXT_FILE = os.path.join(VAULT, "_Agent-Context", "CONTEXT.md")
 REPORT_FILE = os.path.join(VAULT, "_Agent-Context", "CONTEXT-DRIFT.md")
+STATUS_FILE = os.path.join(VAULT, ".agents", "state", "llm_status")
 BRIEFING_DIR = os.path.join(VAULT, "Daily Briefings")
 PER_FILE_CAP = 4000
 TOTAL_CAP = 24000
@@ -61,19 +63,34 @@ def week_commits():
         return ""
 
 
+def llm_failure():
+    """The breadcrumb llm.py leaves: 'timeout', 'auth', 'error' plus detail."""
+    try:
+        with open(STATUS_FILE, errors="replace") as fh:
+            parts = fh.read().strip().split("\t")
+        return " ".join(parts[1:3]) or "unknown"
+    except OSError:
+        return "unknown"
+
+
 def main():
+    """Exit 1 when the report could not be written. On 27/09/2026 the model
+    call ran into its timeout, this returned 0, and the run log showed 'ok'
+    over a report that was a week old."""
     try:
         with open(CONTEXT_FILE, errors="replace") as fh:
             context_md = fh.read()
     except OSError as e:
         log(f"CONTEXT.md unreadable: {e}")
-        return
+        emit(report=0)
+        return 1
 
     briefings = last_week_briefings()
     commits = week_commits()
     if not briefings and not commits:
         log("No data in the last 7 days, reconciliation skipped.")
-        return
+        emit(report=0)
+        return 0
 
     evidence = ""
     if briefings:
@@ -105,8 +122,9 @@ REPORT FORMAT (markdown, use exactly these headings):
 
     result = run_prompt(prompt, timeout=300, lane="reconcile")
     if not result:
-        log("LLM call failed; report not written.")
-        return
+        log(f"LLM call failed ({llm_failure()}); report not written.")
+        emit(report=0)
+        return 1
 
     header = (
         t("weekly_reconcile.report_title") + "\n\n"
@@ -115,6 +133,7 @@ REPORT FORMAT (markdown, use exactly these headings):
     with open(REPORT_FILE, "w") as fh:
         fh.write(header + result + "\n")
     log(f"Report written: {REPORT_FILE}")
+    emit(report=1)
 
     no_drift = any(m in result for m in t_list("weekly_reconcile.no_drift_marker"))
     if not no_drift and shutil.which("osascript"):  # macOS-only notification
@@ -123,7 +142,8 @@ REPORT FORMAT (markdown, use exactly these headings):
              f'display notification "{t("weekly_reconcile.notify_text")}" with title "brainless"'],
             check=False,
         )
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

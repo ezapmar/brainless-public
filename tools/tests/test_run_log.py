@@ -77,6 +77,15 @@ class RunLog(unittest.TestCase):
         roll = self.rl.rollup(self.rl.load(), now=now)
         self.assertEqual((roll[0]["runs"], roll[0]["counts"]["captures"], roll[0]["last"]), (2, 5, "05:00"))
 
+    def test_rollup_keeps_the_last_value_of_a_score(self):
+        # Two compiles in one day: pages changed add up, the hit@5 score does not.
+        now = datetime(2026, 10, 2, 23, 59)
+        for h, changed in ((1, 200), (23, 118)):
+            self.rl.record("nightly_compile", "ok", 1.0, {"hit5": 88, "wiki_changed": changed},
+                           now=now.replace(hour=h))
+        counts = self.rl.rollup(self.rl.load(), now=now)[0]["counts"]
+        self.assertEqual((counts["hit5"], counts["wiki_changed"]), (88, 318))
+
     def test_job_name_comes_from_the_script(self):
         self.assertEqual(self.rl.job_name(["python3", "tools/nightly_processor.py", "--x"]), "nightly_processor")
 

@@ -72,6 +72,44 @@ def is_backed_off(filepath, quarantine, now):
     elapsed = now - rec.get("last_attempt", 0)
     return elapsed < backoff_for(rec.get("attempts", 0))
 
+
+class NoTextError(ValueError):
+    """The converter ran and found no text: a scan without a text layer."""
+
+
+def _fingerprint(filepath):
+    try:
+        st = os.stat(filepath)
+        return [int(st.st_mtime), st.st_size]
+    except OSError:
+        return None
+
+
+def park(filepath, quarantine, now):
+    """Record a file that cannot be read as it is. Unlike a backoff this has no
+    clock: a scan without text fails the same way every time, and until
+    03/10/2026 nine of them were retried, and reported, every week for good.
+    The record holds the file's mtime and size, so a replaced file is tried again."""
+    rec = quarantine.get(filepath, {"attempts": 0})
+    rec["attempts"] = rec.get("attempts", 0) + 1
+    rec["last_attempt"] = now
+    rec["parked"] = True
+    rec["fingerprint"] = _fingerprint(filepath)
+    quarantine[filepath] = rec
+
+
+def is_parked(filepath, quarantine):
+    """True while a parked file is still the file that failed."""
+    rec = quarantine.get(filepath)
+    return bool(rec and rec.get("parked") and rec.get("fingerprint") == _fingerprint(filepath))
+
+
+def prune_quarantine(quarantine):
+    """Drop records of files that are gone (renamed, moved, deleted)."""
+    for path in [p for p in quarantine if not os.path.exists(p)]:
+        del quarantine[path]
+
+
 # High-value knowledge resources get Summary + Fiche; originals stay recoverable.
 # General documents anywhere in the human homes will at least get converted to .md automatically.
 HIGH_VALUE_DIRS = [
@@ -176,7 +214,9 @@ def current_markdown(path, source):
 
 
 def process_file(filepath):
-    """Process one file. Returns one of: 'skipped', 'converted', 'failed'."""
+    """Process one file. Returns one of: 'skipped', 'converted', 'failed',
+    'unreadable' (no text in it, or a format the converter does not know:
+    retrying changes nothing, so the caller parks it)."""
     ext = os.path.splitext(filepath)[1].lower()
     if ext not in SUPPORTED_EXTENSIONS:
         return "skipped"
@@ -208,15 +248,22 @@ def process_file(filepath):
             os.makedirs(work_dir, exist_ok=True)
             convert_to_file(filepath, raw_md)
             if not current_markdown(raw_md, filepath):
-                raise ValueError("conversion produced empty or stale Markdown")
+                raise NoTextError("no text in the document (a scan without a text layer?)")
         except Exception as e:
             print(f"Failed to convert {filename}: {e}")
-            # Remove an empty work_dir we may have just created.
+            # Remove the empty output, then the work_dir if that leaves it
+            # empty. The empty _raw.md used to stay and keep the folder alive.
+            try:
+                if os.path.getsize(raw_md) == 0:
+                    os.remove(raw_md)
+            except OSError:
+                pass
             try:
                 os.rmdir(work_dir)
             except OSError:
                 pass
-            return "failed"
+            unreadable = isinstance(e, NoTextError) or type(e).__name__ == "UnsupportedFormatException"
+            return "unreadable" if unreadable else "failed"
 
     if is_high_value:
         for output, template in ((summary_md, SUMMARY_PROMPT), (fiche_md, FICHE_PROMPT)):
@@ -493,10 +540,13 @@ def main():
     git_sync()
 
     quarantine = load_quarantine()
+    prune_quarantine(quarantine)
     now = time.time()
     converted = 0
     failures = []          # newly-failed this run
     backed_off = 0         # skipped because they're in backoff
+    parked = 0             # skipped because they cannot be read as they are
+    newly_parked = []
 
     EXCLUDE_DIR_PARTS = {"venv", ".git", ".wiki", "archive", "_backup", "__pycache__", "tasks-sync", "_attachments"}
 
@@ -514,6 +564,11 @@ def main():
 
                         # Self-healing: a persistently failing file backs off
                         # exponentially instead of retrying every hour.
+                        if is_parked(filepath, quarantine):
+                            parked += 1
+                            continue
+                        if quarantine.get(filepath, {}).get("parked"):
+                            quarantine.pop(filepath)         # the file changed, try it afresh
                         if is_backed_off(filepath, quarantine, now):
                             backed_off += 1
                             continue
@@ -523,6 +578,12 @@ def main():
                         if status == "converted":
                             converted += 1
                             quarantine.pop(filepath, None)   # recovered, clear it
+                        elif status == "skipped":
+                            quarantine.pop(filepath, None)   # has its markdown now, nothing to retry
+                        elif status == "unreadable":
+                            park(filepath, quarantine, now)
+                            parked += 1
+                            newly_parked.append(filepath)
                         elif status == "failed":
                             rec = quarantine.get(filepath, {"attempts": 0})
                             rec["attempts"] = rec.get("attempts", 0) + 1
@@ -545,12 +606,18 @@ def main():
         subprocess.run(["git", "add", "."], cwd=BRAINLESS_ROOT)
         subprocess.run(["git", "commit", "-m", "Auto-process: Convert documents and generate summaries"], cwd=BRAINLESS_ROOT)
         print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] Batch complete: {converted} converted, "
-              f"{len(failures)} failed, {backed_off} backed off. Committed.")
+              f"{len(failures)} failed, {backed_off} backed off, {parked} parked. Committed.")
     else:
         print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] No new files. "
-              f"{len(failures)} failed, {backed_off} backed off.")
+              f"{len(failures)} failed, {backed_off} backed off, {parked} parked.")
 
-    print(f"RUNLOG converted={converted} failed={len(failures)} backed_off={backed_off}")
+    print(f"RUNLOG converted={converted} failed={len(failures)} backed_off={backed_off} parked={parked}")
+
+    # Said once, when a file is first parked; after that it is only counted.
+    if newly_parked:
+        sample = os.path.basename(newly_parked[0])
+        more = f" (+{len(newly_parked) - 1} more)" if len(newly_parked) > 1 else ""
+        notify(f"{len(newly_parked)} document(s) have no readable text, parked: {sample}{more}")
 
     # Alerting: surface failures instead of letting them rot silently in the log.
     if failures:

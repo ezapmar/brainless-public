@@ -1003,6 +1003,25 @@ def migrate_articles(dry: bool):
 
 
 # ─── Phase: ideas (auto-derived) ────────────────────────────────
+def known_ideas() -> tuple[dict, set]:
+    """({folded name: slug}, archived slugs) for the idea pages already written.
+
+    A name is a page's slug, its title or one of its aliases. The model picked a
+    fresh slug for the same idea night after night: by 04/10/2026 eight beliefs
+    and seven decisions had 54 idea pages, one idea on four of them. An idea is
+    written once; a merged or archived one is not written again.
+    """
+    from lint_wiki import fold_name, parse_fm
+    from wiki_dedupe import aliases_of, title_of
+    names = {}
+    for p in sorted((WIKI / "ideas").glob("*.md")):
+        text = p.read_text(errors="replace")
+        for name in (p.stem, title_of(p, text), *aliases_of(parse_fm(text))):
+            names.setdefault(fold_name(str(name)), p.stem)
+    archived = {p.stem for p in (WIKI / "_archive" / "ideas").glob("*.md")}
+    return names, archived
+
+
 def phase_ideas(dry: bool, full: bool):
     blob = ""
     for d in (VAULT / folder("beliefs"), VAULT / folder("decisions")):
@@ -1021,7 +1040,14 @@ def phase_ideas(dry: bool, full: bool):
         return
     if out_of_time("ideas", need=240):
         return
-    prompt = f"""Auto-derive 5-15 atomic ideas from these beliefs and decisions. Each idea = one note.
+    from lint_wiki import fold_name
+    names, archived = known_ideas()
+    have = "\n".join(f"- {slug}" for slug in sorted(set(names.values()))) or "(none yet)"
+    prompt = f"""Auto-derive up to 15 atomic ideas from these beliefs and decisions. Each idea = one note.
+
+These idea notes already exist. Do NOT restate any of them under a new slug or a new title.
+Output only ideas that none of them covers; an empty list is a good answer.
+{have}
 
 {CROSS_LINK_RULE}
 
@@ -1042,9 +1068,14 @@ Output ONLY valid JSON. For the body: {output_lang_directive()}
         print(f"[ideas] parse fail: {e}")
         return
     now = datetime.now()
+    written = 0
     for i, idea in enumerate(data.get("ideas", [])):
         slug = idea["slug"]
         dst = WIKI / "ideas" / f"{slug}.md"
+        same = names.get(fold_name(slug)) or names.get(fold_name(str(idea.get("title", ""))))
+        if dst.exists() or same or slug in archived:
+            print(f"[skip] idea already held: {slug}" + (f" (as {same})" if same and same != slug else ""))
+            continue
         # zk is the note's permanent slip-id: reuse the existing one so it never
         # churns on recompile; only mint a fresh one for a genuinely new idea.
         # Consecutive new ideas get consecutive minutes so ids in one run never collide.
@@ -1060,9 +1091,12 @@ status: seed
 
 {idea.get('body','')}
 """
+        dst.parent.mkdir(parents=True, exist_ok=True)
         dst.write_text(body)
+        written += 1
+        names[fold_name(slug)] = names[fold_name(str(idea.get("title", slug)))] = slug
         print(f"[ok] {dst.relative_to(VAULT)}")
-    print(f"phase ideas: {len(data.get('ideas', []))} idea(s)")
+    print(f"phase ideas: {written} new of {len(data.get('ideas', []))} proposed")
 
 
 # ─── Phase: index ───────────────────────────────────────────────

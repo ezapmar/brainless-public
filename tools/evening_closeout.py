@@ -26,6 +26,10 @@ Run `--dry-run` to print the section to stdout instead of writing it.
 
 Runs daily at 21:00 via the scheduler (<prefix>.brainless.closeout), before
 the 21:30 backup commit and the 23:00 nightly archiver.
+
+With two machines the morning briefing must reach origin before this runs,
+or the stub created here collides with it as a second new file on the same
+path. cron_wrapper.sh pushes the briefing within the hour for that reason.
 """
 import os
 import subprocess
@@ -40,6 +44,7 @@ from llm import run_prompt
 from calibrate import scan as calibration_scan
 from owner_profile import OWNER, output_lang_directive  # noqa: E402
 from i18n import t, t_list  # noqa: E402
+from run_log import emit  # noqa: E402
 
 CAPTURE_DIR = os.path.join(VAULT, "Thinking", "Daily")
 TASKS_FILE = os.path.join(VAULT, "_Agent-Context", "TASKS.md")  # the single task ledger
@@ -204,6 +209,9 @@ Write only the markdown content, nothing else. Do not invent: write nothing that
 
 
 def main():
+    """Exit 1 when there was material and the close-out could not be written,
+    so the run log and the failure notification show it. An idle day and a
+    close-out already in place are clean exits."""
     dry_run = "--dry-run" in sys.argv
     date_str = datetime.now().strftime("%Y-%m-%d")
     briefing_path = os.path.join(BRIEFING_DIR, f"daily-briefing-{date_str}.md")
@@ -212,14 +220,16 @@ def main():
     changes = todays_changes()
     if not captures and not changes:
         log("Nothing to close: no captures and no file changes today.")
-        return
+        emit(closeout=0)
+        return 0
 
     if os.path.exists(briefing_path) and not dry_run:
         with open(briefing_path, errors="replace") as fh:
             text = fh.read()
         if any(m in text for m in MARKERS):
                 log("Close-out already present for today. Skipping.")
-                return
+                emit(closeout=0)
+                return 0
 
     section = build_section(date_str, captures, changes)
     if section is None:
@@ -231,11 +241,12 @@ def main():
             log("LLM call timed out; close-out not written.")
         else:
             log(f"LLM call failed ({outcome or 'unknown'}): {detail[:80]}")
-        return
+        emit(closeout=0)
+        return 1
 
     if dry_run:
         print(section)
-        return
+        return 0
 
     os.makedirs(BRIEFING_DIR, exist_ok=True)
     if not os.path.exists(briefing_path):
@@ -245,7 +256,9 @@ def main():
     with open(briefing_path, "a") as fh:
         fh.write(section)
     log(f"Close-out appended to {briefing_path}")
+    emit(closeout=1)
     post_to_buzz(section)
+    return 0
 
 
 def post_to_buzz(text):
@@ -261,4 +274,4 @@ def post_to_buzz(text):
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

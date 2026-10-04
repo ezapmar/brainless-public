@@ -136,9 +136,10 @@ class DocumentRetentionTests(FixtureTest):
         self.convert.assert_called_once()
         self.assertEqual(self.source.read_text(), "updated original")
 
-    def test_empty_raw_conversion_is_failure(self):
+    def test_empty_raw_conversion_is_not_a_success(self):
+        # 'unreadable' since 03/10/2026: no text is parked, not retried (test_processor_parking).
         self.convert.side_effect = lambda src, dst: Path(dst).write_text("")
-        self.assertEqual(self.process(), "failed")
+        self.assertEqual(self.process(), "unreadable")
         self.assertTrue(self.source.exists())
         self.llm.assert_not_called()
 

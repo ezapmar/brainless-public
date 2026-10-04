@@ -395,12 +395,17 @@ are OCR'd by Claude into `Thinking/Daily/`, with the original archived under
 `_attachments/handwritten/`. `--images` is the watcher entry point that handles only the
 images, and a lock stops the watcher and the hourly run from reading the same page
 twice. Failing files enter `.agents/state/failed_conversions.json` and are retried on a
-backoff of 1 hour, 4 hours, 12 hours, 1 day and 3 days, capped at a week.
+backoff of 1 hour, 4 hours, 12 hours, 1 day and 3 days, capped at a week. A document with
+no text in it (a scan without a text layer), or in a format the converter does not know,
+is parked instead: it is reported once and skipped until the file itself changes. Records
+of files that are gone are dropped at the start of each run.
 
 **Philosophy.** Originals are never touched. LLM output is staged in a temporary
 directory, validated as non-empty and current, and only then moved into place, so a
 failed call cannot leave half a summary that the next run mistakes for a finished one.
 The backoff exists because a corrupt PDF retried every hour is a bill, not a strategy.
+Parking exists because a scan fails the same way every time: on a backoff alone, the same
+nine files raised the same alarm every week.
 The `git_sync` docstring records the four days in September when a bare `git pull`
 failed every hour; the pull now aborts a half-finished rebase instead of leaving the
 repo locked.
@@ -538,7 +543,9 @@ nothing to produce, so it runs every night, including the nights it has nothing 
    active concept in summaries and filed queries into a link. It uses no model, creates no
    page and rewrites no text. A bare first name that runs straight into another capitalised
    word is someone else and gets no link.
-7. ideas: derived from beliefs and decisions.
+7. ideas: derived from beliefs and decisions. An idea is written once: the prompt names
+   the ideas already held, and a proposal is skipped when a page has its slug, answers to
+   its title or an alias, or sits in `.wiki/_archive/ideas/` after a merge.
 8. index.
 
 A project mirror that shares its name with an entity page is written as
@@ -585,7 +592,9 @@ actually collide.
 **Description.** Reports broken links, missing pages ranked by how often they are
 wanted, orphan files, stale summaries and missing frontmatter, into
 `.wiki/_lint-report.md`. `--fix` backfills frontmatter, `--fix-links` remaps path
-mistakes, `--prune-links` also de-links unresolved targets, and `--dry-run` previews.
+mistakes and links that name a page by its title, an alias or another spelling (only when
+one page alone answers to that name; the wording stays as the display text),
+`--prune-links` also de-links unresolved targets, and `--dry-run` previews.
 
 **Philosophy.** Report by default; the nightly run never fixes. The one destructive
 option is off unless you ask twice. Unresolved links are counted as demand, since a
@@ -789,7 +798,9 @@ unchanged. It also keeps the last `RUNLOG k=v` line the job printed and records 
 `.agents/state/runs.jsonl`.
 
 A 14-day rollup goes to `_Agent-Context/RUNS-<host>.md`, one file per machine so the two
-never race. `health_check` reads both files and warns in three cases:
+never race. Tallies add up across a day's runs; scores and levels (`hit5`, `compile_rc`,
+the lint counts) keep the day's last value, so two compiles in one day do not double a
+score. `health_check` reads both files and warns in three cases:
 
 - a job's last run failed;
 - a job went quiet for 2.5 times its usual gap;
@@ -1017,7 +1028,9 @@ a question gets you five polite essays.
 **Description.** Reflects on the day (what happened, what carries over, open loops) and
 proposes one candidate seed, one decision worth writing down and any contradiction
 between today's actions and your written beliefs. Overdue reviews come from
-`calibrate.scan()`. `--dry-run` prints instead of writing.
+`calibrate.scan()`. `--dry-run` prints instead of writing. It exits 1 when the day had
+material and the model call failed, and reports `closeout=1` or `closeout=0` to the run
+log; an idle day and a close-out already in place are clean exits.
 
 **Philosophy.** It only ever proposes. The single write is one section in the briefing
 file, and nothing under `Thinking/`. The point is to make writing a seed a paste-away
@@ -1145,7 +1158,9 @@ actually happened.
 
 **Description.** Sundays at 20:00 it compares `_Agent-Context/CONTEXT.md` with the last
 seven days of briefings, close-outs and commit subjects, and writes
-`_Agent-Context/CONTEXT-DRIFT.md` with proposed updates.
+`_Agent-Context/CONTEXT-DRIFT.md` with proposed updates. It exits 1 when the report could
+not be written and reports `report=1` or `report=0`, so a failed model call no longer
+reads as a good run.
 
 **Philosophy.** Report only. `CONTEXT.md` is never modified, because a machine that
 edits its own memory of you is a subtle way to end up with a stranger's context. You
@@ -1306,7 +1321,8 @@ the days since the last one.
 
 **Description.** Sundays at 16:30 on the worker, before the research pass. `--count`
 writes `_Agent-Context/PILE-SCORECARD.md`: captures per graded decision, filed analyses
-per decision, Inbox files older than fourteen days, orphan wiki pages, concept pages
+per decision, Inbox files older than fourteen days (a machine ledger such as `Inbox/CRM`
+is not counted), orphan wiki pages, concept pages
 that draw on more than one home, decisions and challenged beliefs in the window, pages
 archived. `--archive` lists what four mechanical rules would move to `.wiki/_archive/`
 and `--apply` moves it: an unlinked analysis after 30 days (research, decision and

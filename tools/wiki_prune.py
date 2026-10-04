@@ -63,6 +63,10 @@ QUERIES = WIKI / "digests" / "queries"
 SUMMARIES = WIKI / "summaries"
 INBOX = VAULT / "Inbox"
 SPIKY = INBOX / "Spiky"
+# Machine ledgers that live under Inbox/ and wait for nobody. crm_capture.py
+# appends to one file per organisation; counted as pile, its 82 quiet files
+# took the stale count from 6 to 93 in a week (27/09/2026).
+INBOX_LEDGERS = (INBOX / "CRM",)
 SPIKY_ARCHIVE = VAULT / "Archive" / "Spiky"
 DECISIONS = VAULT / "Thinking" / "Decisions"
 BELIEFS = VAULT / "Thinking" / "Beliefs"
@@ -423,7 +427,9 @@ def count(now):
             captures_30 += sum(1 for p in base.rglob("*.md") if page_date(p, {}) >= cutoff)
 
     stale_cut = now - timedelta(days=INBOX_STALE_DAYS)
-    inbox_stale = sum(1 for p in INBOX.rglob("*.md") if page_date(p, {}) < stale_cut) if INBOX.exists() else 0
+    inbox_stale = sum(1 for p in INBOX.rglob("*.md")
+                      if not any(d in p.parents for d in INBOX_LEDGERS)
+                      and page_date(p, {}) < stale_cut) if INBOX.exists() else 0
 
     task_cut = (now - timedelta(days=TASK_STALE_DAYS)).strftime("%Y-%m-%d")
     tasks_open = tasks_stale = 0

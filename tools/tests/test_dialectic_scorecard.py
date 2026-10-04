@@ -242,6 +242,19 @@ class TwoPageRenderTest(unittest.TestCase):
         self.assertEqual(dialectic._field("no such label", "finding"), "")
         self.assertEqual(dialectic._field(dialectic.NO_REPLY, "finding"), "")
 
+    def test_split_synthesis_keeps_headings_inside_a_fenced_draft(self):
+        text = ("### Synthesis\nfine\n### Proposal\n```markdown\n---\nlang: tr\n---\n# Draft\n"
+                "## Why\nbecause\n```\n### Method trace\ntrace")
+        parts = dialectic.split_synthesis(text)
+        self.assertIn("## Why\nbecause\n```", parts["proposal"])
+        self.assertEqual(parts["method trace"], "trace")
+        self.assertNotIn("why", parts)
+
+    def test_split_synthesis_closes_a_fence_the_model_left_open(self):
+        parts = dialectic.split_synthesis("### Proposal\n```markdown\n# Draft\n## Cut off here")
+        self.assertTrue(parts["proposal"].endswith("```"))
+        self.assertEqual(parts["proposal"].count("```"), 2)
+
     def test_split_synthesis_keeps_every_block(self):
         parts = dialectic.split_synthesis(self.SYNTH)
         self.assertIn("**Conclusion:** Settled little.", parts["synthesis"])

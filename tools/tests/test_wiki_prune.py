@@ -152,6 +152,10 @@ class PruneVault(unittest.TestCase):
     def test_count_writes_a_machine_readable_line_and_the_beliefs_criterion(self):
         self.write(f"Inbox/Spiky/{days_ago(30)} Old.md", "# x\n")
         self.write(f"Inbox/Spiky/{days_ago(2)} New.md", "# x\n")
+        # A machine ledger under Inbox/ is not pile, however old it is.
+        ledger = self.write("Inbox/CRM/Acme.md", "# Acme\n")
+        old = (self.now - timedelta(days=40)).timestamp()
+        os.utime(ledger, (old, old))
         self.write("Thinking/Decisions/Decision - A.md",
                    fm(date=days_ago(5), type="decision") + "# A\n\n## Outcome\nWent well.\n")
         self.write("Thinking/Decisions/Decision - B.md",
