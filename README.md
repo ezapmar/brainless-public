@@ -15,6 +15,8 @@
 </p>
 
 <p align="center">
+  <a href="https://ezapmar.github.io/brainless-public/">Site</a> &nbsp;·&nbsp;
+  <a href="https://ezapmar.github.io/brainless-public/whats-new.html">What's new</a> &nbsp;·&nbsp;
   <a href="#install">Install</a> &nbsp;·&nbsp;
   <a href="#the-first-ten-minutes">First ten minutes</a> &nbsp;·&nbsp;
   <a href="https://github.com/ezapmar/brainless-public/wiki">Wiki</a> &nbsp;·&nbsp;

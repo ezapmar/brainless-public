@@ -81,13 +81,37 @@ section { padding-block: 72px; }
 .section-head { display: grid; gap: 12px; margin-bottom: 40px; }
 .section-head p { color: var(--muted); font-size: 1.05rem; }
 
-/* nav */
-.nav { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding-block: 18px; }
-.brand { display: flex; align-items: center; gap: 10px; color: var(--fg); font-weight: 500; }
-.brand img { width: 36px; height: 36px; }
-.nav-links { display: flex; gap: 22px; flex-wrap: wrap; font-size: 0.95rem; }
-.nav-links a { color: var(--fg); }
-.nav-links a:hover, .nav-links a[aria-current="page"] { color: var(--accent); text-decoration: none; }
+/* nav: the links are knots on a thread, the way notes sit on the mark's lines.
+   The header stays on night in both themes and ends in a woven selvedge. */
+.site-nav {
+  background: var(--night); color: var(--bone);
+  border-bottom: 6px solid var(--madder);
+  border-image: repeating-linear-gradient(90deg,
+    var(--madder) 0 14px, var(--cream) 14px 18px, var(--teal) 18px 32px, var(--cream) 32px 36px,
+    var(--saffron) 36px 50px, var(--cream) 50px 54px) 6;
+}
+.nav { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding-block: 16px; flex-wrap: wrap; }
+.brand { display: flex; align-items: center; gap: 12px; color: var(--bone); font-family: var(--display); font-weight: 700; font-size: 1.1rem; }
+.brand img { width: 40px; height: 40px; }
+.brand:hover { text-decoration: none; color: var(--cream); }
+.nav-links { display: flex; align-items: center; flex-wrap: wrap; gap: 2px 0; position: relative; }
+.nav-links a {
+  position: relative; display: inline-flex; align-items: center; gap: 9px; padding: 6px 13px;
+  font-family: var(--display); font-weight: 500; font-size: 0.76rem; letter-spacing: 0.13em;
+  text-transform: uppercase; color: var(--bone); background: var(--night);
+}
+.nav-links a::before {
+  content: ""; width: 7px; height: 7px; flex: none;
+  border: 1.5px solid var(--cream); transform: rotate(45deg);
+}
+.nav-links a:hover, .nav-links a:focus-visible { text-decoration: none; color: var(--cream); }
+.nav-links a:hover::before, .nav-links a[aria-current="page"]::before { background: var(--vermilion); border-color: var(--vermilion); }
+.nav-links a[aria-current="page"] { color: var(--saffron); }
+@media (min-width: 760px) {
+  .nav-links::before { content: ""; position: absolute; left: 8px; right: 8px; top: 50%; height: 1px; background: #2E4256; }
+  .nav-links a:first-child { padding-left: 0; }
+  .nav-links a:last-child { padding-right: 0; }
+}
 
 /* hero: always on night, because the banner is the only wordmark */
 .hero { background: var(--night); color: var(--bone); padding-block: 48px 72px; }
