@@ -5,6 +5,7 @@ Description=brainless: dialectic Buzz trigger timer (poll #dialectic every minut
 OnBootSec=2min
 OnUnitActiveSec=60s
 AccuracySec=15s
+# A minute poller has nothing to catch up after downtime; the boot tick covers it.
 Persistent=false
 
 [Install]

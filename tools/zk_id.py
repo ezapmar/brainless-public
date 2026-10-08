@@ -101,7 +101,7 @@ def collect(dirs) -> tuple[list[Path], set[str]]:
         if ".git" in p.parts:
             continue
         try:
-            found = existing_id(p.read_text(errors="replace"))
+            found = existing_id(p.read_text(errors="replace", encoding="utf-8"))
         except OSError:
             continue
         if found:
@@ -122,7 +122,7 @@ def main() -> int:
     notes, taken = collect(args.dirs)
     missing, skipped = [], []
     for path in notes:
-        text = path.read_text(errors="replace")
+        text = path.read_text(errors="replace", encoding="utf-8")
         if existing_id(text):
             continue
         if not _FRONTMATTER.match(text):
@@ -139,7 +139,7 @@ def main() -> int:
         taken.add(zk)
         rel = path.relative_to(VAULT)
         if args.apply:
-            path.write_text(insert_id(text, zk))
+            path.write_text(insert_id(text, zk), encoding="utf-8")
             print(f"wrote  zk: {zk}  {rel}")
         else:
             print(f"would write  zk: {zk}  {rel}")

@@ -7,15 +7,12 @@ Drafts land under Inbox/Content Drafts/, a summary goes to Buzz.
 It never publishes; it only proposes drafts, the decision is the owner's.
 """
 import os
-import sys
 from datetime import datetime, timedelta
 
 VAULT = os.environ.get("BRAINLESS_VAULT") or os.path.expanduser("~/projects/brainless")
-sys.path.insert(0, os.path.join(VAULT, "tools"))
-sys.path.insert(0, os.path.join(VAULT, ".agents", "scripts"))
 from llm import run_prompt
-from owner_profile import OWNER, WORKER, output_lang_directive  # noqa: E402
-from i18n import t  # noqa: E402
+from owner_profile import OWNER, WORKER, output_lang_directive
+from i18n import t
 from buzz_delivery import send
 from functools import partial
 send_buzz = partial(send, 'content')
@@ -27,13 +24,12 @@ OUT_DIR = os.path.join(VAULT, "Inbox", "Content Drafts")
 LOOKBACK_DAYS = 7
 
 
-def log(msg):
-    print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] {msg}")
+from logline import log
 
 
 def read_file(path, limit=None):
     try:
-        with open(path) as fh:
+        with open(path, encoding="utf-8") as fh:
             s = fh.read()
         return s[:limit] if limit else s
     except OSError:
@@ -89,12 +85,12 @@ RULES:
     os.makedirs(OUT_DIR, exist_ok=True)
     stamp = datetime.now().strftime("%Y-%m-%d")
     path = os.path.join(OUT_DIR, t("content_engine.drafts_filename", stamp=stamp))
-    with open(path, "w") as fh:
+    with open(path, "w", encoding="utf-8") as fh:
         fh.write(t("content_engine.file_title", stamp=stamp) + "\n\n" +
                  t("content_engine.file_source_line", worker=WORKER, owner=OWNER) + "\n\n" +
                  f"{out}\n")
     log(f"Drafts written: {path}")
-    titles = [l.strip("# ").strip() for l in out.splitlines() if l.startswith("## ")]
+    titles = [line.strip("# ").strip() for line in out.splitlines() if line.startswith("## ")]
     send_buzz(t("content_engine.telegram_header") + "\n" +
                   "\n".join(f"- {x}" for x in titles) +
                   "\n\n" + t("content_engine.telegram_vault_line", filename=os.path.basename(path)))

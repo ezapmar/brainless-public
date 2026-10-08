@@ -11,6 +11,7 @@ PY_BINS=$(ls -d "$HOME"/Library/Python/*/bin 2>/dev/null | sort -Vr | tr '\n' ':
 NODE_BIN=$(ls -d "$HOME"/.nvm/versions/node/*/bin 2>/dev/null | sort -V | tail -1)
 export PATH="${PY_BINS}$HOME/.local/bin:${NODE_BIN:+$NODE_BIN:}/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin"
 cd "${BRAINLESS_VAULT:-$HOME/projects/brainless}" || exit 1
+export PYTHONPATH="$PWD/tools:$PWD/.agents/scripts${PYTHONPATH:+:$PYTHONPATH}"
 # Prefer the vault's own virtualenv when the installer created one.
 if [ -x .venv/bin/python3 ]; then export PATH="$PWD/.venv/bin:$PATH"; fi
 mkdir -p logs
@@ -84,5 +85,12 @@ if [ -f "$BRIEFING" ] && { [ -n "$(git status --porcelain -- "$BRIEFING")" ] \
     || ! git diff --quiet origin/master HEAD -- "$BRIEFING" 2>/dev/null; }; then
   bash .agents/scripts/vault_backup.sh --only "$BRIEFING" >> logs/vault_backup.log 2>&1
 fi
+
+# Commit and push everything every hour, the owner's own edits included, not
+# only at 21:30. A single missed or refused nightly push used to leave a full
+# day of work on the laptop alone (2026-10-07). The full backup run does it, so
+# the network wait, the remote guard and the retry stay in one place; only the
+# semantic index refresh is left to the nightly run.
+bash .agents/scripts/vault_backup.sh --no-index >> logs/vault_backup.log 2>&1
 
 exit "$status"

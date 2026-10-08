@@ -26,11 +26,14 @@ So this script does two things, in the order the three layers need them.
              .wiki/_archive/. Nothing is deleted; git keeps the history and
              LOG.md keeps the reasons. Dry run by default; --apply moves.
 
-The rules never touch a human home except one, approved on 2026-09-19: a
+The rules never touch a human home except two. Approved on 2026-09-19: a
 Spiky meeting report that has been summarised, mined for tasks and left in
-Inbox/ for two weeks moves to Archive/Spiky/. That is the CLAUDE.md map, "a
-processed file leaves Inbox", finally executed. Everything else in the human
-homes is listed under "Pending" in the scorecard and left where it is.
+Inbox/ for two weeks moves to Archive/Spiky/. Approved on 2026-10-04: a weekly
+file of content drafts, summarised and two weeks old, moves to
+Archive/Content Drafts/; the content engine writes one every week and nothing
+else ever moved them. That is the CLAUDE.md map, "a processed file leaves
+Inbox", finally executed. Everything else in the human homes is listed under
+"Pending" in the scorecard and left where it is.
 
 Every move is written twice: .agents/state/prune_log.jsonl for machines and
 .wiki/_archive/LOG.md for the owner, with the rule and the reason. To undo
@@ -40,10 +43,10 @@ one, git mv the file back and mark the row.
   python3 tools/wiki_prune.py --archive              # list what would move
   python3 tools/wiki_prune.py --archive --apply      # move it, log it
   python3 tools/wiki_prune.py --archive --only spiky --apply
+  python3 tools/wiki_prune.py --archive --only drafts --apply
 """
 import argparse
 import json
-import os
 import re
 import shutil
 import sys
@@ -53,9 +56,9 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import NamedTuple
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from i18n import t  # noqa: E402
-from lint_wiki import (VAULT, WIKI, all_wiki_files, link_graph, orphan_pages,  # noqa: E402
+from fsutil import atomic_write
+from i18n import t
+from lint_wiki import (VAULT, WIKI, all_wiki_files, link_graph, orphan_pages,
                        parse_fm)
 
 ARCHIVE = WIKI / "_archive"
@@ -68,6 +71,8 @@ SPIKY = INBOX / "Spiky"
 # took the stale count from 6 to 93 in a week (27/09/2026).
 INBOX_LEDGERS = (INBOX / "CRM",)
 SPIKY_ARCHIVE = VAULT / "Archive" / "Spiky"
+DRAFTS = INBOX / "Content Drafts"
+DRAFTS_ARCHIVE = VAULT / "Archive" / "Content Drafts"
 DECISIONS = VAULT / "Thinking" / "Decisions"
 BELIEFS = VAULT / "Thinking" / "Beliefs"
 IDEAS = VAULT / "Thinking" / "Ideas"
@@ -92,7 +97,9 @@ TASK_STALE_DAYS = 60
 SEED_LONELY_DAYS = 30
 SCORECARD_ROWS = 20
 GRAPH_ROWS = 26          # weeks of graph-health history (tools/wiki_metrics.py)
-RULES = ("query", "summary", "orphan", "spiky")
+RULES = ("query", "summary", "orphan", "spiky", "drafts")
+# Rules that move a source out of a human home; its summary follows it.
+SOURCE_RULES = ("spiky", "drafts")
 
 _DATE = re.compile(r"(20\d\d-\d\d-\d\d)")
 
@@ -106,13 +113,12 @@ class Move(NamedTuple):
     age: int
 
 
-def log(msg):
-    print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] {msg}")
+from logline import log
 
 
 def read(path):
     try:
-        return Path(path).read_text(errors="replace")
+        return Path(path).read_text(errors="replace", encoding="utf-8")
     except OSError:
         return ""
 
@@ -152,6 +158,24 @@ def page_date(p: Path, fm=None) -> datetime:
         return datetime.fromtimestamp(p.stat().st_mtime)
     except OSError:
         return datetime.now()
+
+
+def inbox_date(p: Path) -> datetime:
+    """When a file reached the Inbox. The name carries the date for most
+    captures, but a podcast or a video is named after the day it was published:
+    its `captured` stamp is the day it arrived."""
+    m = _DATE.search(parse_fm(read(p)).get("captured", "") or "")
+    if m:
+        return datetime.strptime(m.group(1), "%Y-%m-%d")
+    return page_date(p, {})
+
+
+def is_pile(p: Path) -> bool:
+    """False for what sits in Inbox/ by design: a machine ledger, or a standing
+    pad the owner pastes into (frontmatter `type: inbox`)."""
+    if any(d in p.parents for d in INBOX_LEDGERS):
+        return False
+    return parse_fm(read(p)).get("type", "").strip() != "inbox"
 
 
 def age_days(p: Path, now: datetime, fm=None) -> int:
@@ -251,6 +275,22 @@ def rule_spiky(now, summaries=None):
         yield Move("spiky", f, dst, t("wiki_prune.reason_spiky", days=age), 0, age)
 
 
+def rule_drafts(now, summaries=None):
+    """A weekly drafts file the compiler has summarised, after two weeks."""
+    if not DRAFTS.exists():
+        return
+    summaries = summaries if summaries is not None else summary_index()
+    for f in sorted(DRAFTS.glob("*.md")):
+        if nfc(rel(f)) not in summaries:
+            continue
+        d = page_date(f, {})
+        age = (now - d).days
+        if age <= INBOX_STALE_DAYS:
+            continue
+        dst = DRAFTS_ARCHIVE / d.strftime("%Y-%m") / f.name
+        yield Move("drafts", f, dst, t("wiki_prune.reason_drafts", days=age), 0, age)
+
+
 def candidates(now, only=None, files=None, graph=None):
     files = files if files is not None else all_wiki_files()
     graph = graph if graph is not None else link_graph(files)
@@ -270,6 +310,8 @@ def candidates(now, only=None, files=None, graph=None):
             taken.add(m.src)
     if "spiky" in only:
         moves.extend(rule_spiky(now))
+    if "drafts" in only:
+        moves.extend(rule_drafts(now))
     return moves
 
 
@@ -280,7 +322,7 @@ def candidates(now, only=None, files=None, graph=None):
 def ensure_archive_readme():
     ARCHIVE.mkdir(parents=True, exist_ok=True)
     if not README_MD.exists():
-        README_MD.write_text(no_dashes(t("wiki_prune.readme")) + "\n")
+        atomic_write(README_MD, no_dashes(t("wiki_prune.readme")) + "\n")
 
 
 def retarget_summary(summaries, old_src, new_src):
@@ -290,14 +332,14 @@ def retarget_summary(summaries, old_src, new_src):
     text = read(s)
     new_text = re.sub(r"^source:\s*.*$", f"source: {new_src}", text, count=1, flags=re.M)
     if new_text != text:
-        s.write_text(new_text)
+        atomic_write(s, new_text)
 
 
 def append_log(rows):
     """Both logs. The jsonl is machine state, outside git; LOG.md is the
     durable one and the one the owner reads."""
     STATE_DIR.mkdir(parents=True, exist_ok=True)
-    with open(PRUNE_LOG, "a") as fh:
+    with open(PRUNE_LOG, "a", encoding="utf-8") as fh:
         for r in rows:
             fh.write(json.dumps(r, ensure_ascii=False) + "\n")
     header = [t("wiki_prune.log_title"), "", t("wiki_prune.log_intro"), "",
@@ -313,7 +355,7 @@ def append_log(rows):
             body = []
     else:
         body = []
-    LOG_MD.write_text(no_dashes("\n".join(header + new_lines + body)) + "\n")
+    atomic_write(LOG_MD, no_dashes("\n".join(header + new_lines + body)) + "\n")
 
 
 def apply(moves, now):
@@ -328,7 +370,7 @@ def apply(moves, now):
         shutil.move(str(m.src), str(m.dst))
         # NFC, as the compiler writes its source lines: macOS hands back NFD
         # names and the worker is Linux, where the two are different files.
-        if m.rule == "spiky":
+        if m.rule in SOURCE_RULES:
             retarget_summary(summaries, rel(m.src), nfc(rel(m.dst)))
         rows.append({"date": now.strftime("%Y-%m-%d"), "rule": m.rule,
                      "from": nfc(rel(m.src)), "to": nfc(rel(m.dst)), "reason": m.reason,
@@ -428,8 +470,7 @@ def count(now):
 
     stale_cut = now - timedelta(days=INBOX_STALE_DAYS)
     inbox_stale = sum(1 for p in INBOX.rglob("*.md")
-                      if not any(d in p.parents for d in INBOX_LEDGERS)
-                      and page_date(p, {}) < stale_cut) if INBOX.exists() else 0
+                      if is_pile(p) and inbox_date(p) < stale_cut) if INBOX.exists() else 0
 
     task_cut = (now - timedelta(days=TASK_STALE_DAYS)).strftime("%Y-%m-%d")
     tasks_open = tasks_stale = 0
@@ -579,7 +620,7 @@ def scorecard_markdown(c, moves=None):
 
 def write_scorecard(c, moves=None):
     SCORECARD_MD.parent.mkdir(parents=True, exist_ok=True)
-    SCORECARD_MD.write_text(scorecard_markdown(c, moves))
+    atomic_write(SCORECARD_MD, scorecard_markdown(c, moves))
 
 
 # --------------------------------------------------------------------------

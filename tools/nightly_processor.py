@@ -9,19 +9,18 @@ import shutil
 import sys
 
 # Configuration
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from paths import folder, vault_root  # noqa: E402
+from paths import folder, vault_root
+import frontmatter
 VAULT_ROOT = vault_root()
 CAPTURE_DIR = os.path.join(VAULT_ROOT, folder("daily"))
 ARCHIVE_DIR = os.path.join(VAULT_ROOT, 'Archive/Daily-Captures')
 DIGESTS_DIR = os.path.join(VAULT_ROOT, '.wiki/digests')
 PROJECTS_WORK_DIR = os.path.join(VAULT_ROOT, 'Work')
 PROJECTS_PERSONAL_DIR = os.path.join(VAULT_ROOT, 'Personal')
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from llm import run_prompt  # noqa: E402
-from owner_profile import OWNER, lang_name, CROSS_LINK_RULE  # noqa: E402
-from i18n import t, t_list  # noqa: E402
-from task_dedup import is_duplicate  # noqa: E402
+from llm import run_prompt
+from owner_profile import OWNER, lang_name, CROSS_LINK_RULE
+from i18n import t, t_list
+from task_dedup import is_duplicate
 
 
 # Digest budget. Every capture used to enter the prompt whole, so one heavy day
@@ -67,16 +66,12 @@ def write_digest(path, summary):
     and drops its frontmatter, so the file still has one.
     """
     if not os.path.exists(path):
-        with open(path, "w") as f:
+        with open(path, "w", encoding="utf-8") as f:
             f.write(summary)
         return
-    body = summary
-    if body.startswith("---\n"):
-        end = body.find("\n---", 4)
-        if end != -1:
-            body = body[end + 4:].lstrip("\n")
+    body = frontmatter.strip(summary).lstrip("\n")
     stamp = datetime.now().strftime("%H:%M")
-    with open(path, "a") as f:
+    with open(path, "a", encoding="utf-8") as f:
         f.write(f"\n\n---\n\n<!-- later digest, {stamp} -->\n{body}")
 
 
@@ -87,7 +82,7 @@ def process_notes(files, labels=None):
         label = labels.get(os.path.basename(f), "story")
         cap = EPIC_FILE_CAP if label == "epic" else PER_FILE_CAP
         try:
-            with open(f, 'r') as file:
+            with open(f, 'r', encoding="utf-8") as file:
                 raw_content += f"\n--- Source: {os.path.basename(f)} [{label}] ---\n"
                 raw_content += file.read()[:cap]
                 raw_content += "\n"
@@ -157,7 +152,7 @@ TASKS_SECTIONS = t_list("nightly_processor.tasks_section")
 def _clean_task(text, limit=160):
     """Single-line, pipe-free, tag-free title so gtasks_sync/task_reminder parse it
     and Google Tasks gets a readable title. Mirrors spiky_actions._clean_field."""
-    text = re.sub(r"\s#[\w/-]+", "", text)             # drop #tags
+    text = re.sub(r"\s#(?!\d+\b)[\w/-]+", "", text)    # drop #tags; "#4802366" is a ticket, not a tag
     text = re.sub(r"\(from \d{4}-\d{2}-\d{2}\)", "", text)
     text = re.sub(r"[\r\n\t]+", " ", text)
     text = text.replace("|", "/").replace("[[", "(").replace("]]", ")")
@@ -171,13 +166,13 @@ def sync_tasks(summary, date_str):
     if "## Action Items" not in summary:
         return
     task_section = summary.split("## Action Items", 1)[1]
-    raw = [re.sub(r"^- \[ \]\s*", "", l.strip()) for l in task_section.splitlines()
-           if l.strip().startswith("- [ ]")]
+    raw = [re.sub(r"^- \[ \]\s*", "", line.strip()) for line in task_section.splitlines()
+           if line.strip().startswith("- [ ]")]
     titles = [t for t in (_clean_task(r) for r in raw) if t]
     if not titles:
         return
     try:
-        with open(TASKS_FILE) as f:
+        with open(TASKS_FILE, encoding="utf-8") as f:
             content = f.read()
     except OSError:
         content = t("nightly_processor.ledger_template")
@@ -201,13 +196,13 @@ def sync_tasks(summary, date_str):
         print("Tasks: nothing new (all already in ledger)")
         return
     lines = content.splitlines(keepends=True)
-    stripped = [l.strip() for l in lines]
+    stripped = [line.strip() for line in lines]
     section = next((h for h in TASKS_SECTIONS if h in stripped), None)
     if section is None:
         section = TASKS_SECTION
         lines.append(f"\n{section}\n")
-    for idx, l in enumerate(lines):
-        if l.strip() == section:
+    for idx, line in enumerate(lines):
+        if line.strip() == section:
             end = idx + 1
             while end < len(lines) and not lines[end].startswith("## "):
                 end += 1
@@ -215,7 +210,7 @@ def sync_tasks(summary, date_str):
                 end -= 1
             lines[end:end] = rows
             break
-    with open(TASKS_FILE, 'w') as f:
+    with open(TASKS_FILE, 'w', encoding="utf-8") as f:
         f.write("".join(lines))
     print(f"Synced {len(rows)} tasks to _Agent-Context/TASKS.md")
 
@@ -336,14 +331,14 @@ def main():
         date_filename = date_str + ".md"
         os.makedirs(DIGESTS_DIR, exist_ok=True)
         output_path = os.path.join(DIGESTS_DIR, date_filename)
-        
+
         try:
             write_digest(output_path, summary)
             print(f"Summary saved to {output_path}")
-            
+
             # Sync tasks to central file
             sync_tasks(summary, date_str)
-            
+
             date_archive_dir = os.path.join(ARCHIVE_DIR, datetime.now().strftime("%Y-%m-%d"))
             os.makedirs(date_archive_dir, exist_ok=True)
             for f in notes:

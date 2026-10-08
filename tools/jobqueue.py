@@ -15,12 +15,15 @@ this queue decides what is due:
      reachable. A job that needs neither (lint) runs offline.
   3. A failed job is retried with backoff (5 min, 30 min, 2 h, 6 h), then left
      as failed for `brainless queue` to show. A job stuck "running" for three
-     hours (a crash, a sleep mid-run) is put back.
+     hours (a crash, a sleep mid-run) is put back, and that costs an attempt
+     like any failure, so a job that kills every tick ends as failed instead
+     of running forever.
 
 State is one SQLite file, .agents/state/jobs.sqlite3, so it needs no daemon and
-no fcntl (Windows has none). One tick runs at a time: a lock file made with
-O_EXCL, reclaimed when stale. Every job runs through run_log.py, so it shows up
-in RUNS-<host>.md like the timer jobs do.
+no fcntl (Windows has none). One tick runs at a time: a lease row in that same
+file, taken under BEGIN IMMEDIATE, renewed before every job, and free again
+when it has expired or its process is gone. Every job runs through run_log.py,
+so it shows up in RUNS-<host>.md like the timer jobs do.
 
     brainless tick [--dry-run]           enqueue what is due, then drain
     brainless queue [list|add <kind>|retry|clear]
@@ -31,6 +34,7 @@ in RUNS-<host>.md like the timer jobs do.
 import argparse
 import json
 import os
+import platform
 import shutil
 import sqlite3
 import subprocess
@@ -38,14 +42,13 @@ import sys
 import time
 from datetime import datetime, timedelta
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from paths import folder, vault_root  # noqa: E402
-import config  # noqa: E402,F401  brainless.toml before the env is read
+from paths import child_env, folder, vault_root
+import config  # noqa: F401  brainless.toml before the env is read
 
 ENGINE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 BACKOFF = (300, 1800, 7200, 21600)
 STALE_RUNNING = 3 * 3600
-STALE_LOCK = 3 * 3600
+LEASE = 3 * 3600          # a tick renews before each job; jobs time out at 5400 s
 
 # kind -> (argv relative to the engine, needs_net, needs_llm, cadence).
 # Order matters: when several are due in one tick they run in this order, so the
@@ -84,6 +87,11 @@ def connect():
         CREATE TABLE IF NOT EXISTS periodic (
             kind TEXT PRIMARY KEY,
             last_run REAL NOT NULL);
+        CREATE TABLE IF NOT EXISTS lease (
+            id INTEGER PRIMARY KEY CHECK (id = 1),
+            pid INTEGER NOT NULL,
+            host TEXT NOT NULL,
+            expires REAL NOT NULL);
     """)
     return db
 
@@ -135,9 +143,17 @@ def claim(db, can_net, can_llm, now=None):
 def finish(db, row, ok, error="", now=None):
     now = now or time.time()
     if ok:
-        db.execute("UPDATE jobs SET state='done', last_error='', updated=? WHERE id=?", (now, row["id"]))
-        db.execute("INSERT INTO periodic(kind,last_run) VALUES(?,?) "
-                   "ON CONFLICT(kind) DO UPDATE SET last_run=excluded.last_run", (row["kind"], now))
+        # One transaction: a crash between the two statements would mark the
+        # job done but not the period, and the next tick would run it again.
+        db.execute("BEGIN IMMEDIATE")
+        try:
+            db.execute("UPDATE jobs SET state='done', last_error='', updated=? WHERE id=?", (now, row["id"]))
+            db.execute("INSERT INTO periodic(kind,last_run) VALUES(?,?) "
+                       "ON CONFLICT(kind) DO UPDATE SET last_run=excluded.last_run", (row["kind"], now))
+            db.execute("COMMIT")
+        except BaseException:
+            db.execute("ROLLBACK")
+            raise
         return
     attempts = row["attempts"] + 1
     if attempts > len(BACKOFF):
@@ -149,9 +165,16 @@ def finish(db, row, ok, error="", now=None):
 
 
 def requeue_stale(db, now=None):
+    """A job still 'running' after STALE_RUNNING died with its tick (crash,
+    shutdown, sleep). It is put back as a failed attempt, with backoff, so a
+    job that takes every tick down with it reaches 'failed' instead of
+    running again every tick with no error on record."""
     now = now or time.time()
-    return db.execute("UPDATE jobs SET state='queued', updated=? WHERE state='running' AND updated<?",
-                      (now, now - STALE_RUNNING)).rowcount
+    rows = db.execute("SELECT * FROM jobs WHERE state='running' AND updated<?",
+                      (now - STALE_RUNNING,)).fetchall()
+    for row in rows:
+        finish(db, row, False, "tick died mid-run", now=now)
+    return len(rows)
 
 
 def forget_old(db, now=None, days=30):
@@ -225,13 +248,28 @@ def _argv(kind, args):
             "--job", f"lite-{kind}", "--", *cmd]
 
 
+# On Windows the scheduler starts the tick with pythonw, which has no console; a
+# console child would open a window of its own. CREATE_NO_WINDOW gives it a
+# hidden console that its own children (git, a model CLI) share.
+_NO_WINDOW = {"creationflags": subprocess.CREATE_NO_WINDOW} if sys.platform.startswith("win") else {}
+
+
+def _log_when_windowless():
+    """pythonw has no stdout; the tick log is where launchd and systemd send it."""
+    if sys.stdout is None:
+        path = os.path.join(vault_root(), "logs", "lite-tick.log")
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        sys.stdout = sys.stderr = open(path, "a", encoding="utf-8", buffering=1)
+
+
 def run_job(row, timeout=None):
     """Run one claimed job; (ok, error text)."""
     timeout = timeout or int(os.environ.get("BRAINLESS_JOB_TIMEOUT", "5400"))
-    env = dict(os.environ, BRAINLESS_VAULT=vault_root())
+    env = child_env(PYTHONUTF8="1")
     try:
         r = subprocess.run(_argv(row["kind"], json.loads(row["args"])), cwd=ENGINE, env=env,
-                           capture_output=True, text=True, timeout=timeout)
+                           capture_output=True, text=True, encoding="utf-8", errors="replace",
+                           timeout=timeout, **_NO_WINDOW)
     except subprocess.TimeoutExpired:
         return False, f"timed out after {timeout}s"
     except OSError as e:
@@ -242,42 +280,95 @@ def run_job(row, timeout=None):
     return True, ""
 
 
-class Lock:
-    """One tick at a time, with no fcntl: O_EXCL create, stale reclaim."""
+def _pid_alive(pid):
+    """Is a process with this id still running on this machine? Unknown counts
+    as alive, so only the lease expiry can override a check that cannot run."""
+    if pid <= 0:
+        return False
+    if sys.platform.startswith("win"):
+        try:
+            import ctypes
+            k32 = ctypes.windll.kernel32
+            handle = k32.OpenProcess(0x1000, False, pid)   # PROCESS_QUERY_LIMITED_INFORMATION
+            if not handle:
+                return False
+            code = ctypes.c_ulong()
+            ok = k32.GetExitCodeProcess(handle, ctypes.byref(code))
+            k32.CloseHandle(handle)
+            return bool(ok) and code.value == 259         # STILL_ACTIVE
+        except Exception:
+            return True
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except OSError:
+        return True
+    return True
 
-    def __init__(self):
-        self.path = os.path.join(_state_dir(), "tick.lock")
-        self.fd = None
+
+class Lock:
+    """One tick at a time, with no fcntl: a lease row in the queue's own SQLite
+    file, taken under BEGIN IMMEDIATE so two ticks cannot both win it.
+
+    The old file lock was reclaimed on mtime alone, and never refreshed, so a
+    live tick in its fourth hour lost the lock to the next tick and both
+    drained the queue. The lease is renewed before every job, and it is free
+    when it has expired or its process is gone: a crash never blocks the next
+    tick, and a long live tick is never reclaimed.
+
+        with Lock() as lock:
+            if not lock: ...          # another tick holds it
+            lock.renew()              # before each job
+    """
+
+    def __init__(self, db=None):
+        self.db = db
+        self.held = False
+        self.pid = os.getpid()
+        self.host = platform.node()
+
+    def __bool__(self):
+        return self.held
 
     def __enter__(self):
+        self.db = self.db or connect()
+        now = time.time()
+        self.db.execute("BEGIN IMMEDIATE")
         try:
-            if time.time() - os.path.getmtime(self.path) > STALE_LOCK:
-                os.remove(self.path)
-        except OSError:
-            pass
-        try:
-            self.fd = os.open(self.path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
-            os.write(self.fd, str(os.getpid()).encode())
-        except FileExistsError:
-            self.fd = None
-        return self.fd is not None
+            row = self.db.execute("SELECT pid, host, expires FROM lease WHERE id=1").fetchone()
+            busy = bool(row) and row["expires"] > now and (
+                row["host"] != self.host or _pid_alive(row["pid"]))
+            if not busy:
+                self.db.execute(
+                    "INSERT INTO lease(id,pid,host,expires) VALUES(1,?,?,?) ON CONFLICT(id) "
+                    "DO UPDATE SET pid=excluded.pid, host=excluded.host, expires=excluded.expires",
+                    (self.pid, self.host, now + LEASE))
+                self.held = True
+            self.db.execute("COMMIT")
+        except BaseException:
+            self.db.execute("ROLLBACK")
+            raise
+        return self
+
+    def renew(self):
+        if self.held:
+            self.db.execute("UPDATE lease SET expires=? WHERE id=1 AND pid=? AND host=?",
+                            (time.time() + LEASE, self.pid, self.host))
 
     def __exit__(self, *exc):
-        if self.fd is not None:
-            os.close(self.fd)
-            try:
-                os.remove(self.path)
-            except OSError:
-                pass
+        if self.held:
+            self.db.execute("DELETE FROM lease WHERE id=1 AND pid=? AND host=?", (self.pid, self.host))
+            self.held = False
 
 
 def tick(dry_run=False, max_jobs=10, runner=run_job, now=None):
     """Enqueue what is due, then drain. Returns a summary dict (also printed)."""
-    with Lock() as held:
-        if not held:
+    with Lock() as lock:
+        if not lock:
             print("another tick is running")
             return {"skipped": True}
-        db = connect()
+        db = lock.db
         net = online()
         if dry_run:
             waiting = [r["kind"] for r in db.execute("SELECT kind FROM jobs WHERE state='queued' ORDER BY id")]
@@ -293,6 +384,7 @@ def tick(dry_run=False, max_jobs=10, runner=run_job, now=None):
             row = claim(db, can_net=net, can_llm=ready)
             if row is None:
                 break
+            lock.renew()
             ok, err = runner(row)
             finish(db, row, ok, err)
             (done if ok else failed).append(row["kind"])
@@ -379,6 +471,7 @@ def main(argv=None):
     ns = ap.parse_args(argv)
 
     if ns.cmd == "tick":
+        _log_when_windowless()
         res = tick(dry_run=ns.dry_run)
         return 1 if res.get("failed") else 0
     if ns.cmd == "add":

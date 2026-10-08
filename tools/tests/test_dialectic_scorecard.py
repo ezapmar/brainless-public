@@ -13,7 +13,6 @@ import io
 import json
 import os
 from pathlib import Path
-import sys
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -21,8 +20,7 @@ from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[2]
 os.environ.setdefault("BRAINLESS_VAULT", str(ROOT))
-sys.path.insert(0, str(ROOT / "tools"))
-import dialectic  # noqa: E402
+import dialectic
 
 NAMES = [name for _, name in dialectic.PERSONAS]
 
@@ -280,7 +278,7 @@ class TwoPageRenderTest(unittest.TestCase):
         self.assertNotRegex(md, "[\\u2013\\u2014]")
         # every transcript line is inside the callout
         after = md.split("> [!note]- Full transcript", 1)[1]
-        self.assertTrue(all(l.startswith(">") for l in after.strip().splitlines()), "transcript leaked out of the fold")
+        self.assertTrue(all(line.startswith(">") for line in after.strip().splitlines()), "transcript leaked out of the fold")
 
 
 class NightStatusTest(unittest.TestCase):
@@ -293,8 +291,8 @@ class NightStatusTest(unittest.TestCase):
                 dialectic.write_status("2026-09-20", "noon", "idle", "no new captures")
                 dialectic.write_status("2026-09-20", "night", "ok", "usable, 10/12 replies passed")
                 text = open(path).read()
-        day_lines = [l for l in text.splitlines() if l.startswith("- 20")]
-        night_lines = [l for l in text.splitlines() if l.startswith("- night ")]
+        day_lines = [line for line in text.splitlines() if line.startswith("- 20")]
+        night_lines = [line for line in text.splitlines() if line.startswith("- night ")]
         self.assertEqual(len(day_lines), 2)
         self.assertEqual(night_lines, ["- night 2026-09-20: ok, usable, 10/12 replies passed"], "night line replaced, not duplicated")
         self.assertLess(text.index(day_lines[-1]), text.index("## Night experiment"), "day lines stay first for the checks that read the last one")

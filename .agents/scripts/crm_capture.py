@@ -52,9 +52,8 @@ import urllib.request
 from datetime import date, datetime, timedelta
 
 VAULT = os.environ.get("BRAINLESS_VAULT") or os.path.expanduser("~/projects/brainless")
-sys.path.insert(0, os.path.join(VAULT, "tools"))
-from owner_profile import LANG, OWNER  # noqa: E402
-from i18n import languages, raw, t  # noqa: E402
+from owner_profile import LANG, OWNER
+from i18n import languages, raw, t
 
 CONF_DIR = os.path.expanduser("~/.config/brainless")
 STATE_FILE = os.path.join(VAULT, ".agents", "state", "crm_snapshot.json")
@@ -91,13 +90,12 @@ class Labels:
         return default if val is None else val
 
 
-def log(msg):
-    print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] {msg}")
+from logline import log
 
 
 def read_file(path):
     try:
-        with open(path) as fh:
+        with open(path, encoding="utf-8") as fh:
             return fh.read().strip()
     except OSError:
         return None
@@ -174,7 +172,7 @@ class PipedriveProvider(Provider):
         self.token = token
         self.base = BOOTSTRAP_URL
 
-    def _get(self, path, params=None, _retry=True):
+    def _get(self, path, params=None, _retry=True, _net_tries=3):
         url = self.base + path
         if params:
             url += "?" + urllib.parse.urlencode(params)
@@ -188,7 +186,7 @@ class PipedriveProvider(Provider):
                 payload = json.load(resp)
         except urllib.error.HTTPError as e:
             if e.code in (401, 403):
-                raise AuthError(f"HTTP {e.code}")
+                raise AuthError(f"HTTP {e.code}") from e
             if e.code == 429 and _retry:
                 wait = e.headers.get("Retry-After") or "2"
                 try:
@@ -198,7 +196,17 @@ class PipedriveProvider(Provider):
                 log(f"429, waiting {wait}s: {path}")
                 time.sleep(wait)
                 return self._get(path, params, _retry=False)
-            raise RuntimeError(f"HTTP {e.code} {path}")
+            raise RuntimeError(f"HTTP {e.code} {path}") from e
+        except (urllib.error.URLError, TimeoutError, ConnectionError) as e:
+            # The hourly job often fires while the laptop is waking from sleep:
+            # DNS fails or the connection is reset for a few seconds. One such
+            # blip used to fail the whole run and turn the health check red.
+            if _net_tries <= 1:
+                raise
+            wait = 10 * (4 - _net_tries)
+            log(f"network error, retrying in {wait}s: {type(e).__name__}: {e}")
+            time.sleep(wait)
+            return self._get(path, params, _retry, _net_tries - 1)
         if payload.get("success") is False:
             raise RuntimeError(f"API error {path}: {str(payload.get('error'))[:80]}")
         return payload
@@ -587,7 +595,7 @@ def analyse(provider, prev, cfg, now):
 
 def load_state():
     try:
-        with open(STATE_FILE) as fh:
+        with open(STATE_FILE, encoding="utf-8") as fh:
             data = json.load(fh)
         return data if isinstance(data, dict) and data.get("version") == 1 else {}
     except (OSError, ValueError):
@@ -597,14 +605,14 @@ def load_state():
 def save_state(state):
     os.makedirs(os.path.dirname(STATE_FILE), exist_ok=True)
     tmp = STATE_FILE + ".tmp"
-    with open(tmp, "w") as fh:
+    with open(tmp, "w", encoding="utf-8") as fh:
         json.dump(state, fh, ensure_ascii=False, indent=1)
     os.replace(tmp, STATE_FILE)
 
 
 def write_status(outcome, detail=""):
     os.makedirs(os.path.dirname(STATUS_FILE), exist_ok=True)
-    with open(STATUS_FILE, "w") as fh:
+    with open(STATUS_FILE, "w", encoding="utf-8") as fh:
         fh.write(f"{datetime.now().isoformat(timespec='seconds')}\t{outcome}\t{_plain(detail)[:160]}\n")
 
 
@@ -619,7 +627,7 @@ def append_org_logs(events, files, provider_name, L):
         path = os.path.join(ORG_DIR, files[oid])
         os.makedirs(ORG_DIR, exist_ok=True)
         new = not os.path.exists(path)
-        with open(path, "a") as fh:
+        with open(path, "a", encoding="utf-8") as fh:
             if new:
                 fh.write(L["log_header"].format(org=evs[0].get("org_name") or oid, provider=provider_name))
             for ev in evs:
@@ -637,7 +645,7 @@ def write_snapshot(text):
     if _TS_RE.sub("", old).strip() == _TS_RE.sub("", text).strip():
         return False
     os.makedirs(os.path.dirname(SNAPSHOT_FILE), exist_ok=True)
-    with open(SNAPSHOT_FILE, "w") as fh:
+    with open(SNAPSHOT_FILE, "w", encoding="utf-8") as fh:
         fh.write(text)
     return True
 

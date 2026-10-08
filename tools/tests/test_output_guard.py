@@ -8,17 +8,15 @@ Run: python3 -m unittest tools.tests.test_output_guard -v
 """
 import contextlib
 import io
-import sys
 import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(ROOT / "tools"))
-import output_guard as G  # noqa: E402
-import compile_resources as compiler  # noqa: E402
-import concepts as C  # noqa: E402
+import output_guard as G
+import compile_resources as compiler
+import concepts as C
 
 FM = "---\nlang: tr\nsummary_en: {}\ncompiled_at: 2026-09-20T22:00:13\n---\n"
 GOOD = FM.format("A book on decisions under uncertainty.") + "# Thinking in Bets\n\n## Özet\n\nKararlar...\n"

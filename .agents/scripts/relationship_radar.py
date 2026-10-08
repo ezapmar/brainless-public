@@ -12,17 +12,14 @@ a momentum drop of 15+ points is flagged. Scope: person rows in entities.md + sc
 import os
 import re
 import statistics
-import sys
 from datetime import datetime
 
 VAULT = os.environ.get("BRAINLESS_VAULT") or os.path.expanduser("~/projects/brainless")
-sys.path.insert(0, os.path.join(VAULT, ".agents", "scripts"))
-sys.path.insert(0, os.path.join(VAULT, "tools"))
 from buzz_delivery import send
 from functools import partial
 send_buzz = partial(send, 'radar')
-from owner_profile import LANG  # noqa: E402
-from i18n import t, t_list  # noqa: E402
+from owner_profile import LANG
+from i18n import t, t_list
 
 SPIKY_DIR = os.path.join(VAULT, "Inbox", "Spiky")
 TASKS_FILE = os.path.join(VAULT, "_Agent-Context", "TASKS.md")
@@ -37,7 +34,7 @@ DATE_RE = re.compile(r"(\d{4}-\d{2}-\d{2})")
 
 def read(path):
     try:
-        with open(path) as fh:
+        with open(path, encoding="utf-8") as fh:
             return fh.read()
     except OSError:
         return ""
@@ -63,8 +60,8 @@ def load_people():
 def parse_score(text):
     """Take the first number from the 'Spiky Score' block in the note body -> int | None."""
     lines = text.splitlines()
-    for i, l in enumerate(lines):
-        if l.strip() == "Spiky Score":
+    for i, line in enumerate(lines):
+        if line.strip() == "Spiky Score":
             for j in range(i + 1, min(i + 6, len(lines))):
                 if re.fullmatch(r"\d{1,3}", lines[j].strip()):
                     return int(lines[j].strip())
@@ -73,8 +70,8 @@ def parse_score(text):
 
 def participants_line(text):
     lines = text.splitlines()
-    for i, l in enumerate(lines):
-        if l.strip() == "Participants":
+    for i, line in enumerate(lines):
+        if line.strip() == "Participants":
             for j in range(i + 1, min(i + 4, len(lines))):
                 if lines[j].strip():
                     return lines[j]
@@ -236,7 +233,7 @@ def write_snapshot(rows):
         lines.append(f"| [[{r['name']}]] | {r['scope']} | {r['last'].strftime('%Y-%m-%d')} "
                      f"({int(r['stale_w'])}{week}) | {cad} | {r['last_score'] or '-'} | {mom} "
                      f"| {len(r['waiting'])} | {len(r['owe'])} |")
-    with open(OUT_FILE, "w") as fh:
+    with open(OUT_FILE, "w", encoding="utf-8") as fh:
         fh.write("\n".join(lines) + "\n")
 
 

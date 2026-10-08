@@ -10,15 +10,14 @@ from datetime import datetime, timedelta
 from pathlib import Path
 import os
 import plistlib
-import sys
 import tempfile
+import time
 import unittest
 from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(ROOT / "tools"))
-import jobqueue as jq  # noqa: E402
-import schedule  # noqa: E402
+import jobqueue as jq
+import schedule
 
 EVENING = datetime(2026, 9, 26, 22, 0)
 MORNING = datetime(2026, 9, 26, 8, 0)
@@ -103,11 +102,26 @@ class TestQueue(VaultTest):
         jq.finish(self.db, jq.claim(self.db, True, True), True, now=123.0)
         self.assertEqual(self.db.execute("SELECT last_run FROM periodic WHERE kind='compile'").fetchone()[0], 123.0)
 
-    def test_stale_running_goes_back(self):
+    def test_stale_running_goes_back_as_a_failed_attempt(self):
         jq.enqueue(self.db, "compile", now=0)
         jq.claim(self.db, True, True, now=10)
-        self.assertEqual(jq.requeue_stale(self.db, now=10 + jq.STALE_RUNNING + 1), 1)
-        self.assertIsNotNone(jq.claim(self.db, True, True, now=10 + jq.STALE_RUNNING + 2))
+        stale = 10 + jq.STALE_RUNNING + 1
+        self.assertEqual(jq.requeue_stale(self.db, now=stale), 1)
+        row = self.db.execute("SELECT state, attempts, last_error FROM jobs").fetchone()
+        self.assertEqual((row["state"], row["attempts"]), ("queued", 1))
+        self.assertIn("died", row["last_error"])
+        self.assertIsNone(jq.claim(self.db, True, True, now=stale + 1))
+        self.assertIsNotNone(jq.claim(self.db, True, True, now=stale + jq.BACKOFF[0]))
+
+    def test_job_that_kills_every_tick_ends_failed(self):
+        jq.enqueue(self.db, "compile", now=0)
+        now = 10.0
+        for _ in range(len(jq.BACKOFF) + 1):
+            self.assertIsNotNone(jq.claim(self.db, True, True, now=now))
+            now += jq.STALE_RUNNING + 1
+            jq.requeue_stale(self.db, now=now)
+            now += max(jq.BACKOFF)
+        self.assertEqual(self.db.execute("SELECT state FROM jobs").fetchone()[0], "failed")
 
 
 class TestTick(VaultTest):
@@ -137,6 +151,21 @@ class TestTick(VaultTest):
             self.assertTrue(held)
             with mock.patch("builtins.print"):
                 self.assertEqual(jq.tick(), {"skipped": True})
+
+    def test_lease_of_a_dead_tick_is_reclaimed(self):
+        with jq.Lock() as first:
+            self.assertTrue(first)
+            with mock.patch.object(jq, "_pid_alive", return_value=False):
+                with jq.Lock() as second:
+                    self.assertTrue(second)
+        self.assertEqual(self.db.execute("SELECT COUNT(*) FROM lease").fetchone()[0], 0)
+
+    def test_live_tick_keeps_its_lease_past_the_old_stale_window(self):
+        with jq.Lock() as first:
+            self.db.execute("UPDATE lease SET expires=?", (time.time() - 1,))   # expired by clock
+            first.renew()                                                     # but still running
+            with jq.Lock() as second:
+                self.assertFalse(second)
 
 
 class TestCapture(VaultTest):

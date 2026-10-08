@@ -35,7 +35,9 @@ def resolve_claude() -> str:
 # Where installers put CLIs when they are not on a scheduler's minimal PATH
 # (launchd and systemd user units start with little more than /usr/bin).
 _EXTRA_DIRS = ("~/.local/bin", "/opt/homebrew/bin", "/usr/local/bin",
-               "~/.npm-global/bin", "~/.bun/bin", "~/.cargo/bin")
+               "~/.npm-global/bin", "~/.bun/bin", "~/.cargo/bin",
+               # Windows: npm global shims, and Ollama's per-user install
+               "%APPDATA%/npm", "%LOCALAPPDATA%/Programs/Ollama")
 
 
 def resolve(name: str) -> str | None:
@@ -48,8 +50,11 @@ def resolve(name: str) -> str | None:
     if found:
         return found
     for d in _EXTRA_DIRS:
-        p = os.path.join(os.path.expanduser(d), name)
-        if os.access(p, os.X_OK):
+        d = os.path.expandvars(os.path.expanduser(d))
+        if "%" in d or not os.path.isdir(d):
+            continue
+        p = shutil.which(name, path=d)   # adds .exe/.cmd on Windows
+        if p:
             return p
     for p in sorted(glob.glob(os.path.expanduser(f"~/.nvm/versions/node/*/bin/{name}")),
                     key=_node_version_key, reverse=True):

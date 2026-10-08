@@ -2,14 +2,11 @@
 from datetime import date, timedelta
 import json
 from pathlib import Path
-import sys
 import tempfile
 import unittest
 from unittest.mock import Mock, patch
 
 ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(ROOT / "tools"))
-sys.path.insert(0, str(ROOT / ".agents/scripts"))
 import calibrate
 import today_queue as module
 from today_queue import TodayQueue

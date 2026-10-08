@@ -17,8 +17,7 @@ import subprocess
 import sys
 
 VAULT = os.environ.get("BRAINLESS_VAULT") or os.path.expanduser("~/projects/brainless")
-sys.path.insert(0, os.path.join(VAULT, "tools"))
-from i18n import t  # noqa: E402
+from i18n import t
 
 CONF_DIR = os.path.expanduser("~/.config/brainless")
 MAX_LOG = 1200  # bound journal excerpts
@@ -85,4 +84,4 @@ if __name__ == "__main__":
         raise SystemExit(main())
     except Exception as exc:  # never cascade a failure out of the notifier
         print(f"notify_failure error: {exc}", file=sys.stderr)
-        raise SystemExit(0)
+        raise SystemExit(0) from None

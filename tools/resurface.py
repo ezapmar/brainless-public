@@ -11,17 +11,14 @@ the single write is RESURFACE.md. Runs Mondays 06:30 via launchd
 (<prefix>.brainless.resurface).
 """
 import os
-import sys
 import time
 from datetime import datetime
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from paths import vault_root  # noqa: E402
+from paths import vault_root
 VAULT = vault_root()
-sys.path.insert(0, os.path.join(VAULT, "tools"))
 from llm import run_prompt
-from owner_profile import OWNER, output_lang_directive  # noqa: E402
-from i18n import t  # noqa: E402
+from owner_profile import OWNER, output_lang_directive
+from i18n import t
 
 CONTEXT_FILE = os.path.join(VAULT, "_Agent-Context", "CONTEXT.md")
 OUT_FILE = os.path.join(VAULT, "_Agent-Context", "RESURFACE.md")
@@ -33,8 +30,7 @@ MAX_CANDIDATES = 120    # cap the list shown to the model
 SNIPPET_CHARS = 160
 
 
-def log(msg):
-    print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] {msg}")
+from logline import log
 
 
 def collect_candidates():
@@ -63,8 +59,8 @@ def collect_candidates():
                         snippet = fh.read(2000)
                 except OSError:
                     continue
-                title = next((l.lstrip("# ").strip() for l in snippet.splitlines()
-                              if l.startswith("#")), os.path.splitext(name)[0])
+                title = next((line.lstrip("# ").strip() for line in snippet.splitlines()
+                              if line.startswith("#")), os.path.splitext(name)[0])
                 body = " ".join(snippet.split())[:SNIPPET_CHARS]
                 found.append((mtime, rel, title, body))
     # Oldest first, so long-forgotten notes get a chance before merely stale ones.
@@ -118,7 +114,7 @@ OUTPUT FORMAT (write only this):
         t("resurface.title") + "\n\n"
         + t("resurface.intro", date=date_str) + "\n\n"
     )
-    with open(OUT_FILE, "w") as fh:
+    with open(OUT_FILE, "w", encoding="utf-8") as fh:
         fh.write(header + result + "\n")
     log(f"Written: {OUT_FILE} (out of {len(candidates)} candidates)")
 

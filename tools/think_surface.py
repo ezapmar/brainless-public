@@ -19,15 +19,12 @@ Runs each morning via launchd (<prefix>.brainless.think).
 import os
 import subprocess
 import re
-import sys
 from datetime import date, datetime
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from paths import vault_root  # noqa: E402
+from paths import vault_root
 VAULT = vault_root()
-sys.path.insert(0, os.path.join(VAULT, "tools"))
-import calibrate  # noqa: E402  (reuses the decision-scan logic)
-from i18n import t, t_list  # noqa: E402
+import calibrate
+from i18n import t, t_list
 
 AGENT = os.path.join(VAULT, "_Agent-Context")
 CADENCE_FILE = os.path.join(VAULT, "Thinking", "Thinking Cadence.md")
@@ -42,8 +39,7 @@ DRIFT_FRESH_DAYS = 10
 DASH_RE = re.compile("\\s*[\u2014\u2013]\\s*")  # em / en dash -> " - " (repo hard-ban)
 
 
-def log(msg):
-    print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] {msg}")
+from logline import log
 
 
 def clean(text):
@@ -65,7 +61,7 @@ def cadence_stuck_note():
     commit. A step that has waited more than two weeks gets the note; the
     daily nudge alone is evidently not working."""
     def checked(text):
-        return sum(1 for l in text.splitlines() if l.strip().startswith("- [x]"))
+        return sum(1 for line in text.splitlines() if line.strip().startswith("- [x]"))
     try:
         rel = os.path.relpath(CADENCE_FILE, VAULT)
         log = subprocess.run(["git", "log", "--format=%H %ct", "--", rel], cwd=VAULT,
@@ -95,10 +91,10 @@ def cadence_step():
             lines = fh.read().splitlines()
     except OSError:
         return t("think_surface.cadence_unreadable")
-    steps = [l for l in lines if l.strip().startswith("- [")]
-    for l in steps:
-        if l.strip().startswith("- [ ]"):
-            return clean(l.strip()[5:].strip()) + cadence_stuck_note()
+    steps = [line for line in lines if line.strip().startswith("- [")]
+    for line in steps:
+        if line.strip().startswith("- [ ]"):
+            return clean(line.strip()[5:].strip()) + cadence_stuck_note()
     if steps:
         return t("think_surface.cadence_all_done")
     return t("think_surface.cadence_none")
@@ -165,8 +161,8 @@ def drift_bullets():
     m = re.search(r"##\s*(?:" + heads + r")[^\n]*\n(.*?)(?:\n##|\Z)", text, re.S)
     if not m:
         return []
-    return [clean(l.strip()[2:]) for l in m.group(1).splitlines()
-            if l.strip().startswith("- ")]
+    return [clean(line.strip()[2:]) for line in m.group(1).splitlines()
+            if line.strip().startswith("- ")]
 
 
 def provocation(needs_pred):
@@ -204,7 +200,7 @@ def resurface_block():
             text = fh.read()
     except OSError:
         return t("think_surface.resurface_unreadable")
-    bullets = [clean(l) for l in text.splitlines() if l.strip().startswith("- ")]
+    bullets = [clean(line) for line in text.splitlines() if line.strip().startswith("- ")]
     return "\n".join(bullets[:3]) if bullets else t("think_surface.resurface_empty")
 
 
@@ -229,7 +225,7 @@ def main():
 {t("think_surface.section_resurface")}
 {resurface_block()}
 """
-    with open(OUT_FILE, "w") as fh:
+    with open(OUT_FILE, "w", encoding="utf-8") as fh:
         fh.write(body)
     log(f"Written: {OUT_FILE} (decisions awaiting grading: {due_count})")
 

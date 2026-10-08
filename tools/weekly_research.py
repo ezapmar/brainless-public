@@ -45,11 +45,10 @@ import sys
 from datetime import datetime, timedelta
 from pathlib import Path
 
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__))))
-from i18n import t  # noqa: E402
-from lang_detect import detect  # noqa: E402
-from llm import run_prompt  # noqa: E402
-from owner_profile import OWNER, output_lang_directive  # noqa: E402
+from i18n import t
+from lang_detect import detect
+from llm import run_prompt
+from owner_profile import OWNER, output_lang_directive
 
 VAULT = Path(os.environ.get("BRAINLESS_VAULT") or Path(__file__).resolve().parents[1])
 TAGS = VAULT / ".agents" / "state" / "note_tags.jsonl"
@@ -76,13 +75,12 @@ CLAIM_RE = re.compile(
     re.I)
 
 
-def log(msg):
-    print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] {msg}")
+from logline import log
 
 
 def read(path, cap=None):
     try:
-        text = Path(path).read_text(errors="replace")
+        text = Path(path).read_text(errors="replace", encoding="utf-8")
     except OSError:
         return ""
     return text[:cap] if cap else text
@@ -90,14 +88,14 @@ def read(path, cap=None):
 
 def load_json(path, default):
     try:
-        return json.loads(Path(path).read_text())
+        return json.loads(Path(path).read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return default
 
 
 def save_json(path, data):
     Path(path).parent.mkdir(parents=True, exist_ok=True)
-    Path(path).write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n")
+    Path(path).write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
 
 # --------------------------------------------------------------------------

@@ -11,16 +11,13 @@ import importlib.util
 import os
 from pathlib import Path
 import shutil
-import sys
 import tempfile
 import unittest
 from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[2]
 os.environ.setdefault("BRAINLESS_VAULT", str(ROOT))
-sys.path.insert(0, str(ROOT / "tools"))
-sys.path.insert(0, str(ROOT / ".agents/scripts"))
-import buzz_capture as bc  # noqa: E402
+import buzz_capture as bc
 
 URL = "https://buzz.example/media/abc123"
 XLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"

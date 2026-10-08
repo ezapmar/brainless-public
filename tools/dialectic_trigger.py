@@ -24,19 +24,17 @@ Options: --dry-run (detect and report, launch nothing), --self-test (offline
 logic check, no Buzz).
 """
 import argparse
-import fcntl
 import json
 import os
 import re
 import subprocess
 import sys
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from paths import vault_root  # noqa: E402
+from paths import vault_root
 VAULT = vault_root()
-sys.path.insert(0, os.path.join(VAULT, "tools"))
-import dialectic as D  # noqa: E402  reuse buzz(), channel_id, post, pubkey, read/write, log
-from net_wait import wait_for_network  # noqa: E402
+import dialectic as D
+from net_wait import wait_for_network
+from vault_lock import try_lock_exclusive
 
 TRIGGER_RE = re.compile(r"^\s*!dialectic\s+(.+)", re.IGNORECASE | re.DOTALL)
 BARE_RE = re.compile(r"^\s*!dialectic\s*$", re.IGNORECASE)
@@ -153,10 +151,8 @@ def main():
               f"({len(rounds)} pending, {len(bare)} bare)")
         return 0
 
-    lock = open(LOCK_FILE, "w")
-    try:
-        fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
-    except OSError:
+    lock = open(LOCK_FILE, "w", encoding="utf-8")
+    if not try_lock_exclusive(lock):
         # A round is already running; do not mark these seen, retry next tick.
         D.log("round in progress; deferring trigger")
         return 0

@@ -17,12 +17,9 @@ deterministic so it can be tested without a model.
 import json
 import re
 import unicodedata
-import os
-import sys
 from pathlib import Path
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from paths import folder  # noqa: E402
+from paths import folder
 
 STATUSES = {"active", "proposed", "retired"}
 CONFIDENCE = ("primary", "secondary", "self-reported", "unverified")
@@ -158,10 +155,8 @@ _FM_RE = re.compile(r"\A---\n(.*?)\n---\n?", re.S)
 
 
 def split_frontmatter(text: str) -> tuple[str, str]:
-    m = _FM_RE.match(text)
-    if not m:
-        return "", text
-    return m.group(1), text[m.end():]
+    from frontmatter import split
+    return split(text)
 
 
 def fm_value(fm: str, key: str) -> str | None:
@@ -274,14 +269,8 @@ def delta(assigned: dict[str, str], integrated: dict[str, str]) -> list[str]:
 
 # ─── LLM output parsing ─────────────────────────────────────────
 def parse_json_object(out: str) -> dict | None:
-    if not out:
-        return None
-    try:
-        m = re.search(r"\{.*\}", out, re.S)
-        data = json.loads(m.group(0) if m else out)
-    except (ValueError, AttributeError):
-        return None
-    return data if isinstance(data, dict) else None
+    from llm import extract_json
+    return extract_json(out, dict)
 
 
 def parse_assignment(out: str, stems: set[str], slugs: set[str]) -> tuple[dict, list]:
@@ -459,6 +448,6 @@ def strip_dashes(text: str) -> str:
 
 def read_page(path: Path) -> str:
     try:
-        return path.read_text()
+        return path.read_text(encoding="utf-8")
     except OSError:
         return ""

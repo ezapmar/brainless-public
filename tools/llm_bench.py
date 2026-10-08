@@ -15,10 +15,8 @@ be repeated on any machine without carrying private content into a benchmark.
 """
 import argparse
 import os
-import sys
 import time
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 # Roughly note-shaped filler: Turkish and English sentences, since a local
 # model's speed on Turkish tokens is worse than its speed on English ones and

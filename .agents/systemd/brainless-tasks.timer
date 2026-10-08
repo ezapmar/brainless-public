@@ -4,6 +4,7 @@ Description=brainless gorev hatti 30 dk
 [Timer]
 OnBootSec=7min
 OnUnitActiveSec=30min
+Persistent=true
 
 [Install]
 WantedBy=timers.target

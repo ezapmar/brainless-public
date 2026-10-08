@@ -1,13 +1,10 @@
 import os
 import time
-import sys
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from paths import vault_root  # noqa: E402
+from paths import vault_root
 VAULT = vault_root()
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from owner_profile import COMPANY_AREA  # noqa: E402
-from markitdown_native import convert_to_file  # noqa: E402
+from owner_profile import COMPANY_AREA
+from markitdown_native import convert_to_file
 
 
 TARGET_DIRS = [
@@ -27,14 +24,14 @@ SUPPORTED_EXTENSIONS = {
 def process_file(filepath):
     filename = os.path.basename(filepath)
     file_basename, ext = os.path.splitext(filename)
-    
+
     if ext.lower() not in SUPPORTED_EXTENSIONS:
         return
 
     parent_dir = os.path.dirname(filepath)
     out_dir = os.path.join(parent_dir, file_basename)
     out_md_path = os.path.join(out_dir, f"{file_basename}.md")
-    
+
     if os.path.exists(out_md_path):
         # Already exists, skipping
         return

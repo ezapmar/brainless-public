@@ -10,14 +10,13 @@ import tempfile
 # Configuration
 # The engine sits in the vault: .agents/scripts/ -> vault root.
 _ENGINE = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-sys.path.insert(0, os.path.join(_ENGINE, "tools"))
-from paths import folder, vault_root  # noqa: E402
+from paths import folder, vault_root
 BRAINLESS_ROOT = vault_root()
-import llm  # noqa: E402
-from owner_profile import COMPANY_AREA, LANG, lang_name, output_lang_directive  # noqa: E402
-from i18n import t  # noqa: E402
-import mac_notify  # noqa: E402
-from markitdown_native import convert_to_file  # noqa: E402
+import llm
+from owner_profile import COMPANY_AREA, LANG, lang_name, output_lang_directive
+from i18n import t
+import mac_notify
+from markitdown_native import convert_to_file
 
 # Documents longer than this reach a non-Claude provider cut, with a note saying so.
 MAX_CHARS = int(os.environ.get("BRAINLESS_LLM_MAX_CHARS", "30000"))
@@ -44,7 +43,7 @@ def notify(message, title="brainless / smart_processor"):
 
 def load_quarantine():
     try:
-        with open(QUARANTINE_FILE) as fh:
+        with open(QUARANTINE_FILE, encoding="utf-8") as fh:
             return json.load(fh)
     except (FileNotFoundError, json.JSONDecodeError):
         return {}
@@ -52,7 +51,7 @@ def load_quarantine():
 
 def save_quarantine(data):
     os.makedirs(STATE_DIR, exist_ok=True)
-    with open(QUARANTINE_FILE, "w") as fh:
+    with open(QUARANTINE_FILE, "w", encoding="utf-8") as fh:
         json.dump(data, fh, indent=2, ensure_ascii=False)
 
 
@@ -356,7 +355,7 @@ def process_image(filepath):
 
     # Enforce house style: em/en dashes are hard-banned in vault output.
     try:
-        with open(note_path) as fh:
+        with open(note_path, encoding="utf-8") as fh:
             body = fh.read()
     except OSError:
         return "failed"
@@ -376,7 +375,7 @@ def process_image(filepath):
 
     footer = ("\n\n---\n" + t("smart_processor.handwritten_footer", stamp=stamp) + "\n"
               f"![[{os.path.basename(archived)}]]\n")
-    with open(note_path, "w") as fh:
+    with open(note_path, "w", encoding="utf-8") as fh:
         fh.write(body + footer)
 
     print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] Note written: "
@@ -551,7 +550,8 @@ def main():
     EXCLUDE_DIR_PARTS = {"venv", ".git", ".wiki", "archive", "_backup", "__pycache__", "tasks-sync", "_attachments"}
 
     for t_dir in TARGET_DIRS:
-        if not os.path.exists(t_dir): continue
+        if not os.path.exists(t_dir):
+            continue
         for root, dirs, files in os.walk(t_dir):
             # Skip hidden + known non-content directories
             dirs[:] = [d for d in dirs if not d.startswith('.') and not any(bad in d.lower() for bad in EXCLUDE_DIR_PARTS)]

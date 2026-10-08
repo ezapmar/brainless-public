@@ -5,7 +5,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"$CLAUDE_PROJECT_DIR/tools/hooks/claude_guard.py\" session",
+            "command": "PYTHONPATH=\"$CLAUDE_PROJECT_DIR/tools\" python3 \"$CLAUDE_PROJECT_DIR/tools/hooks/claude_guard.py\" session",
             "timeout": 10
           }
         ]
@@ -17,7 +17,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"$CLAUDE_PROJECT_DIR/tools/hooks/claude_guard.py\" pre",
+            "command": "PYTHONPATH=\"$CLAUDE_PROJECT_DIR/tools\" python3 \"$CLAUDE_PROJECT_DIR/tools/hooks/claude_guard.py\" pre",
             "timeout": 10
           }
         ]
@@ -29,7 +29,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"$CLAUDE_PROJECT_DIR/tools/hooks/claude_guard.py\" post",
+            "command": "PYTHONPATH=\"$CLAUDE_PROJECT_DIR/tools\" python3 \"$CLAUDE_PROJECT_DIR/tools/hooks/claude_guard.py\" post",
             "timeout": 10
           }
         ]

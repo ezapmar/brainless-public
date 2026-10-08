@@ -6,9 +6,7 @@ built with chr() so this file itself stays clean.
 
 Run: python3 -m unittest tools.tests.test_claude_guard -v
 """
-import contextlib
 import importlib.util
-import io
 import json
 import os
 import subprocess

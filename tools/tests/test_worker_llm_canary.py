@@ -10,7 +10,6 @@ Run: python3 -B -m unittest tools.tests.test_worker_llm_canary -v
 import importlib
 import json
 import os
-import sys
 import tempfile
 import time
 import unittest
@@ -18,7 +17,6 @@ from pathlib import Path
 from unittest.mock import Mock, patch
 
 ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(ROOT / "tools"))
 
 AUTH = "2026-09-25 02:10:00\tauth\t[compile] Failed to authenticate: OAuth session expired\n"
 OK = "2026-09-25 21:00:00\tok\t[nightly] \n"

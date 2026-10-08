@@ -35,7 +35,6 @@ import collections
 import hashlib
 import os
 import subprocess
-import sys
 from pathlib import Path
 
 VAULT = Path(os.environ.get("BRAINLESS_VAULT")
@@ -118,7 +117,6 @@ def find_markdown(rel: str) -> Path | None:
 
 def convert(rel: str) -> Path | None:
     """Make the missing markdown with the vault's own converter."""
-    sys.path.insert(0, str(VAULT / "tools"))
     try:
         from markitdown_native import convert_to_file
     except ImportError:
@@ -132,7 +130,7 @@ def convert(rel: str) -> Path | None:
         return None
     # An empty conversion is worse than none: it would untrack the original and
     # leave a file that says nothing about it.
-    if not dst.is_file() or not dst.read_text(errors="replace").strip():
+    if not dst.is_file() or not dst.read_text(errors="replace", encoding="utf-8").strip():
         if dst.is_file():
             dst.unlink()
         return None
@@ -224,13 +222,13 @@ def stamp(md: Path, rel: str, size: int, sha: str, drive: Path | None) -> None:
              f"> **Not:** Orijinal git'e alınmaz, bu markdown kayıt nüshasıdır. "
              f"Kural: `docs/method.md`.\n"
              f"{MARK_END}\n")
-    text = md.read_text(errors="replace")
+    text = md.read_text(errors="replace", encoding="utf-8")
     if MARK_START in text and MARK_END in text:
         head, rest = text.split(MARK_START, 1)
         _, tail = rest.split(MARK_END, 1)
-        md.write_text(head + block + tail.lstrip("\n"))
+        md.write_text(head + block + tail.lstrip("\n"), encoding="utf-8")
         return
-    md.write_text(block + "\n" + text)
+    md.write_text(block + "\n" + text, encoding="utf-8")
 
 
 def main() -> int:

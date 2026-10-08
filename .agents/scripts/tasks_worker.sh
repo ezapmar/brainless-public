@@ -8,6 +8,7 @@ export MISE_QUIET=1
 VAULT="${BRAINLESS_VAULT:-$HOME/projects/brainless}"
 GPY="$HOME/.local/venvs/gtasks/bin/python"
 cd "$VAULT" || exit 1
+export PYTHONPATH="$VAULT/tools:$VAULT/.agents/scripts${PYTHONPATH:+:$PYTHONPATH}"
 
 # Skip the tick if the box woke before the network came back, so the Google
 # Tasks sync does not crash the unit and trip a false alarm; next run catches up.
@@ -16,7 +17,10 @@ if ! python3 tools/net_wait.py --wait; then
   exit 0
 fi
 
-git pull --rebase --autostash --quiet || true
+if ! bash .agents/scripts/git_sync.sh; then
+  echo "git_sync: tree not clean (alert sent once); skipping this run"
+  exit 0
+fi
 python3 .agents/scripts/spiky_actions.py "$@"
 [ -x "$GPY" ] && "$GPY" .agents/scripts/gtasks_sync.py
 bash .agents/scripts/worker_backup.sh

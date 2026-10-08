@@ -26,10 +26,9 @@ import shutil
 import subprocess
 import sys
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from paths import FOLDER_KEYS, skeleton, vault_root  # noqa: E402
-import config  # noqa: E402
-from brand import paint  # noqa: E402
+from paths import FOLDER_KEYS, skeleton, vault_root
+import config
+from brand import paint
 
 ENGINE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PROTECTED = ("~/Documents", "~/Desktop", "~/Library/Mobile Documents")
@@ -43,6 +42,7 @@ KEY_PROVIDERS = {  # provider -> (label, secret name, suggested model or None)
 CLI_PROVIDERS = {"claude-cli": ("claude", "Claude Code"), "codex-cli": ("codex", "Codex"),
                  "gemini-cli": ("gemini", "Gemini CLI")}
 OLLAMA_MODEL = "qwen3:8b"
+WINDOWS = sys.platform.startswith("win")
 
 
 class Prompter:
@@ -54,7 +54,7 @@ class Prompter:
         self.tty = None
         if answers is None and not assume_yes and not sys.stdin.isatty():
             try:
-                self.tty = open("/dev/tty", "r+")
+                self.tty = open("CONIN$" if WINDOWS else "/dev/tty", "r+", encoding="utf-8")
             except OSError:
                 self.assume_yes = True
 
@@ -63,9 +63,9 @@ class Prompter:
             return self.answers.pop(0) if self.answers else ""
         if self.tty:
             if secret:
-                return getpass.getpass(prompt, stream=self.tty)
-            self.tty.write(prompt)
-            self.tty.flush()
+                return getpass.getpass(prompt, stream=None if WINDOWS else self.tty)
+            (sys.stdout if WINDOWS else self.tty).write(prompt)
+            (sys.stdout if WINDOWS else self.tty).flush()
             return self.tty.readline().rstrip("\n")
         return getpass.getpass(prompt) if secret else input(prompt)
 
@@ -209,15 +209,27 @@ def link_external(vault, library, path):
     rel = f"{library}/_linked/{os.path.basename(src.rstrip(os.sep)) or 'notes'}"
     dst = os.path.join(vault, rel)
     os.makedirs(os.path.dirname(dst), exist_ok=True)
-    if os.path.islink(dst) and os.path.realpath(dst) == src:
+    if _is_link(dst) and os.path.realpath(dst) == src:
         ok(f"{rel} already links to {src}")
         return rel
     if os.path.lexists(dst):
         warn(f"{rel} exists and points elsewhere; skipped")
         return None
-    os.symlink(src, dst, target_is_directory=True)
+    try:
+        os.symlink(src, dst, target_is_directory=True)
+    except OSError:
+        # Windows allows symlinks only to admins or in Developer Mode; a directory
+        # junction needs neither and reads the same for the compiler.
+        if not WINDOWS or subprocess.run(["cmd", "/c", "mklink", "/J", dst, src],
+                                         capture_output=True).returncode != 0:
+            warn(f"could not link {path}; skipped")
+            return None
     ok(f"{rel} -> {src} (read only: its .md files are summarised, nothing is written there)")
     return rel
+
+
+def _is_link(path):
+    return os.path.islink(path) or (hasattr(os.path, "isjunction") and os.path.isjunction(path))
 
 
 def ask_llm(pr, args):
@@ -299,10 +311,14 @@ def setup_ollama(pr, args):
     import llm
     binary = llm_resolve("ollama")
     if not binary:
-        cmd = (["brew", "install", "ollama"] if sys.platform == "darwin"
-               else ["sh", "-c", "curl -fsSL https://ollama.com/install.sh | sh"])
-        shown = " ".join(cmd) if cmd[0] == "brew" else cmd[2]
-        if sys.platform.startswith("win"):
+        if sys.platform == "darwin":
+            cmd = ["brew", "install", "ollama"]
+        elif WINDOWS:
+            cmd = ["winget", "install", "--id", "Ollama.Ollama", "-e", "--silent"]
+        else:
+            cmd = ["sh", "-c", "curl -fsSL https://ollama.com/install.sh | sh"]
+        shown = cmd[2] if cmd[0] == "sh" else " ".join(cmd)
+        if WINDOWS and not shutil.which("winget"):
             warn("install Ollama from https://ollama.com/download, then run brainless init again")
             return args.model or OLLAMA_MODEL
         if cmd[0] == "brew" and not shutil.which("brew"):
@@ -320,8 +336,9 @@ def setup_ollama(pr, args):
         if sys.platform == "darwin" and shutil.which("brew"):
             subprocess.run(["brew", "services", "start", "ollama"], capture_output=True)
         else:
-            subprocess.Popen([binary, "serve"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-                             start_new_session=True)
+            detach = {"creationflags": subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP} \
+                if WINDOWS else {"start_new_session": True}
+            subprocess.Popen([binary, "serve"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, **detach)
         import time
         for _ in range(10):
             time.sleep(1)
@@ -353,7 +370,7 @@ def probe(settings):
         return True
     detail = ""
     try:
-        with open(llm.STATUS_FILE) as fh:
+        with open(llm.STATUS_FILE, encoding="utf-8") as fh:
             detail = fh.read().strip().split("\t", 2)[-1]
     except OSError:
         pass
@@ -470,7 +487,7 @@ def run(args, pr):
     llm_settings, secret = ask_llm(pr, args)
     if secret:
         backend = config.set_secret(*secret)
-        ok(f"key stored in the {backend.replace('keychain', 'macOS Keychain')}")
+        ok(f"key stored in the {config.BACKEND_LABELS.get(backend, backend)}")
     probed = True if args.no_probe else probe(llm_settings)
     say("Extras")
     install_extras(pr, args)
@@ -486,16 +503,16 @@ def run(args, pr):
     if probed:
         first_run(pr, args, lang)
     say("Ready")
-    pointer = os.path.expanduser("~/.config/brainless/vault")
+    pointer = os.path.join(os.path.expanduser("~"), ".config", "brainless", "vault")
     try:
-        with open(pointer, encoding="utf-8") as fh:
+        with open(pointer, encoding="utf-8-sig") as fh:
             current = fh.readline().strip()
     except OSError:
         current = ""
     if current and os.path.realpath(current) != os.path.realpath(vault):
+        setenv = f"$env:BRAINLESS_VAULT = '{vault}'" if WINDOWS else f"export BRAINLESS_VAULT={vault}"
         warn(f"the `brainless` command still opens {current}. For this vault, run "
-             f"`export BRAINLESS_VAULT={vault}` first, or make it the default with "
-             f"`echo {vault} > {pointer}`.")
+             f"`{setenv}` first, or make it the default by writing {vault} into {pointer}.")
     print(f"""
   brainless add "a thought"     capture a note (it lands in {folders['daily']}/)
   brainless add <file>          drop a document into {folders['inbox']}/

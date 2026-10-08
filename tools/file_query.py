@@ -19,10 +19,10 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from owner_profile import LANG  # noqa: E402
-from lang_detect import detect  # noqa: E402
-from concepts import yaml_scalar  # noqa: E402
+import frontmatter
+from owner_profile import LANG
+from lang_detect import detect
+from concepts import yaml_scalar
 
 # Portable: env override, else the repo that contains this script.
 VAULT = Path(os.environ.get("BRAINLESS_VAULT") or Path(__file__).resolve().parents[1])
@@ -49,6 +49,14 @@ def main():
     if not content:
         print("file_query: no content on stdin", file=sys.stderr)
         sys.exit(1)
+    # A command's output may bring its own frontmatter (a research note,
+    # a draft page). Wrapping it gave the file two blocks, which the output
+    # guard reads as a damaged page (four queries on 2026-09-26). Its keys join
+    # the wrapper's below; the wrapper's own keys win.
+    header, body = frontmatter.split(content)
+    carried = [line for line in header.splitlines() if ":" in line]
+    if header:
+        content = body.lstrip("\n")
 
     lang = args.lang
     if lang == "auto":
@@ -69,9 +77,11 @@ def main():
         f"compiled_at: {datetime.now().isoformat(timespec='seconds')}\n"
         "status: seed\n"
         f"tags: [query, {args.command}]\n"
-        "---\n\n"
     )
-    dst.write_text(fm + content + "\n")
+    own = {line.split(":", 1)[0] for line in fm.splitlines() if ":" in line}
+    fm += "".join(line + "\n" for line in carried if line.split(":", 1)[0].strip() not in own)
+    fm += "---\n\n"
+    dst.write_text(fm + content + "\n", encoding="utf-8")
     print(str(dst.relative_to(VAULT)))
 
 

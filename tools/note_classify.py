@@ -42,15 +42,14 @@ import argparse
 import json
 import os
 import re
-import sys
 from datetime import datetime, timedelta
 from pathlib import Path
 
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__))))
-from i18n import t  # noqa: E402
-from lang_detect import detect, _TR_STOP, _EN_STOP  # noqa: E402
-from llm import run_prompt  # noqa: E402
-from owner_profile import OWNER  # noqa: E402
+from i18n import t
+import frontmatter
+from lang_detect import detect, _TR_STOP, _EN_STOP
+from llm import run_prompt
+from owner_profile import OWNER
 
 VAULT = Path(os.environ.get("BRAINLESS_VAULT") or Path(__file__).resolve().parents[1])
 STATE = VAULT / ".agents" / "state" / "note_tags.jsonl"
@@ -129,13 +128,12 @@ _STOP = _TR_STOP | _EN_STOP | {
 }
 
 
-def log(msg):
-    print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] {msg}")
+from logline import log
 
 
 def read(path):
     try:
-        return Path(path).read_text(errors="replace")
+        return Path(path).read_text(errors="replace", encoding="utf-8")
     except OSError:
         return ""
 
@@ -204,7 +202,7 @@ def collect(days: int):
 
 def features(path: Path, text: str, projects, people, peers):
     """peers: (path, date, tokens) of other notes, for the recurrence signal."""
-    body = re.sub(r"^---\s*\n.*?\n---\s*\n", "", text, flags=re.S)
+    body = frontmatter.strip(text)
     words = len(body.split())
     tokens = significant_tokens(body)
 
@@ -367,7 +365,7 @@ def classify(path, text, projects, people, peers, weight, use_llm=True):
 def load_state():
     seen = {}
     if STATE.exists():
-        for line in STATE.read_text(errors="replace").splitlines():
+        for line in STATE.read_text(errors="replace", encoding="utf-8").splitlines():
             try:
                 rec = json.loads(line)
             except ValueError:

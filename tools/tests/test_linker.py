@@ -8,15 +8,13 @@ Run: python3 -m unittest tools.tests.test_linker -v
 """
 import contextlib
 import io
-import sys
 import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(ROOT / "tools"))
-import compile_resources as compiler  # noqa: E402
+import compile_resources as compiler
 
 
 def fm(**kw):

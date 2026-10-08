@@ -26,10 +26,8 @@ import re
 import sys
 from collections import deque
 from datetime import datetime, timedelta
-from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-from lint_wiki import WIKI, all_wiki_files, link_graph, orphan_pages, parse_fm  # noqa: E402
+from lint_wiki import WIKI, all_wiki_files, link_graph, orphan_pages, parse_fm
 
 ORPHAN_WARN, ORPHAN_RED = 0.05, 0.15
 DEGREE_WARN = 2.0
@@ -118,7 +116,7 @@ def stale_concepts(files, now) -> tuple[int, int]:
     stale = 0
     for p in concepts:
         try:
-            fm = parse_fm(p.read_text(errors="replace"))
+            fm = parse_fm(p.read_text(errors="replace", encoding="utf-8"))
         except OSError:
             continue
         m = re.match(r"\d{4}-\d{2}-\d{2}", fm.get("compiled_at", ""))

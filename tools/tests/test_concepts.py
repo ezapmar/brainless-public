@@ -11,16 +11,14 @@ Run: python3 -m unittest tools.tests.test_concepts -v
 import contextlib
 import io
 import json
-import sys
 import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(ROOT / "tools"))
-import concepts as C  # noqa: E402
-import compile_resources as compiler  # noqa: E402
+import concepts as C
+import compile_resources as compiler
 
 DASH = "\u2014"
 

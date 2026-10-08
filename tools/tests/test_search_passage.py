@@ -2,14 +2,12 @@
 
 Run: python3 -m unittest tools.tests.test_search_passage -v
 """
-import sys
 import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(ROOT / "tools"))
 
-import wiki_search  # noqa: E402
+import wiki_search
 
 FM = "---\nlang: tr\nsummary_en: A page.\n---\n"
 

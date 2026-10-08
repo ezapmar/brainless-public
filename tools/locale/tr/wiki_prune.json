@@ -30,6 +30,7 @@
   "reason_query": "{cmd} çıktısı, {days} günlük, kimse bağlamamış",
   "reason_summary": "kaynağı Archive'a taşınmış ya da yok olmuş özet, {days} günlük, gelen link yok",
   "reason_orphan": "{days} gündür ne gelen ne giden link, hiçbir iş yeniden üretmez",
+  "reason_drafts": "özetlenmiş, {days} gündür Inbox'ta",
   "reason_spiky": "özetlenmiş, görevleri çıkarılmış, {days} gündür Inbox'ta",
   "log_title": "# Arşiv logu",
   "log_intro": "_tools/wiki_prune.py'nin yaptığı her taşıma, en yenisi üstte. Hiçbir şey silinmedi; tarihçe git'te. Geri almak için: `git mv \"<nereye>\" \"<nereden>\"`, sonra satırı geri alındı diye işaretle._",

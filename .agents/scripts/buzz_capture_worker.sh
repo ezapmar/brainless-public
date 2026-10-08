@@ -7,6 +7,7 @@ export PATH="$HOME/.cargo/bin:$HOME/.local/bin:/usr/local/bin:/usr/bin:/bin"
 export MISE_QUIET=1
 VAULT="${BRAINLESS_VAULT:-$HOME/projects/brainless}"
 cd "$VAULT" || exit 1
+export PYTHONPATH="$VAULT/tools:$VAULT/.agents/scripts${PYTHONPATH:+:$PYTHONPATH}"
 
 # Skip the tick if the box woke before the network came back, so the Buzz call
 # does not crash the unit and trip a false alarm; the next run captures it.
@@ -15,11 +16,14 @@ if ! python3 tools/net_wait.py --wait; then
   exit 0
 fi
 
-git pull --rebase --autostash --quiet || true
+if ! bash .agents/scripts/git_sync.sh; then
+  echo "git_sync: tree not clean (alert sent once); skipping this run"
+  exit 0
+fi
 python3 .agents/scripts/buzz_capture.py
 
 git add "Thinking" "Inbox" 2>/dev/null
 if ! git diff --cached --quiet; then
   git commit --quiet -m "buzz capture: $(date +%F-%H%M) ($WORKER)"
-  git pull --rebase --autostash --quiet && git push --quiet
+  bash .agents/scripts/git_sync.sh && git push --quiet
 fi

@@ -178,7 +178,7 @@ def _load(paths):
     docs = []
     for p in paths:
         try:
-            txt = Path(p).read_text(errors="ignore")
+            txt = Path(p).read_text(errors="ignore", encoding="utf-8")
             docs.append({"path": p, "text": txt, "tokens": tokenize(txt)})
         except Exception:
             pass

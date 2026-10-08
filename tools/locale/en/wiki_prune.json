@@ -30,6 +30,7 @@
   "reason_query": "{cmd} output, {days} days old, nothing links to it",
   "reason_summary": "summary of a source now under Archive or gone, {days} days old, no inbound link",
   "reason_orphan": "no link in or out for {days} days and no job would rebuild it",
+  "reason_drafts": "summarised, {days} days in Inbox",
   "reason_spiky": "summarised, mined for tasks, {days} days in Inbox",
   "log_title": "# Archive log",
   "log_intro": "_Every move made by tools/wiki_prune.py, newest first. Nothing was deleted; git holds the history. To restore one: `git mv \"<to>\" \"<from>\"`, then mark the row restored._",

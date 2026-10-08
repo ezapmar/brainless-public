@@ -32,6 +32,7 @@ import json
 import os
 import shutil
 import subprocess
+from paths import child_env
 import sys
 import tarfile
 import tempfile
@@ -40,7 +41,6 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 VAULT = Path(os.environ.get("BRAINLESS_VAULT") or Path(__file__).resolve().parents[1])
-sys.path.insert(0, str(Path(__file__).resolve().parent))
 STATE = VAULT / ".agents" / "state" / "backup.json"
 KEEP = 6
 PREFIX = "brainless-"
@@ -66,7 +66,7 @@ def config() -> tuple[Path | None, str]:
 
 def load_state() -> dict:
     try:
-        return json.loads(STATE.read_text())
+        return json.loads(STATE.read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return {}
 
@@ -74,7 +74,7 @@ def load_state() -> dict:
 def save_state(**kw):
     s = {**load_state(), **kw}
     STATE.parent.mkdir(parents=True, exist_ok=True)
-    STATE.write_text(json.dumps(s, indent=1))
+    STATE.write_text(json.dumps(s, indent=1), encoding="utf-8")
 
 
 def files(root: Path):
@@ -184,11 +184,11 @@ def verify(identity: Path, archive: Path | None = None) -> dict:
         except tarfile.TarError:
             dec.stdout.close()
             dec.wait()
-            raise RuntimeError("age could not decrypt the archive (wrong key, or not this vault's key?)")
+            raise RuntimeError("age could not decrypt the archive (wrong key, or not this vault's key?)") from None
         dec.stdout.close()
         if dec.wait() != 0:
             raise RuntimeError("age could not decrypt the archive (wrong key?)")
-        manifest = json.loads((root / "manifest.json").read_text())
+        manifest = json.loads((root / "manifest.json").read_text(encoding="utf-8"))
         missing = [f for f, size in manifest["files"].items()
                    if not (root / "vault" / f).exists() or (root / "vault" / f).stat().st_size != size]
         # A clone is the real restore of the history, and it checks every object.
@@ -205,11 +205,12 @@ def verify(identity: Path, archive: Path | None = None) -> dict:
 
 def _link_check(vault: Path) -> dict:
     """Links resolve in the restored copy the way they do in the live one."""
-    code = (f"import json,sys; sys.path.insert(0, {str(Path(__file__).resolve().parent)!r}); import lint_wiki as L;"
+    code = ("import json; import lint_wiki as L;"
             "fs=L.all_wiki_files(); g=L.link_graph(fs);"
             "print(json.dumps({'wiki_pages': len(fs), 'broken_links': len(g['broken'])}))")
+    # The live engine's lint_wiki (on PYTHONPATH via child_env) reads the restored vault.
     r = subprocess.run([sys.executable, "-c", code], cwd=vault, capture_output=True, text=True,
-                       env={**os.environ, "BRAINLESS_VAULT": str(vault)}, timeout=300)
+                       env={**child_env(), "BRAINLESS_VAULT": str(vault)}, timeout=300)
     try:
         return json.loads(r.stdout.strip().splitlines()[-1])
     except (ValueError, IndexError):

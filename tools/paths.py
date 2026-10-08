@@ -40,6 +40,34 @@ def vault_root():
     return os.path.dirname(_HERE)
 
 
+# The engine's Python lives in two script directories that import each other
+# by bare module name. Until 2026-10-08 every file put them on sys.path by
+# hand (99 inserts in 74 files). Now a launcher sets PYTHONPATH once, through
+# child_env() here (cli.py, run_log.py, jobqueue.py), through the shell
+# wrappers' export line, or through the installed units' Environment= line.
+# A tool run directly as `python3 tools/x.py` still finds its siblings, since
+# Python puts the script's own directory first; only the cross-directory
+# imports need the variable, and `brainless run <script>` sets it.
+SCRIPT_DIRS = ("tools", os.path.join(".agents", "scripts"))
+
+
+def python_path(vault=None) -> str:
+    """PYTHONPATH value for a child process: the script directories, then
+    whatever the caller already had."""
+    root = vault or vault_root()
+    dirs = [os.path.join(root, d) for d in SCRIPT_DIRS]
+    current = os.environ.get("PYTHONPATH", "")
+    if current:
+        dirs.append(current)
+    return os.pathsep.join(dict.fromkeys(dirs))
+
+
+def child_env(vault=None, **extra) -> dict:
+    """os.environ plus BRAINLESS_VAULT and PYTHONPATH, for subprocess calls."""
+    root = vault or vault_root()
+    return dict(os.environ, BRAINLESS_VAULT=root, PYTHONPATH=python_path(root), **extra)
+
+
 def _clean(rel):
     raw = unicodedata.normalize("NFC", rel.strip().replace("\\", "/"))
     clean = raw.strip("/")

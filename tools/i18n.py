@@ -23,8 +23,7 @@ import os
 import sys
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
-sys.path.insert(0, _HERE)
-from owner_profile import LANG  # noqa: E402
+from owner_profile import LANG
 
 LOCALE_DIR = os.path.join(_HERE, "locale")
 _cache = {}

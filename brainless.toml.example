@@ -29,6 +29,18 @@ model = "qwen3:8b"     # see: python3 tools/llm.py --models ollama
 # [llm.lanes.compile]
 # provider = "claude-cli"
 
+# A monthly cap for the anthropic provider (USD, 0 = none). Past the warn ratio
+# the health check says so; past the stop ratio anthropic lanes run on the
+# fallback until the reset day. Spend per lane: python3 tools/llm.py --usage
+# api_budget_usd = 100
+# api_budget_warn = 0.8
+# api_budget_stop = 0.9
+# api_budget_reset_day = 1
+# House rules sent as the system prompt on raw API calls (vault-relative path)
+# system_prompt_file = "_Agent-Context/LLM-SYSTEM.md"
+# An account-linked Anthropic key must name its workspace (Console > Settings > Workspaces)
+# anthropic_workspace_id = "wrkspc_..."
+
 [schedule]
 enabled = false
 

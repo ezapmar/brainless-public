@@ -1,6 +1,5 @@
 """In-memory Buzz relay for delivery and workflow regressions."""
 import hashlib
-import json
 
 OWNER = 'a' * 64
 

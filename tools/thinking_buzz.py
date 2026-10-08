@@ -1,18 +1,16 @@
 """Weekly thinking over Buzz. Workflow state and prepared writes survive crashes."""
 from contextlib import contextmanager
-import fcntl
 import hashlib
 import json
 from pathlib import Path
-import sys
 import time
 
-from buzz_delivery import Outbox, VAULT, event_id
+from buzz_delivery import Outbox, event_id
 from i18n import t
 from today_buzz import parents, direct_parent
 from today_queue import atomic_write
+from vault_lock import lock_exclusive
 
-sys.path.insert(0, str(VAULT / '.agents/scripts'))
 import thinking_loop as loop
 
 
@@ -21,8 +19,8 @@ def locked():
     path = Path(loop.STATE_FILE)
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.with_suffix('.lock').open('a') as stream:
-        fcntl.flock(stream, fcntl.LOCK_EX)
-        state = json.loads(path.read_text()) if path.exists() else {}
+        lock_exclusive(stream)
+        state = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
         yield state
         persist(state)
 
@@ -37,7 +35,7 @@ def snapshots(state):
     for value in [path, loop.CALIBRATION if state['kind'] in ('grade', 'predict') else None]:
         if value:
             p = Path(value)
-            result[str(p)] = p.read_text() if p.exists() else None
+            result[str(p)] = p.read_text(encoding="utf-8") if p.exists() else None
     return result
 
 
@@ -121,7 +119,7 @@ def resume_writes(state):
         rel = path.relative_to(vault).as_posix()
         if not (rel.startswith('Thinking/') or rel.startswith('.wiki/digests/queries/')):
             raise ValueError('Invalid thinking target')
-        current = path.read_text() if path.exists() else None
+        current = path.read_text(encoding="utf-8") if path.exists() else None
         if current not in (entry['before'], entry['after']):
             raise ValueError(t('buzz_interaction.source_changed'))
         pending.append((path, entry['after']))
@@ -165,7 +163,7 @@ def handle(msg, channel, owner, *, text=None, box=None):
                 # A generated seed must never overwrite an existing note.
                 if state['kind'] == 'seed' and any(Path(p).exists() for p in writes if Path(p).parent == Path(loop.IDEAS_DIR)):
                     raise ValueError(t('buzz_interaction.source_changed'))
-                state['pending_apply'] = {'writes': [{'path': p, 'before': Path(p).read_text() if Path(p).exists() else None, 'after': body}
+                state['pending_apply'] = {'writes': [{'path': p, 'before': Path(p).read_text(encoding="utf-8") if Path(p).exists() else None, 'after': body}
                                                      for p, body in writes.items()]}
                 persist(state)
                 resume_writes(state)

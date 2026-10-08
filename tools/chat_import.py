@@ -35,9 +35,8 @@ import unicodedata
 from datetime import datetime, timezone
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
 VAULT = Path(__file__).resolve().parents[1]
-import os  # noqa: E402
+import os
 VAULT = Path(os.environ.get("BRAINLESS_VAULT") or VAULT)
 OUT_ROOT = VAULT / "raw" / "chats"
 PROMOTED = VAULT / "Library" / "Chats"
@@ -168,7 +167,7 @@ def existing_ids(root: Path) -> set[str]:
     ids = set()
     for p in list(root.rglob("*.md")) + list(PROMOTED.rglob("*.md")):
         try:
-            m = re.search(r"^conversation_id:\s*(\S+)", p.read_text(errors="replace")[:1000], re.M)
+            m = re.search(r"^conversation_id:\s*(\S+)", p.read_text(errors="replace", encoding="utf-8")[:1000], re.M)
         except OSError:
             continue
         if m:
@@ -207,7 +206,7 @@ def do_import(convs, min_words, markers, include_personal) -> dict:
         while path.exists():
             path = d / f"{c['date']}-{slug(c['title'])}-{i}.md"
             i += 1
-        path.write_text(render(c))
+        path.write_text(render(c), encoding="utf-8")
         seen.add(c["id"])
         stats["written"] += 1
     return stats
@@ -242,7 +241,7 @@ def main(argv=None) -> int:
         return 0
     convs = []
     for p in args.paths:
-        convs += parse(json.loads(Path(p).read_text()))
+        convs += parse(json.loads(Path(p).read_text(encoding="utf-8")))
     markers = personal_markers()
     if args.cmd == "triage":
         triage(convs, args.min_words, markers)

@@ -8,13 +8,11 @@ Run: python3 -m unittest tools.tests.test_link_suggest -v
 """
 import importlib
 import os
-import sys
 import tempfile
 import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(ROOT / "tools"))
 
 try:
     import numpy as np

@@ -54,6 +54,8 @@ SHIP_FILES = [
     "VERSION",
     "_Agent-Context/AGENT-RULES.md",
     "_Agent-Context/TRUNK-BASED-DEVELOPMENT.md",
+    # House rules the raw API provider sends as its system prompt (tools/llm.py).
+    "_Agent-Context/LLM-SYSTEM.md",
     # Project hooks (tools/hooks/claude_guard.py): the vault rules as checks, not prompts.
     ".claude/settings.json",
 ]
@@ -171,6 +173,7 @@ Thinking/**/*.md
 _Agent-Context/*.md
 !_Agent-Context/AGENT-RULES.md
 !_Agent-Context/TRUNK-BASED-DEVELOPMENT.md
+!_Agent-Context/LLM-SYSTEM.md
 !_Agent-Context/PROFILE.md
 !_Agent-Context/LEARNINGS.md
 !**/.gitkeep
@@ -523,6 +526,22 @@ def leak_scan(out, names=None):
     return findings
 
 
+def _prune_owner_only(out):
+    """owner-only.txt names units the installer skips by default. Some of those
+    units never ship (EXCLUDE), and the unit test that reads the list expects
+    every name in it to exist, so the exported copy drops the lines that name
+    an excluded file. The installer treats a missing or short list the same."""
+    path = os.path.join(out, ".agents", "systemd", "owner-only.txt")
+    if not os.path.isfile(path):
+        return
+    gone = {os.path.basename(x) for x in EXCLUDE if x.startswith(".agents/systemd/")}
+    with open(path, encoding="utf-8") as fh:
+        lines = fh.read().splitlines()
+    kept = [l for l in lines if l.split("#", 1)[0].strip() not in gone]
+    with open(path, "w", encoding="utf-8") as fh:
+        fh.write("\n".join(kept) + "\n")
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", help="destination directory (omit for a dry run)")
@@ -547,6 +566,7 @@ def main():
                 p = os.path.join(args.out, name)
                 shutil.rmtree(p) if os.path.isdir(p) and not os.path.islink(p) else os.remove(p)
         n = write_tree(args.out)
+        _prune_owner_only(args.out)
         print(f"wrote {n} files to {args.out}")
     findings = leak_scan(args.out)
     if findings:

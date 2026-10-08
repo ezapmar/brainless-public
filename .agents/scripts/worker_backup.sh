@@ -8,7 +8,12 @@ cd "$VAULT" || exit 1
 # Commit suffix names the always-on worker (PROFILE.md worker_name); the watchdog attributes by it.
 WORKER="$(grep -m1 '^worker_name:' _Agent-Context/PROFILE.md 2>/dev/null | cut -d: -f2- | xargs)"; WORKER="${WORKER:-worker}"
 
-git pull --rebase --autostash --quiet || true
+# Pull through git_sync.sh: it aborts a conflicting rebase instead of leaving
+# conflict markers for the `git add -A` below to commit.
+if ! bash .agents/scripts/git_sync.sh; then
+  echo "git_sync: tree not clean (alert sent once); skipping this run"
+  exit 0
+fi
 
 # Buzz Layer 1: post the morning briefing to #daily once per day (best effort).
 [ -x .agents/scripts/buzz_briefing_sync.sh ] && bash .agents/scripts/buzz_briefing_sync.sh || true

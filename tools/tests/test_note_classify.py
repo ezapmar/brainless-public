@@ -7,13 +7,11 @@ feature is meant to prevent. So the gate is tested from the over-triggering side
 """
 from datetime import datetime, timedelta
 from pathlib import Path
-import sys
 import tempfile
 import unittest
 
 ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(ROOT / "tools"))
-import note_classify as nc  # noqa: E402
+import note_classify as nc
 
 
 def classify(text, *, projects=(), people=(), peers=(), weight=1.0, name="note.md"):

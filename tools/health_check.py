@@ -14,16 +14,12 @@ import subprocess
 import time
 from datetime import datetime, timedelta
 
-import sys
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from paths import vault_root  # noqa: E402
+from paths import vault_root
 VAULT = vault_root()
-import sys
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from owner_profile import WORKER  # noqa: E402
-from owner_profile import PROTECTED_HOMES as profile_protected_homes  # noqa: E402
-from i18n import t  # noqa: E402
-import mac_notify  # noqa: E402
+from owner_profile import WORKER
+from owner_profile import PROTECTED_HOMES as profile_protected_homes
+from i18n import t
+import mac_notify
 HEALTH_FILE = os.path.join(VAULT, "_Agent-Context", "HEALTH.md")
 RED_FLAG_SECONDS = 2 * 24 * 3600
 PILE_INBOX_RED = 10  # tools/wiki_prune.py INBOX_STALE_RED, the belief's own criterion
@@ -59,7 +55,7 @@ def check_buzz_delivery():
     if not os.path.exists(path):
         return  # worker-only state; absent on the primary Mac
     try:
-        status = json.loads(open(path).read())
+        status = json.loads(open(path, encoding="utf-8").read())
         age = time.time() - status.get("checked_at", 0)
         pending = status.get("pending_messages", 0) + status.get("pending_replies", 0)
         level = "RED" if age > 900 else ("WARN" if pending or status.get("failures") else "OK")
@@ -87,7 +83,7 @@ def check_git():
             ["git", "status", "--porcelain"], cwd=VAULT,
             capture_output=True, text=True, timeout=30,
         )
-        dirty = len([l for l in out.stdout.splitlines() if l.strip()])
+        dirty = len([line for line in out.stdout.splitlines() if line.strip()])
         add(t("health_check.uncommitted_changes"), "OK" if dirty < 20 else "WARN", t("health_check.files", n=dirty))
     except Exception:
         pass
@@ -166,12 +162,47 @@ def check_llm_auth():
         return
     label = t("health_check.llm_access_worker", worker=WORKER)
     try:
-        m = json.loads(open(mirror).read())
+        m = json.loads(open(mirror, encoding="utf-8").read())
         line, mtime = m["line"], m["mtime"]
     except (OSError, ValueError, KeyError, TypeError):
         add(label, "WARN", t("health_check.status_file_unreadable"))
         return
     llm_row(label, line, time.time() - mtime, "health_check.llm_auth_worker")
+
+
+def _budget_row(label, state):
+    pct = int(round(float(state.get("ratio") or 0) * 100))
+    kw = dict(spent=f"{float(state.get('spent') or 0):.2f}", budget=f"{float(state.get('budget') or 0):.0f}",
+              pct=pct, start=state.get("period_start", "?"))
+    level = state.get("level", "ok")
+    if level == "stop":
+        add(label, "WARN", t("health_check.api_budget_stop", **kw))
+    elif level == "warn":
+        add(label, "WARN", t("health_check.api_budget_warn", **kw))
+    else:
+        add(label, "OK", t("health_check.api_budget_ok", **kw))
+
+
+def check_api_budget():
+    """Spend against the anthropic provider's monthly cap (tools/llm.py).
+
+    The ledger lives where the calls run. This machine's own state file gets a
+    row when it exists; the worker's copy (mirrored by tools/worker_reach.py to
+    worker_llm_budget.json) gets its own. No file, no row: no budget is set
+    here, which is the default."""
+    path = os.path.join(VAULT, ".agents", "state", "llm_budget.json")
+    if os.path.exists(path):
+        try:
+            _budget_row(t("health_check.api_budget"), json.loads(open(path, encoding="utf-8").read()))
+        except (OSError, ValueError):
+            add(t("health_check.api_budget"), "WARN", t("health_check.status_file_unreadable"))
+    mirror = os.path.join(VAULT, ".agents", "state", "worker_llm_budget.json")
+    if os.path.exists(mirror):
+        try:
+            _budget_row(t("health_check.api_budget_worker", worker=WORKER),
+                        json.loads(open(mirror, encoding="utf-8").read()))
+        except (OSError, ValueError):
+            add(t("health_check.api_budget_worker", worker=WORKER), "WARN", t("health_check.status_file_unreadable"))
 
 
 def check_crm():
@@ -183,7 +214,7 @@ def check_crm():
     """
     conf = os.path.expanduser("~/.config/brainless")
     try:
-        with open(os.path.join(conf, "crm_provider")) as fh:
+        with open(os.path.join(conf, "crm_provider"), encoding="utf-8") as fh:
             provider = fh.read().strip().lower() or "pipedrive"
     except OSError:
         provider = "pipedrive"
@@ -289,7 +320,7 @@ def check_pile():
 
 def _pile_line():
     try:
-        with open(os.path.join(VAULT, "_Agent-Context", "PILE-SCORECARD.md"), errors="replace") as fh:
+        with open(os.path.join(VAULT, "_Agent-Context", "PILE-SCORECARD.md"), errors="replace", encoding="utf-8") as fh:
             m = re.search(r"<!-- pile: (\{.*?\}) -->", fh.read())
         return json.loads(m.group(1)) if m else None
     except (OSError, ValueError):
@@ -340,7 +371,6 @@ DRY_CAPTURE = {("nightly_processor", "captures"): 3, ("spiky_capture", "reports"
 def run_findings(roll, now=None):
     """(status, text) findings from a run-log rollup (tools/run_log.py)."""
     now = now or datetime.now()
-    today = now.strftime("%Y-%m-%d")
     by_job = {}
     for e in roll:
         by_job.setdefault(e["job"], []).append(e)
@@ -391,7 +421,7 @@ def check_worker_reach():
         return
     label = f"{WORKER} reach"
     try:
-        s = json.loads(open(path).read())
+        s = json.loads(open(path, encoding="utf-8").read())
     except (OSError, ValueError):
         add(label, "RED", "Unreadable reachability state")
         return
@@ -408,7 +438,6 @@ def check_worker_reach():
 def check_runs():
     """Per-run log (tools/run_log.py): a job that failed last time, went quiet,
     or ran every night with nothing to do. Exit codes miss the last two."""
-    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
     from run_log import read_rollup
     label = t("health_check.runs_label")
     findings, jobs = [], 0
@@ -431,7 +460,7 @@ def check_backup():
     and that has been restored once, protects against a bad automation run."""
     path = os.path.join(VAULT, ".agents", "state", "backup.json")
     try:
-        with open(path) as fh:
+        with open(path, encoding="utf-8") as fh:
             s = json.load(fh)
     except (OSError, ValueError):
         s = {}
@@ -461,11 +490,11 @@ def check_log_errors():
             # ("... backed off."). Resolved or transient errors (ssh outage, an
             # old code bug) then stop producing WARN once a clean run follows;
             # the errors of a last run that crashed without a summary stay flagged.
-            last_run = max((i for i, l in enumerate(tail)
-                            if "backed off" in l.lower()), default=-1)
-            errs = [l.strip() for l in tail[last_run + 1:]
-                    if any(k in l.lower() for k in ("error", "failed", "err]", "exception"))
-                    and "0 failed" not in l]
+            last_run = max((i for i, line in enumerate(tail)
+                            if "backed off" in line.lower()), default=-1)
+            errs = [line.strip() for line in tail[last_run + 1:]
+                    if any(k in line.lower() for k in ("error", "failed", "err]", "exception"))
+                    and "0 failed" not in line]
             if errs:
                 add(label, "WARN", t("health_check.error_lines", n=len(errs), last=errs[-1][:120]))
             else:
@@ -512,12 +541,12 @@ def check_dialectic():
     if not text.strip():
         try:
             with open(os.path.join(VAULT, "_Agent-Context", "DIALECTIC-STATUS.md"),
-                      errors="replace") as fh:
+                      errors="replace", encoding="utf-8") as fh:
                 text = fh.read()
         except OSError:
             add(t("health_check.dialectic_round"), "WARN", t("health_check.dialectic_no_status"))
             return
-    runs = [l for l in text.splitlines() if l.startswith("- 20")]
+    runs = [line for line in text.splitlines() if line.startswith("- 20")]
     if not runs:
         add(t("health_check.dialectic_round"), "WARN", t("health_check.dialectic_empty"))
         return
@@ -578,6 +607,7 @@ def main():
     check_runs()
     check_backup()
     check_llm_auth()
+    check_api_budget()
     check_buzz_delivery()
     check_crm()
     check_log_errors()
@@ -604,11 +634,11 @@ def main():
     lines.append(t("health_check.footer"))
 
     os.makedirs(os.path.dirname(HEALTH_FILE), exist_ok=True)
-    with open(HEALTH_FILE, "w") as fh:
+    with open(HEALTH_FILE, "w", encoding="utf-8") as fh:
         fh.write("\n".join(lines) + "\n")
 
     if worst == "RED":
-        reds = "; ".join(f"{l}: {d}" for l, s, d in CHECKS if s == "RED")[:180]
+        reds = "; ".join(f"{label}: {d}" for label, s, d in CHECKS if s == "RED")[:180]
         title = t("health_check.notify_title")
         if shutil.which("osascript"):  # macOS-only notification
             # reds holds LLM error text and paths: argv only, never AppleScript source.

@@ -10,14 +10,12 @@ in both places, once.
 import importlib
 import json
 import os
-import sys
 import tempfile
 import unittest
 from datetime import datetime, timedelta
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(ROOT / "tools"))
 
 
 def fm(**kw):
@@ -118,6 +116,27 @@ class PruneVault(unittest.TestCase):
         self.assertEqual([m.src.name for m in moves], [summarised.name])
         self.assertEqual(moves[0].dst, self.vault / "Archive" / "Spiky" / d[:7] / summarised.name)
 
+    # ---- drafts
+
+    def test_drafts_file_moves_with_a_summary_after_two_weeks_and_its_summary_follows(self):
+        d = days_ago(20)
+        old = self.write(f"Inbox/Content Drafts/{d} weekly drafts.md", "# Drafts\n")
+        self.write(f"Inbox/Content Drafts/{days_ago(21)} unsummarised.md", "# x\n")
+        self.write(f"Inbox/Content Drafts/{days_ago(5)} fresh.md", "# x\n")
+        s = self.write(".wiki/summaries/inbox_content-drafts_old.md",
+                       fm(lang="en", summary_en="x", source=f"Inbox/Content Drafts/{d} weekly drafts.md",
+                          compiled_at=f"{days_ago(19)}T00:00:00") + "s\n")
+        self.write(".wiki/summaries/inbox_content-drafts_fresh.md",
+                   fm(lang="en", summary_en="x", source=f"Inbox/Content Drafts/{days_ago(5)} fresh.md",
+                      compiled_at=f"{days_ago(4)}T00:00:00") + "s\n")
+        moves = self.wp.candidates(self.now, ["drafts"])
+        self.assertEqual([m.src.name for m in moves], [old.name])
+        dst = self.vault / "Archive" / "Content Drafts" / d[:7] / old.name
+        self.assertEqual(moves[0].dst, dst)
+        self.wp.apply(moves, self.now)
+        self.assertTrue(dst.exists())
+        self.assertIn(f"source: Archive/Content Drafts/{d[:7]}/{old.name}", s.read_text())
+
     # ---- apply and the log
 
     def test_apply_moves_logs_every_move_twice_and_retargets_the_summary(self):
@@ -156,6 +175,11 @@ class PruneVault(unittest.TestCase):
         ledger = self.write("Inbox/CRM/Acme.md", "# Acme\n")
         old = (self.now - timedelta(days=40)).timestamp()
         os.utime(ledger, (old, old))
+        # Nor is a standing pad, or a podcast published long ago and captured this week.
+        pad = self.write("Inbox/inspiration.md", "---\ntype: inbox\n---\n# Pad\n")
+        os.utime(pad, (old, old))
+        self.write(f"Inbox/Media/{days_ago(90)} An old episode.md",
+                   f"---\nkind: podcast\ncaptured: {days_ago(3)}\n---\n# Episode\n")
         self.write("Thinking/Decisions/Decision - A.md",
                    fm(date=days_ago(5), type="decision") + "# A\n\n## Outcome\nWent well.\n")
         self.write("Thinking/Decisions/Decision - B.md",

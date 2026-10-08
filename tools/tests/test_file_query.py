@@ -15,8 +15,7 @@ import unittest
 from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(ROOT / "tools"))
-import concepts as C  # noqa: E402
+import concepts as C
 
 try:
     import yaml
@@ -152,6 +151,27 @@ class FileQueryTest(unittest.TestCase):
         self.assertEqual(r.returncode, 1)
         self.assertFalse((self.vault / ".wiki").exists())
 
+
+
+class CarriedFrontmatterTest(unittest.TestCase):
+    """Output that brings its own frontmatter gets one merged block, not two
+    (the output guard read four such queries as damaged, 2026-09-26)."""
+
+    def run_file_query(self, vault, content):
+        env = dict(os.environ, BRAINLESS_VAULT=vault)
+        rel = subprocess.run([sys.executable, str(ROOT / "tools" / "file_query.py"), "research", "A note"],
+                             input=content, env=env, capture_output=True, text=True, check=True).stdout.strip()
+        return (Path(vault) / rel).read_text()
+
+    def test_carried_frontmatter_is_merged(self):
+        import output_guard
+        with tempfile.TemporaryDirectory() as vault:
+            text = self.run_file_query(vault, "---\ntags: [uk]\ncreated: 2026-09-26\nlang: en\n---\n# Note\n\nbody\n")
+            self.assertEqual(output_guard.problems(text), [])
+            self.assertIn("created: 2026-09-26", text)
+            self.assertIn("tags: [query, research]", text)
+            self.assertNotIn("tags: [uk]", text)
+            self.assertTrue(text.split("---\n")[2].lstrip().startswith("# Note"))
 
 if __name__ == "__main__":
     unittest.main()

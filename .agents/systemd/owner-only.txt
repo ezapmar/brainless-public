@@ -1,0 +1,13 @@
+# Units that only make sense on the owner's own worker. .agents/systemd/install.sh
+# skips every file named here unless it is run with --all. One unit file name
+# per line; a # starts a comment.
+#
+# Personal job: the owner's PTE exam countdown in Buzz #tasks.
+# Hand-installed units that still run through the hand-named compatibility
+# shim and the owner's own sources (content engine, Spiky mail, thinker digest).
+brainless-content.service
+brainless-content.timer
+brainless-spiky.service
+brainless-spiky.timer
+brainless-thinkers.service
+brainless-thinkers.timer

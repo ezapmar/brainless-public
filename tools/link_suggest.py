@@ -49,8 +49,7 @@ import sys
 from datetime import date
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-from lint_wiki import VAULT, WIKI, all_wiki_files, link_graph  # noqa: E402
+from lint_wiki import VAULT, WIKI, all_wiki_files, link_graph
 
 REPORT = WIKI / "_link-suggestions.md"
 K = 5
@@ -88,7 +87,7 @@ def shelf(rel: str) -> str:
     if parent.endswith("digests/queries"):
         return parent + "/" + Path(rel).stem[11:].split("-")[0]
     try:
-        head = p.read_text(errors="ignore")[:2000]
+        head = p.read_text(errors="ignore", encoding="utf-8")[:2000]
     except OSError:
         return parent
     m = re.search(r"^source:\s*(.+)$", head, re.M)
@@ -218,7 +217,7 @@ def main(argv=None) -> int:
     if args.json:
         print(json.dumps(res, ensure_ascii=False, indent=1))
     else:
-        REPORT.write_text(markdown(res))
+        REPORT.write_text(markdown(res), encoding="utf-8")
         print(f"{_rel(REPORT)}: {len(res['orphan_homes'])} orphan homes, "
               f"{len(res['new_links'])} new links, {len(res['near_identical'])} near-identical")
     print(f"RUNLOG orphan_homes={len(res['orphan_homes'])} new_links={len(res['new_links'])} "

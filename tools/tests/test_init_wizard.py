@@ -12,18 +12,16 @@ import contextlib
 import io
 import os
 import subprocess
-import sys
 import tempfile
 import tomllib
 import unittest
 from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(ROOT / "tools"))
-import config  # noqa: E402
-import doctor  # noqa: E402
-import init_wizard as wiz  # noqa: E402
-import profiles  # noqa: E402
+import config
+import doctor
+import init_wizard as wiz
+import profiles
 
 
 class WizardTest(unittest.TestCase):

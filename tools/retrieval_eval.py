@@ -27,12 +27,10 @@ Usage:
 """
 import argparse
 import json
-import os
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-from wiki_search import VAULT, mode, search  # noqa: E402
+from wiki_search import VAULT, mode, search
 
 GOLDEN = VAULT / "_Agent-Context" / "retrieval-golden.json"
 LAST = VAULT / ".agents" / "state" / "retrieval_eval.json"
@@ -41,7 +39,7 @@ K = 10
 
 def load_golden(path: Path = GOLDEN) -> list[dict]:
     try:
-        items = json.loads(path.read_text())
+        items = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return []
     return [i for i in items if isinstance(i, dict) and i.get("q") and i.get("expect")]
@@ -101,12 +99,12 @@ def main(argv=None) -> int:
         print(f"no golden set at {GOLDEN.relative_to(VAULT)}")
         return 0
     try:
-        prev = json.loads(LAST.read_text())
+        prev = json.loads(LAST.read_text(encoding="utf-8"))
     except (OSError, ValueError):
         prev = {}
     moved = changes(prev, res)
     LAST.parent.mkdir(parents=True, exist_ok=True)
-    LAST.write_text(json.dumps(res, ensure_ascii=False, indent=1))
+    LAST.write_text(json.dumps(res, ensure_ascii=False, indent=1), encoding="utf-8")
     if args.json:
         print(json.dumps({**res, "changes": moved}, ensure_ascii=False))
     else:

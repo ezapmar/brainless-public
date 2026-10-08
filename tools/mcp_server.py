@@ -42,12 +42,11 @@ import unicodedata
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-from owner_profile import PRIVATE_SEGMENTS  # noqa: E402
-from wiki_search import VAULT, mode, passage, search  # noqa: E402
+from owner_profile import PRIVATE_SEGMENTS
+from wiki_search import VAULT, mode, passage, search
 
 WIKI = VAULT / ".wiki"
-NAME, VERSION = "brainless-wiki", (VAULT / "VERSION").read_text().strip() if (VAULT / "VERSION").exists() else "0"
+NAME, VERSION = "brainless-wiki", (VAULT / "VERSION").read_text(encoding="utf-8").strip() if (VAULT / "VERSION").exists() else "0"
 PROTOCOLS = ("2025-06-18", "2025-03-26", "2024-11-05")
 TOKEN_FILE = Path.home() / ".config" / "brainless" / "mcp_token"
 MAX_PAGE = 60_000  # characters; a raw import can be a whole book
@@ -125,7 +124,7 @@ def resolve(path: str) -> Path:
     try:
         rel = p.relative_to(VAULT.resolve()).as_posix()
     except ValueError:
-        raise Refused("only pages under .wiki/ are served")
+        raise Refused("only pages under .wiki/ are served") from None
     if not allowed([rel]) or not p.is_file():
         raise Refused(f"not available: {path}")
     return p
@@ -153,7 +152,7 @@ def tool_search(query: str, k: int = 8) -> str:
 
 
 def tool_read_page(path: str) -> str:
-    text = resolve(path).read_text(errors="ignore")
+    text = resolve(path).read_text(errors="ignore", encoding="utf-8")
     if len(text) > MAX_PAGE:
         text = text[:MAX_PAGE] + f"\n\n[truncated at {MAX_PAGE} characters]"
     return text
@@ -164,7 +163,7 @@ def tool_index(topic: str | None = None) -> str:
         return "\n".join(sorted(p.stem.removeprefix("index-") for p in (WIKI / "_index").glob("index-*.md")))
     rel = ".wiki/INDEX.md" if not topic else f".wiki/_index/index-{topic.removeprefix('index-')}.md"
     # Index lines name pages; a line naming a page this server would refuse goes too.
-    return "\n".join(l for l in tool_read_page(rel).splitlines() if not denied(l))
+    return "\n".join(line for line in tool_read_page(rel).splitlines() if not denied(line))
 
 
 def call(name: str, args: dict) -> str:
@@ -227,7 +226,7 @@ def serve_stdio():
 
 def token() -> str:
     try:
-        return TOKEN_FILE.read_text().strip()
+        return TOKEN_FILE.read_text(encoding="utf-8").strip()
     except OSError:
         TOKEN_FILE.parent.mkdir(parents=True, exist_ok=True)
         t = secrets.token_urlsafe(32)

@@ -87,7 +87,7 @@ retrying. See [Buzz interactions](buzz-interactions.md).
 ## Verification
 
 ```bash
-python3 -B -m unittest discover -s tools/tests -v
+brainless test -v
 ```
 
 Tests use a fictional vault and a mocked Buzz relay. No credentials,

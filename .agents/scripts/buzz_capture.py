@@ -25,16 +25,14 @@ import json
 import os
 import re
 import subprocess
-import sys
 import tempfile
 import time
 from datetime import datetime
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-sys.path.insert(0, HERE)
-import telegram_capture as tc  # noqa: E402  (reuses whisper, prompts, paths)
-from owner_profile import LANG, PRIVATE_NAME_PARTS  # noqa: E402
-from i18n import t, t_list  # noqa: E402
+import telegram_capture as tc
+from owner_profile import LANG, PRIVATE_NAME_PARTS
+from i18n import t, t_list
 
 VAULT = tc.VAULT
 BUZZ_DIR = os.path.expanduser("~/.config/brainless/buzz")
@@ -96,7 +94,7 @@ def secret(identity):
 
 def channel_id(name):
     try:
-        with open(os.path.join(BUZZ_DIR, "channels.json")) as fh:
+        with open(os.path.join(BUZZ_DIR, "channels.json"), encoding="utf-8") as fh:
             return json.load(fh).get(name)
     except (OSError, ValueError):
         return None
@@ -128,7 +126,7 @@ def load_seen():
 
 def save_seen(seen):
     os.makedirs(os.path.dirname(STATE_SEEN), exist_ok=True)
-    with open(STATE_SEEN, "w") as fh:
+    with open(STATE_SEEN, "w", encoding="utf-8") as fh:
         fh.write("\n".join(list(seen)[-500:]))
 
 
@@ -140,7 +138,7 @@ def load_since():
 
 
 def save_since(ts):
-    with open(STATE_SINCE, "w") as fh:
+    with open(STATE_SINCE, "w", encoding="utf-8") as fh:
         fh.write(str(int(ts)))
 
 
@@ -199,7 +197,6 @@ def doc_slug(name):
 def convert_document(src):
     """-> markdown text via tools/markitdown_native (imported lazily: the Mac-less
     capture path must still run when markitdown is missing, just not for documents)."""
-    sys.path.insert(0, os.path.join(VAULT, "tools"))
     from markitdown_native import convert_to_file
     out = src + ".md"
     convert_to_file(src, out)
@@ -256,7 +253,7 @@ def transcribe_file(path):
 def write_note(note, stamp, source):
     os.makedirs(tc.CAPTURE_DIR, exist_ok=True)
     path = os.path.join(tc.CAPTURE_DIR, f"{stamp}-buzz.md")
-    with open(path, "w") as fh:
+    with open(path, "w", encoding="utf-8") as fh:
         fh.write(note + f"\n\n---\n{t('buzz_capture.source_label')}: Buzz #{CHANNEL_NAME} {source}, {stamp}\n")
     log(f"Note written: {path}")
     return path

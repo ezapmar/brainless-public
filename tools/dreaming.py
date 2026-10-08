@@ -36,7 +36,6 @@ Usage:
 """
 import argparse
 from contextlib import contextmanager
-import fcntl
 import hashlib
 import json
 import os
@@ -46,8 +45,8 @@ import time
 from datetime import date
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-from owner_profile import lang_name  # noqa: E402
+from owner_profile import lang_name
+from vault_lock import lock_exclusive
 
 VAULT = Path(os.environ.get("BRAINLESS_VAULT") or Path(__file__).resolve().parents[1])
 STATE = VAULT / ".agents" / "state" / "dreaming.json"
@@ -111,14 +110,8 @@ def parse(reply: str | None) -> dict | None:
     """The judge's JSON, or None when the reply is unusable. A small model
     sometimes wraps the JSON in prose or a thinking block; take the last
     object that parses."""
-    if not reply:
-        return None
-    reply = re.sub(r"<think>.*?</think>", "", reply, flags=re.S)
-    for m in reversed(list(re.finditer(r"\{[^{}]*\}", reply, re.S))):
-        try:
-            obj = json.loads(m.group(0))
-        except ValueError:
-            continue
+    from llm import iter_json
+    for obj in reversed(list(iter_json(reply, dict))):
         v = str(obj.get("verdict", "")).strip().lower()
         reason = " ".join(str(obj.get("reason", "")).split())
         if v in VERDICTS:
@@ -130,7 +123,7 @@ def judge(a_rel: str, b_rel: str, vault: Path, run=None) -> dict | None:
     if run is None:
         from llm import run_prompt as run
     a, b = vault / a_rel, vault / b_rel
-    p = prompt(a.stem, a.read_text(errors="ignore"), b.stem, b.read_text(errors="ignore"))
+    p = prompt(a.stem, a.read_text(errors="ignore", encoding="utf-8"), b.stem, b.read_text(errors="ignore", encoding="utf-8"))
     return parse(run(p, lane=LANE, timeout=180))
 
 
@@ -161,7 +154,7 @@ def registry_rows() -> list[dict]:
 def record(a: str, b: str, decision: str, reason: str):
     """Append one decision. The reason is one line and may not break the table."""
     from today_queue import atomic_write
-    text = REGISTRY.read_text() if REGISTRY.exists() else REGISTRY_HEAD
+    text = REGISTRY.read_text(encoding="utf-8") if REGISTRY.exists() else REGISTRY_HEAD
     reason = " ".join(reason.replace("|", "/").split())
     row = f"| {a} | {b} | {decision} | {reason} | {date.today().isoformat()} |\n"
     atomic_write(REGISTRY, text.rstrip("\n") + "\n" + row)
@@ -171,8 +164,8 @@ def record(a: str, b: str, decision: str, reason: str):
 def locked():
     STATE.parent.mkdir(parents=True, exist_ok=True)
     with STATE.with_suffix(".lock").open("a") as lock:
-        fcntl.flock(lock, fcntl.LOCK_EX)
-        state = json.loads(STATE.read_text()) if STATE.exists() else {}
+        lock_exclusive(lock)
+        state = json.loads(STATE.read_text(encoding="utf-8")) if STATE.exists() else {}
         state.setdefault("proposals", {})
         state.setdefault("judged", {})
         yield state
@@ -234,7 +227,7 @@ def preview(p: dict) -> str:
 def evidence(rel: str, other: str) -> str:
     """path:line of the passage in `rel` closest to what `other` is about."""
     import wiki_search
-    d = {"path": str(VAULT / rel), "text": (VAULT / rel).read_text(errors="ignore")}
+    d = {"path": str(VAULT / rel), "text": (VAULT / rel).read_text(errors="ignore", encoding="utf-8")}
     other_title = Path(other).stem.replace("_", " ").replace("-", " ")
     src = wiki_search.passage(d, other_title)
     return f"{rel}:{src['line']}" if src["line"] else rel
@@ -247,6 +240,15 @@ def run(dry: bool = False, n: int = N, box=None, judge_fn=None) -> dict:
         for k, p in state["proposals"].items():
             if p["status"] == "pending" and now - p["created"] > EXPIRE_DAYS * DAY:
                 p.update(status="expired", decided_at=now)
+        # Pages get pruned or merged while a pair waits. A pair with a missing
+        # page cannot be shown or acted on, and reading it used to crash the run
+        # (2026-10-08) before the state was saved, so it crashed every night.
+        gone = lambda x: not ((VAULT / x["a"]).is_file() and (VAULT / x["b"]).is_file())
+        for p in state["proposals"].values():
+            if p["status"] == "pending" and gone(p):
+                p.update(status="expired", decided_at=now)
+        if any(gone(w) for w in state.get("waiting", [])):
+            state["waiting"] = [w for w in state["waiting"] if not gone(w)]
         if state.get("stopped"):
             print("dreaming is stopped (kill rule); see .agents/state/dreaming.json")
             return counts
@@ -278,8 +280,8 @@ def run(dry: bool = False, n: int = N, box=None, judge_fn=None) -> dict:
                 break
             a, b = cand["a"], cand["b"]
             k = pair_key(a, b)
-            if any(pair_key(w["a"], w["b"]) == k for w in waiting + ready):
-                continue
+            if gone(cand) or any(pair_key(w["a"], w["b"]) == k for w in waiting + ready):
+                continue  # the semantic index can lag a deletion by a day
             verdict = (judge_fn or judge)(a, b, VAULT)
             calls += 1
             counts["judged"] += 1

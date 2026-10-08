@@ -22,15 +22,12 @@ writes the file, `--dry-run` only prints.
 import argparse
 import os
 import re
-import sys
 from datetime import date, datetime
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from paths import vault_root  # noqa: E402
+from paths import vault_root
 VAULT = vault_root()
-sys.path.insert(0, os.path.join(VAULT, "tools"))
-from i18n import t  # noqa: E402
-import build_dashboard as bd  # noqa: E402  (project discovery, frontmatter)
+from i18n import t
+import build_dashboard as bd
 
 OUT_FILE = os.path.join(VAULT, "_Agent-Context", "KILL-CRITERIA.md")
 DUE_SOON_DAYS = 14
@@ -58,7 +55,7 @@ def scan(today=None):
     today = today or date.today()
     res = {"breached": [], "due": [], "upcoming": 0, "done": 0, "missing": []}
     for cat, name, path in bd.project_notes():
-        text = path.read_text(errors="ignore")
+        text = path.read_text(errors="ignore", encoding="utf-8")
         status = bd.fm(text).get("status", "active").lower()
         if any(k in status for k in SKIP_STATUSES):
             continue
@@ -114,7 +111,7 @@ def write(res=None):
     res = res or scan()
     text = render(res)
     os.makedirs(os.path.dirname(OUT_FILE), exist_ok=True)
-    with open(OUT_FILE, "w") as fh:
+    with open(OUT_FILE, "w", encoding="utf-8") as fh:
         fh.write(text)
     return res
 

@@ -147,7 +147,7 @@ Tested 2026-09-17. The Gmail MCP connector rewrites every web URL into a `google
 - The engine only proposes (seed, belief, decision stubs). Nothing is written to `Thinking/`; rule 2 holds.
 - `/dialectic [topic]` is the local twin of the same rounds (`.wiki/_commands/dialectic.md`).
 - Each topic is filed as two pages and a folded transcript: decision summary (verdict computed from the final votes, conclusion, vote table, proposal), method trace (question, hypotheses, tests, one row per persona), then the raw rounds under a collapsed callout. `/dialectic` produces the same layout.
-- Night experiment (`brainless-dialectic-night.timer`, 02:00): the persona lane runs on the worker's local model, the moderator on the cloud grades each reply usable or not; one `- night <date>:` line per run in the night section of `DIALECTIC-STATUS.md`. Kill rule: after five nights, fewer than three usable nights closes the timer, the result is logged in `docs/local-inference.md`, no larger model is seeded. The briefing repeats the latest night line when there is one.
+- Night experiment (`brainless-dialectic-night.timer`, 02:00): closed 2026-10-02 by its kill rule, 0 usable nights out of 11; the result is in `docs/local-inference.md`. The timer is disabled and removed from `.agents/systemd/`; `dialectic-persona` stays on the cloud and no larger local model is seeded for it. The night section of `DIALECTIC-STATUS.md` stays as a frozen record.
 
 ## Weekly Research (epic-triggered)
 

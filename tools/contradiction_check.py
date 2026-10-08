@@ -27,15 +27,13 @@ Usage:
 """
 import argparse
 import hashlib
-import json
 import os
 import re
 import sys
 from datetime import datetime, timedelta
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-import concepts as C  # noqa: E402
+import concepts as C
 
 VAULT = Path(os.environ.get("BRAINLESS_VAULT") or Path(__file__).resolve().parents[1])
 WIKI = VAULT / ".wiki"
@@ -57,7 +55,7 @@ def _rel(p: Path) -> str:
 
 def _read(rel: str) -> str:
     try:
-        return (VAULT / rel).read_text(errors="replace")
+        return (VAULT / rel).read_text(errors="replace", encoding="utf-8")
     except OSError:
         return ""
 
@@ -193,7 +191,7 @@ def record(results: list[dict], now: datetime | None = None) -> list[dict]:
     """Add new conflicts to CONTRADICTIONS.md; returns the ones added."""
     from i18n import t
     now = now or datetime.now()
-    text = REPORT.read_text() if REPORT.exists() else ""
+    text = REPORT.read_text(encoding="utf-8") if REPORT.exists() else ""
     blocks = [b for b in re.split(r"(?m)^(?=<!-- c:)", text) if _ROW.match(b.splitlines()[0] if b else "")]
     cutoff = (now - timedelta(days=KEEP_DAYS)).strftime("%Y-%m-%d")
     blocks = [b for b in blocks if _ROW.match(b.splitlines()[0]).group(2) >= cutoff]
@@ -217,7 +215,7 @@ def record(results: list[dict], now: datetime | None = None) -> list[dict]:
     head = [t("contradiction_check.title"), "", t("contradiction_check.intro", days=KEEP_DAYS), ""]
     body = "\n".join(b.rstrip("\n") for b in new_blocks + blocks)
     REPORT.parent.mkdir(parents=True, exist_ok=True)
-    REPORT.write_text(C.strip_dashes("\n".join(head) + (body + "\n" if body else t("contradiction_check.none") + "\n")))
+    REPORT.write_text(C.strip_dashes("\n".join(head) + (body + "\n" if body else t("contradiction_check.none") + "\n")), encoding="utf-8")
     return added
 
 

@@ -9,14 +9,12 @@ Run: python3 -m unittest tools.tests.test_retract_source -v
 """
 import importlib
 import os
-import sys
 import tempfile
 import unittest
 from datetime import datetime
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(ROOT / "tools"))
 
 CONCEPT = """---
 lang: en

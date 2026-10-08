@@ -28,7 +28,6 @@ import sys
 from pathlib import Path
 
 VAULT = Path(os.environ.get("BRAINLESS_VAULT") or Path(__file__).resolve().parents[2])
-sys.path.insert(0, str(VAULT / "tools"))
 
 DASHES = (chr(0x2014), chr(0x2013))
 HUMAN_AREAS = ("Work/", "Personal/", "Library/", "Thinking/", "Inbox/", "raw/",
@@ -77,7 +76,7 @@ def writes(tool: str, ti: dict) -> tuple[str, str, str]:
         path = ti.get("file_path", "")
         old = ""
         try:
-            old = Path(path).read_text(errors="replace")
+            old = Path(path).read_text(errors="replace", encoding="utf-8")
         except OSError:
             pass
         return path, ti.get("content", ""), old
@@ -186,7 +185,7 @@ def post(payload: dict):
         return
     from lint_wiki import parse_fm
     try:
-        fm = parse_fm(Path(path).read_text(errors="replace"))
+        fm = parse_fm(Path(path).read_text(errors="replace", encoding="utf-8"))
     except OSError:
         return
     missing = [k for k in ("lang", "summary_en") if not fm.get(k)]
@@ -201,7 +200,8 @@ def session(payload: dict):
     for name in ("CONTEXT.md", "PROJECTS-ACTIVE.md", "LEARNINGS.md"):
         p = VAULT / "_Agent-Context" / name
         try:
-            blocks.append(f"<file path=\"_Agent-Context/{name}\">\n{p.read_text()}\n</file>")
+            text = p.read_text(encoding="utf-8")
+            blocks.append(f"<file path=\"_Agent-Context/{name}\">\n{text}\n</file>")
         except OSError:
             continue
     if blocks:

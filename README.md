@@ -442,13 +442,16 @@ The full story, with the mechanics and the file names, lives in the
 - [Today Queue](https://github.com/ezapmar/brainless-public/wiki/Today-Queue) and [Buzz Interactions](https://github.com/ezapmar/brainless-public/wiki/Buzz-Interactions): the
   morning three and the threads.
 - [References](https://github.com/ezapmar/brainless-public/wiki/References): the books, papers and tools it is built on.
+- [The AI Shed](https://github.com/ezapmar/brainless-public/wiki/AI-Shed): the always-on worker with standing agent panes, and the night shift on a plan's monthly API credit with a ledger and a budget.
 - [Design](docs/design.md): the kilim brain, the palette, the logo files and the terminal colour rules.
 
 ## Honest limits
 
-- The default path assumes a Claude subscription. Other providers work but I have tested
-  them less, and reading handwriting and whiteboard photos only works with Claude for
-  now. Text, voice and documents are fine.
+- The default path assumes a Claude subscription. The night shift can run on the monthly
+  API credit a Max or Team plan includes, with a ledger and a budget cap (see [The AI
+  Shed](https://github.com/ezapmar/brainless-public/wiki/AI-Shed)). Other providers work
+  but I have tested them less, and reading handwriting and whiteboard photos only works
+  with Claude for now. Text, voice and documents are fine.
 - It speaks English and Turkish out of the box. Another language is a new folder of
   labels.
 - The six personas are my shelf. Yours may be different, and should be.
@@ -464,7 +467,7 @@ than a feature request.
 The regression tests run offline, with no credentials and no model calls:
 
 ```bash
-python3 -B -m unittest discover -s tools/tests -v
+brainless test -v
 ```
 
 ## Licence

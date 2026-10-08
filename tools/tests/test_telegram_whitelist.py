@@ -13,7 +13,6 @@ import io
 import os
 from pathlib import Path
 import stat
-import sys
 import tempfile
 import unittest
 from unittest.mock import Mock, patch
@@ -21,9 +20,7 @@ from unittest.mock import Mock, patch
 
 ROOT = Path(__file__).resolve().parents[2]
 os.environ.setdefault("BRAINLESS_VAULT", str(ROOT))
-sys.path.insert(0, str(ROOT / "tools"))
-sys.path.insert(0, str(ROOT / ".agents/scripts"))
-import telegram_capture as capture  # noqa: E402
+import telegram_capture as capture
 
 OWNER, STRANGER = "42", "99"
 

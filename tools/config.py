@@ -42,8 +42,9 @@ is ignored with a warning. Keys live in the OS secret store instead, read at run
 time, never written to disk by brainless:
   macOS  : login Keychain, service "brainless", account = the secret's name
   Linux  : libsecret via secret-tool, when installed
+  Windows: Credential Manager, target "brainless:<name>" (ctypes, no extra package)
   else   : ~/.config/brainless/secrets.env, mode 600
-BRAINLESS_SECRETS_BACKEND=keychain|secret-tool|file forces one (tests use file).
+BRAINLESS_SECRETS_BACKEND=keychain|secret-tool|wincred|file forces one (tests use file).
 
 tomllib is Python 3.11+. On older Pythons a vault without brainless.toml still
 works; a vault with one says so once and runs on environment and defaults.
@@ -54,16 +55,23 @@ import shutil
 import subprocess
 import sys
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from paths import FOLDER_KEYS, vault_root  # noqa: E402
+from paths import FOLDER_KEYS, vault_root
 
 CONFIG_NAME = "brainless.toml"
 SERVICE = "brainless"
+BACKEND_LABELS = {"keychain": "macOS Keychain", "secret-tool": "system keyring (libsecret)",
+                  "wincred": "Windows Credential Manager", "file": "secrets file"}
 _SECRET_NAME = re.compile(r"[A-Za-z0-9_.-]{1,64}")
 _LANE_KEYS = {"provider": "PROVIDER", "model": "MODEL", "fallback": "FALLBACK"}
 _LLM_KEYS = {"provider": "BRAINLESS_LLM_PROVIDER", "base_url": "BRAINLESS_LLM_BASE_URL",
              "model": "BRAINLESS_LLM_MODEL", "fallback": "BRAINLESS_LLM_FALLBACK",
-             "claude_model": "BRAINLESS_CLAUDE_MODEL", "max_chars": "BRAINLESS_LLM_MAX_CHARS"}
+             "claude_model": "BRAINLESS_CLAUDE_MODEL", "max_chars": "BRAINLESS_LLM_MAX_CHARS",
+             # The anthropic provider's monthly cap and its reroute thresholds (tools/llm.py).
+             "api_budget_usd": "BRAINLESS_API_BUDGET_USD", "api_budget_warn": "BRAINLESS_API_BUDGET_WARN",
+             "api_budget_stop": "BRAINLESS_API_BUDGET_STOP",
+             "api_budget_reset_day": "BRAINLESS_API_BUDGET_RESET_DAY",
+             "system_prompt_file": "BRAINLESS_SYSTEM_PROMPT_FILE",
+             "anthropic_workspace_id": "BRAINLESS_ANTHROPIC_WORKSPACE_ID"}
 
 _loaded = None
 
@@ -162,7 +170,61 @@ def _backend():
         return "keychain"
     if sys.platform.startswith("linux") and shutil.which("secret-tool"):
         return "secret-tool"
+    if sys.platform.startswith("win"):
+        return "wincred"
     return "file"
+
+
+class _WinCred:
+    """Windows Credential Manager through advapi32: generic credentials, one per
+    secret, persisted for this user on this machine. Values stay off argv."""
+    GENERIC, LOCAL_MACHINE, NOT_FOUND = 1, 2, 1168
+
+    def __init__(self):
+        import ctypes
+        from ctypes import wintypes as w
+
+        class CREDENTIAL(ctypes.Structure):
+            _fields_ = [("Flags", w.DWORD), ("Type", w.DWORD), ("TargetName", w.LPWSTR),
+                        ("Comment", w.LPWSTR), ("LastWritten", w.FILETIME),
+                        ("CredentialBlobSize", w.DWORD), ("CredentialBlob", ctypes.POINTER(ctypes.c_ubyte)),
+                        ("Persist", w.DWORD), ("AttributeCount", w.DWORD), ("Attributes", ctypes.c_void_p),
+                        ("TargetAlias", w.LPWSTR), ("UserName", w.LPWSTR)]
+        self.ct, self.CREDENTIAL = ctypes, CREDENTIAL
+        self.api = ctypes.WinDLL("advapi32", use_last_error=True)
+        self.api.CredReadW.argtypes = [w.LPCWSTR, w.DWORD, w.DWORD, ctypes.POINTER(ctypes.POINTER(CREDENTIAL))]
+        self.api.CredWriteW.argtypes = [ctypes.POINTER(CREDENTIAL), w.DWORD]
+        self.api.CredDeleteW.argtypes = [w.LPCWSTR, w.DWORD, w.DWORD]
+        self.api.CredFree.argtypes = [ctypes.c_void_p]
+
+    @staticmethod
+    def target(name):
+        return f"{SERVICE}:{name}"
+
+    def get(self, name):
+        ct = self.ct
+        p = ct.POINTER(self.CREDENTIAL)()
+        if not self.api.CredReadW(self.target(name), self.GENERIC, 0, ct.byref(p)):
+            return None
+        try:
+            c = p.contents
+            return ct.string_at(c.CredentialBlob, c.CredentialBlobSize).decode("utf-8")
+        finally:
+            self.api.CredFree(p)
+
+    def set(self, name, value):
+        ct = self.ct
+        blob = value.encode("utf-8")
+        buf = (ct.c_ubyte * len(blob)).from_buffer_copy(blob)
+        cred = self.CREDENTIAL(Type=self.GENERIC, TargetName=self.target(name), UserName=name,
+                               CredentialBlobSize=len(blob),
+                               CredentialBlob=ct.cast(buf, ct.POINTER(ct.c_ubyte)),
+                               Persist=self.LOCAL_MACHINE)
+        if not self.api.CredWriteW(ct.byref(cred), 0):
+            raise RuntimeError(f"Credential Manager refused the secret (error {ct.get_last_error()})")
+
+    def delete(self, name):
+        return bool(self.api.CredDeleteW(self.target(name), self.GENERIC, 0))
 
 
 def _secrets_file():
@@ -200,6 +262,8 @@ def get_secret(name):
     backend = _backend()
     if backend == "file":
         return _file_read().get(name)
+    if backend == "wincred":
+        return _WinCred().get(name)
     if backend == "keychain":
         cmd = ["security", "find-generic-password", "-s", SERVICE, "-a", name, "-w"]
     else:
@@ -220,6 +284,9 @@ def set_secret(name, value):
         table = _file_read()
         table[name] = value
         _file_write(table)
+        return backend
+    if backend == "wincred":
+        _WinCred().set(name, value)
         return backend
     if backend == "keychain":
         # `security -i` reads commands from stdin, which keeps the value off argv.
@@ -245,6 +312,8 @@ def delete_secret(name):
         del table[name]
         _file_write(table)
         return True
+    if backend == "wincred":
+        return _WinCred().delete(name)
     if backend == "keychain":
         cmd = ["security", "delete-generic-password", "-s", SERVICE, "-a", name]
     else:

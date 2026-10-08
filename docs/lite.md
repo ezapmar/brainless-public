@@ -32,6 +32,13 @@ You need git and Python 3.11 or newer. On a Mac that is `brew install python`.
 curl -fsSL https://raw.githubusercontent.com/ezapmar/brainless-public/main/install.sh | bash
 ```
 
+On Windows, in PowerShell. If git or Python is missing, `winget install Git.Git` and
+`winget install Python.Python.3.13` first, then open a new window:
+
+```powershell
+irm https://raw.githubusercontent.com/ezapmar/brainless-public/main/install.ps1 | iex
+```
+
 The script sets up Python and the `brainless` command, then hands over to
 `brainless init`. It asks a handful of questions, in this order.
 
@@ -44,11 +51,14 @@ The script sets up Python and the `brainless` command, then hands over to
    there.
 3. **The model.** Three kinds, in the table further down. If you pick Ollama and it is not
    installed, it asks before installing it. If you pick an API, the key goes into the
-   macOS Keychain, or libsecret on Linux. It never touches the folder, because the folder
+   macOS Keychain, libsecret on Linux, or Credential Manager on Windows. It never touches
+   the folder, because the folder
    is a git repository, and a git repository is where keys go to leak.
 4. **A test call.** One tiny prompt, so you learn now, and not at nine in the evening,
    that the key had a typo.
-5. **Background runs.** One scheduler entry. On a Mac, if your folder lives in
+5. **Background runs.** One scheduler entry. That is launchd on a Mac, a systemd timer on
+   Linux (a crontab line where there is no systemd, as in WSL), and a Task Scheduler task
+   on Windows. On a Mac, if your folder lives in
    `~/Documents`, `~/Desktop` or iCloud Drive, macOS will ask for permission every time a
    background job opens it. `init` warns you and can open the right settings page.
    `~/brainless` avoids the whole conversation.
@@ -63,6 +73,12 @@ For a script, or a machine you set up often, the same questions take flags:
 ```bash
 bash install.sh --vault ~/brainless --yes -- --lang en --provider ollama --model qwen3:8b
 bash install.sh --yes -- --provider anthropic --api-key-env ANTHROPIC_API_KEY --no-schedule
+```
+
+On Windows the same flags go after `-InitArgs`:
+
+```powershell
+.\install.ps1 -Vault $HOME\brainless -Yes -InitArgs '--provider','ollama','--model','qwen3:8b'
 ```
 
 ## A day with it
@@ -125,6 +141,11 @@ I run it on Claude through a subscription. You do not have to.
 | `claude-cli` | Claude Code, signed in | Uses the subscription you already pay for. It is also the only one here that can search the web and read photos. |
 | `codex-cli`, `gemini-cli` | that tool, signed in | Each call starts in an empty folder, Codex inside its read-only sandbox. They are agents, which is a looser fence than the others, so I would keep them away from anything that reads untrusted text. |
 
+With `anthropic`, a monthly cap keeps the bill in sight: `api_budget_usd` in `brainless.toml`,
+`python3 tools/llm.py --usage` for the spend per lane, and the fallback takes over past the
+stop ratio. The same keys serve a Max or Team plan's monthly API credit, see
+[The AI shed](shed.md).
+
 Each provider reads its own key and nobody else's, so a mistake in one setting cannot send
 your OpenAI key to xAI. Keys are set with `brainless config secret set <name>`, using
 `anthropic_api_key`, `openai_api_key`, `xai_api_key`, `gemini_api_key` or
@@ -139,6 +160,9 @@ brainless schedule uninstall
 rm -rf ~/.local/bin/brainless ~/.config/brainless
 ```
 
+On Windows, `brainless schedule uninstall`, then delete `~\.local\bin\brainless.cmd` and
+`~\.config\brainless`.
+
 That stops the background runs and removes the command. Your notes are still in
 `~/brainless`, and I would leave them there. The keys stay in the Keychain under
 `brainless` until you delete them, or run `brainless config secret delete <name>` first.
@@ -149,7 +173,8 @@ Honest limits, as of September 2026.
 
 - Photos are read only with `claude-cli`. With any other model they wait in the inbox.
 - Web research needs `claude-cli` too. Without it that job is skipped and says so.
-- Windows does not work yet.
+- Windows runs on a CI machine, not yet on a real laptop. Linking an outside folder
+  makes a directory junction there, because a symlink needs admin rights.
 - The person who has installed lite most often is me, into a scratch folder with a fake
   home directory. If you are among the first strangers to try it, tell me where it broke
   in the [issues](https://github.com/ezapmar/brainless-public/issues). That is the test I

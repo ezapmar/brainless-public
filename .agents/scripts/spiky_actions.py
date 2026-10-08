@@ -12,17 +12,14 @@ State: .agents/state/spiky_actions_done (processed file names).
 --backfill N: processes the reports of the last N days (for first setup).
 """
 import argparse
-import json
 import os
 import re
-import sys
 from datetime import datetime, timedelta
 
 VAULT = os.environ.get("BRAINLESS_VAULT") or os.path.expanduser("~/projects/brainless")
-sys.path.insert(0, os.path.join(VAULT, "tools"))
 from llm import run_prompt
-from owner_profile import OWNER, OWNER_FULL, WORKER, output_lang_directive  # noqa: E402
-from i18n import t, t_list  # noqa: E402
+from owner_profile import OWNER, OWNER_FULL, WORKER, output_lang_directive
+from i18n import t, t_list
 
 SPIKY_DIR = os.path.join(VAULT, "Inbox", "Spiky")
 TASKS_FILE = os.path.join(VAULT, "_Agent-Context", "TASKS.md")
@@ -36,13 +33,12 @@ HEADER = (t("spiky_actions.tasks_header", worker=WORKER) + "\n\n"
           + SECTION_PROMISES + "\n\n" + SECTION_WAITING + "\n")
 
 
-def log(msg):
-    print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] {msg}")
+from logline import log
 
 
 def read_file(path):
     try:
-        with open(path) as fh:
+        with open(path, encoding="utf-8") as fh:
             return fh.read()
     except OSError:
         return None
@@ -60,7 +56,7 @@ def open_task_titles(tasks_md):
 
 # The near-duplicate guard lives in tools/task_dedup.py since 2026-09-19, so
 # the nightly digest applies the same one; the names stay importable here.
-from task_dedup import DUPLICATE_OVERLAP, STEM_LEN, _words, is_duplicate  # noqa: E402,F401
+from task_dedup import DUPLICATE_OVERLAP, STEM_LEN, _words, is_duplicate  # noqa: F401
 
 
 def extract(note_name, note_text, existing):
@@ -93,12 +89,9 @@ RULES:
     out = run_prompt(prompt, timeout=180, lane="spiky-actions")
     if not out:
         return []
-    m = re.search(r"\[.*\]", out, re.S)
-    if not m:
-        return []
-    try:
-        items = json.loads(m.group(0))
-    except ValueError:
+    from llm import extract_json
+    items = extract_json(out, list)
+    if items is None:
         log(f"{note_name}: JSON could not be parsed")
         return []
     return [i for i in items if isinstance(i, dict) and i.get("task")]
@@ -126,8 +119,8 @@ def append_tasks(tasks_md, items, note_name, date_str):
         row = f"- [ ] {text} | [[{link}]] | {date_str}\n"
         # The heading may be in the current language or in English (existing ledgers).
         headings = t_list(section)
-        for idx, l in enumerate(lines):
-            if l.strip() in headings:
+        for idx, line in enumerate(lines):
+            if line.strip() in headings:
                 end = idx + 1
                 while end < len(lines) and not lines[end].startswith("## "):
                     end += 1
@@ -181,10 +174,10 @@ def main():
         done.add(f)
 
     os.makedirs(os.path.dirname(TASKS_FILE), exist_ok=True)
-    with open(TASKS_FILE, "w") as fh:
+    with open(TASKS_FILE, "w", encoding="utf-8") as fh:
         fh.write(tasks_md)
     os.makedirs(os.path.dirname(STATE_FILE), exist_ok=True)
-    with open(STATE_FILE, "w") as fh:
+    with open(STATE_FILE, "w", encoding="utf-8") as fh:
         fh.write("\n".join(sorted(done)))
     if len(candidates) > MAX_PER_RUN:
         log(f"{len(candidates) - MAX_PER_RUN} file(s) left for the next run")

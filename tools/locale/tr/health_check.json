@@ -70,5 +70,11 @@
   "backup_label": "Yedek",
   "backup_none": "henüz şifreli arşiv yok (tools/vault_archive.py create)",
   "backup_detail": "son arşiv {made} gün önce, son geri yükleme testi: {verified} gün önce",
-  "backup_never": "hiç yapılmadı"
+  "backup_never": "hiç yapılmadı",
+  "api_budget": "API kredisi",
+  "api_budget_worker": "API kredisi ({worker})",
+  "api_budget_no_record": "bu dönem henüz harcama kaydı yok",
+  "api_budget_ok": "{spent} / {budget} USD (%{pct}), {start} itibarıyla",
+  "api_budget_warn": "{spent} / {budget} USD (%{pct}), {start} itibarıyla: uyarı eşiği geçildi",
+  "api_budget_stop": "{spent} / {budget} USD (%{pct}), {start} itibarıyla: API hatları sıfırlanma gününe kadar yedekte çalışıyor"
 }

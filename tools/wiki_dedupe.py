@@ -27,13 +27,11 @@ Usage: python3 tools/wiki_dedupe.py
 import difflib
 import json
 import re
-import sys
 import unicodedata
 from itertools import combinations
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-from lint_wiki import VAULT, WIKI, all_wiki_files, link_graph, parse_fm  # noqa: E402
+from lint_wiki import VAULT, WIKI, all_wiki_files, link_graph, parse_fm
 
 FOLDERS = ("concepts", "entities", "ideas", "articles", "projects")
 TITLE_RATIO = 0.9
@@ -75,7 +73,7 @@ def registry_aliases() -> dict[str, list[str]]:
     out = {}
     for reg in REGISTRIES:
         try:
-            text = reg.read_text()
+            text = reg.read_text(encoding="utf-8")
         except OSError:
             continue
         for line in text.splitlines():
@@ -102,7 +100,7 @@ def proposals() -> list[dict]:
     info = {}
     for p in pages:
         try:
-            text = p.read_text(errors="replace")
+            text = p.read_text(errors="replace", encoding="utf-8")
         except OSError:
             continue
         names = {p.stem, title_of(p, text), *aliases_of(parse_fm(text)), *reg.get(p.stem, [])}
@@ -117,6 +115,11 @@ def proposals() -> list[dict]:
         ia, ib = info[a], info[b]
         if a.stem == b.stem:
             found[(a, b)] = ("clash", "same file name in two folders; [[links]] are ambiguous")
+            continue
+        # The compiler writes a project mirror that shares an entity's name as
+        # "<Name> (project).md" and links it to the entity. That pair is the
+        # fix for a clash, not a duplicate to merge.
+        if f"{a.stem} (project)" == b.stem or f"{b.stem} (project)" == a.stem:
             continue
         shared_names = ia["names"] & ib["names"]
         if shared_names:

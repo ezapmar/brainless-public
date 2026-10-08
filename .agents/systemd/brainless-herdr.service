@@ -1,0 +1,23 @@
+[Unit]
+Description=brainless herdr server (agent panes on the always-on worker)
+OnFailure=brainless-notify-failure@%n.service
+
+# Long-running, so install.sh copies it but does not start it (it enables timers only).
+# Start once by hand:  systemctl --user enable --now brainless-herdr.service
+# `herdr server` is the headless form the herdr docs name for service-style
+# setups. It keeps the agent panes (the standing Claude Code session in the
+# vault, its helper panes) alive through client disconnects and comes back after
+# a reboot; panes with a Claude Code integration resume their session. A client
+# attaches from this machine with `herdr`, from another with
+# `herdr --remote <ssh-host>` or a saved machine (`herdr machine add`).
+# herdr is installed per user (~/.local/bin or mise shims); nothing here needs root.
+[Service]
+Type=simple
+Environment=PATH=%h/.local/bin:%h/.local/share/mise/shims:%h/.cargo/bin:/usr/local/bin:/usr/bin:/bin
+WorkingDirectory=%h/projects/brainless
+ExecStart=/bin/sh -c 'exec "$(command -v herdr)" server'
+Restart=on-failure
+RestartSec=15
+
+[Install]
+WantedBy=default.target

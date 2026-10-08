@@ -404,6 +404,9 @@ and an always-on **laptop running [Omarchy](https://omarchy.org) (Arch Linux)** 
 Tailscale that runs the timers, the capture, the Buzz relay and the persona agents, so
 the Mac can sleep. The devices, the diagram, the full schedule and the real configuration
 (units, sandbox, placeholder secrets) are in [Reference deployment](reference-deployment.md).
+The same machine doubles as the AI shed: standing agent panes under herdr, and the batch
+lanes on a monthly API credit while interactive sessions stay on the subscription, see
+[The AI shed](shed.md).
 
 ---
 

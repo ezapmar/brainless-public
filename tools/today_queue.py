@@ -3,16 +3,15 @@
 import argparse
 from contextlib import contextmanager
 from datetime import date, timedelta
-import fcntl
 import hashlib
 import json
 import os
 from pathlib import Path
 import re
-import sys
-import tempfile
 
 from build_dashboard import fm
+import frontmatter
+from vault_lock import lock_exclusive
 from compile_resources import _is_private
 from i18n import t, t_list
 from owner_profile import LANG
@@ -25,16 +24,7 @@ def digest(text):
     return hashlib.sha256(text.encode()).hexdigest()[:16]
 
 
-def atomic_write(path, text):
-    path.parent.mkdir(parents=True, exist_ok=True)
-    fd, tmp = tempfile.mkstemp(prefix=".today-", dir=path.parent)
-    try:
-        with os.fdopen(fd, "w", encoding="utf-8") as stream:
-            stream.write(text)
-        os.replace(tmp, path)
-    finally:
-        if os.path.exists(tmp):
-            os.unlink(tmp)
+from fsutil import atomic_write  # noqa: F401  re-exported: callers import it from here
 
 
 def as_date(value):
@@ -55,9 +45,9 @@ class TodayQueue:
     def locked(self):
         self.state_path.parent.mkdir(parents=True, exist_ok=True)
         with self.state_path.with_suffix(".lock").open("a") as lock:
-            fcntl.flock(lock, fcntl.LOCK_EX)
+            lock_exclusive(lock)
             try:
-                state = json.loads(self.state_path.read_text()) if self.state_path.exists() else {}
+                state = json.loads(self.state_path.read_text(encoding="utf-8")) if self.state_path.exists() else {}
             except (OSError, json.JSONDecodeError):
                 # A truncated state file should not strand the queue; source notes remain authoritative.
                 state = {}
@@ -89,14 +79,14 @@ class TodayQueue:
         return {"id": digest(identity)[:12], "category": category, "source": relative,
                 "mode": mode, "title": (title or path.stem)[:180], "line": line,
                 "fingerprint": digest(line or text),
-                "excerpt": re.sub(r"^---\n.*?\n---\n", "", line or text, flags=re.S)[:600]}
+                "excerpt": frontmatter.strip(line or text)[:600]}
 
     def candidates(self):
         out = []
         for path in sorted((self.vault / "Thinking/Decisions").glob("*.md")):
             try:
                 relative = path.relative_to(self.vault).as_posix()
-                text = self.source(relative).read_text()
+                text = self.source(relative).read_text(encoding="utf-8")
                 meta = fm(text)
                 status = meta.get("status", "").lower()
                 review = as_date(meta.get("review") or meta.get("revisit"))
@@ -117,7 +107,7 @@ class TodayQueue:
         if ledger.exists():
             section = None
             aliases = {h for key in ("promises", "waiting") for h in t_list(f"gtasks_sync.section_{key}")}
-            for line in ledger.read_text().splitlines():
+            for line in ledger.read_text(encoding="utf-8").splitlines():
                 if line.startswith("## "):
                     section = line[3:].strip()
                 if section not in aliases or not line.startswith("- [ ] "):
@@ -132,7 +122,7 @@ class TodayQueue:
         evidence = []
         resurfaced = self.vault / "_Agent-Context/RESURFACE.md"
         if resurfaced.exists():
-            text = resurfaced.read_text()
+            text = resurfaced.read_text(encoding="utf-8")
             stamp = re.search(r"\d{4}-\d{2}-\d{2}", text)
             when = as_date(stamp.group()) if stamp else None
             if when and 0 <= (self.today - when).days < 7:
@@ -232,7 +222,7 @@ class TodayQueue:
             item.update(status="dismissed", reason=text.strip()[:1000])
         elif action in ("answer", "apply"):
             path = self.source(item["source"])
-            current = path.read_text()
+            current = path.read_text(encoding="utf-8")
             valid = current.splitlines().count(item["line"]) == 1 if item["line"] else digest(current) == item["fingerprint"]
             if not valid:
                 raise ValueError(t("today_queue.source_changed"))
@@ -257,7 +247,6 @@ class TodayQueue:
                 updated = "".join(replacement + ("\n" if line.endswith("\n") else "")
                                   if line.rstrip("\n") == item["line"] else line for line in current.splitlines(keepends=True))
             elif mode in ("decide", "grade"):
-                sys.path.insert(0, str(Path(__file__).resolve().parents[1] / ".agents/scripts"))
                 from thinking_loop import set_fm
                 updated = set_fm(current, "status", "decided") if mode == "decide" else set_fm(current, "graded", self.today.isoformat())
                 heading = "Decision" if mode == "decide" else "Outcome"
@@ -267,7 +256,7 @@ class TodayQueue:
                 calibration = self.vault / "Thinking/Calibration.md"
                 if calibration.exists():
                     calibration = self.source("Thinking/Calibration.md")
-                    before = calibration.read_text()
+                    before = calibration.read_text(encoding="utf-8")
                     rows = []
                     for row in before.splitlines(keepends=True):
                         if row.startswith("|") and f"[[{path.stem}]]" in row:
@@ -302,7 +291,7 @@ class TodayQueue:
         pending = []
         for write in op["writes"]:
             path = self.source(write["relative"])
-            current = path.read_text()
+            current = path.read_text(encoding="utf-8")
             if current not in (write["before"], write["after"]):
                 raise ValueError(t("today_queue.source_changed"))
             if current != write["after"]:
@@ -345,7 +334,7 @@ def main():
                 print(queue.render(state))
     else:
         try:
-            state = json.loads(queue.state_path.read_text()) if queue.state_path.exists() else {"records": {}, "history": []}
+            state = json.loads(queue.state_path.read_text(encoding="utf-8")) if queue.state_path.exists() else {"records": {}, "history": []}
         except (OSError, json.JSONDecodeError):
             state = {"records": {}, "history": []}
         if not isinstance(state, dict):

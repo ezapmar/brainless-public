@@ -7,18 +7,15 @@ restores to the same files, and that only this tool's own archives are pruned.
 Run: python3 -m unittest tools.tests.test_vault_archive -v
 """
 import importlib
-import json
 import os
 import stat
 import subprocess
-import sys
 import tempfile
 import unittest
 from datetime import datetime, timedelta
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(ROOT / "tools"))
 
 FAKE_AGE = """#!/bin/sh
 # encrypt: age -r KEY  (stdin -> stdout); decrypt: age -d -i KEY FILE

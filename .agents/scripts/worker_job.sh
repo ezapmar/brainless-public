@@ -15,6 +15,7 @@ export MISE_QUIET=1
 VAULT="${BRAINLESS_VAULT:-$HOME/projects/brainless}"
 LOCK="${BRAINLESS_GIT_LOCK:-$HOME/.brainless-git.lock}"
 cd "$VAULT" || exit 1
+export PYTHONPATH="$VAULT/tools:$VAULT/.agents/scripts${PYTHONPATH:+:$PYTHONPATH}"
 
 # A timer can fire in the seconds after wake-from-sleep, before the network is
 # back. Skip this tick cleanly rather than letting the tool crash on its first
@@ -24,7 +25,14 @@ if ! python3 tools/net_wait.py --wait; then
   exit 0
 fi
 
-flock -w 300 "$LOCK" git pull --rebase --autostash --quiet || true
+# git_sync.sh aborts a conflicting rebase; exit 3 means the tree is still not
+# clean, so skip the tool (some tools commit) rather than build on it. Any other
+# failure (lock timeout, network) runs the tool on the local copy as before.
+flock -w 300 "$LOCK" bash .agents/scripts/git_sync.sh
+if [ $? -eq 3 ]; then
+  echo "git_sync: tree not clean (alert sent once); skipping $*"
+  exit 0
+fi
 # run_log records the run with its counts (tools/run_log.py) and returns the
 # tool's own exit code, so OnFailure and the backup behave exactly as before.
 python3 tools/run_log.py exec -- python3 "$@"

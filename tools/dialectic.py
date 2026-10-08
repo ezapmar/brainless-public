@@ -81,14 +81,12 @@ import sys
 import time
 from datetime import datetime, timedelta
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from paths import folder, vault_root  # noqa: E402
+from paths import folder, vault_root
 VAULT = vault_root()
-sys.path.insert(0, os.path.join(VAULT, "tools"))
-from llm import run_prompt  # noqa: E402
-from calibrate import scan as calibration_scan  # noqa: E402
-from owner_profile import OWNER, lang_name, output_lang_directive  # noqa: E402
-from lang_detect import detect  # noqa: E402
+from llm import run_prompt
+from calibrate import scan as calibration_scan
+from owner_profile import OWNER, lang_name, output_lang_directive
+from lang_detect import detect
 
 CAPTURE_DIR = os.path.join(VAULT, folder("daily"))
 STATE_DIR = os.path.join(VAULT, ".agents", "state")
@@ -134,8 +132,7 @@ STALE_BELIEF_DAYS = 90
 PENDING_HORIZON_DAYS = 45
 
 
-def log(msg):
-    print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] {msg}", flush=True)
+from logline import log
 
 
 def read_file(path):
@@ -148,7 +145,7 @@ def read_file(path):
 
 def write_file(path, text):
     os.makedirs(os.path.dirname(path), exist_ok=True)
-    with open(path, "w") as fh:
+    with open(path, "w", encoding="utf-8") as fh:
         fh.write(text)
 
 
@@ -209,14 +206,8 @@ def collect_captures(date_str, seen):
 
 
 def _frontmatter(text):
-    m = re.match(r"^---\n(.*?)\n---\n", text, re.S)
-    out = {}
-    if m:
-        for line in m.group(1).splitlines():
-            if ":" in line:
-                k, _, v = line.partition(":")
-                out[k.strip()] = v.partition("#")[0].strip()
-    return out
+    from frontmatter import parse
+    return parse(text, comments=True)
 
 
 def _section(text, heading, limit=700):
@@ -226,10 +217,10 @@ def _section(text, heading, limit=700):
         return ""
     body = re.sub(r"<!--.*?-->", "", m.group(1), flags=re.S)
     lines = []
-    for l in body.splitlines():
-        l = re.sub(r"^\s*>\s*(\[![a-z]+\]\s*)?", "", l).strip()  # quotes and callouts
-        if l and l != "---":
-            lines.append(l)
+    for line in body.splitlines():
+        line = re.sub(r"^\s*>\s*(\[![a-z]+\]\s*)?", "", line).strip()  # quotes and callouts
+        if line and line != "---":
+            lines.append(line)
     return " ".join(lines)[:limit]
 
 
@@ -396,26 +387,16 @@ def wiki_search(query, k=WIKI_K):
             break
     # The owner's own decisions and beliefs outrank a summary of someone else's
     # book: they are what the personas are asked to argue against.
-    own = [l for l in out if re.search(r"decision|belief", l.split("`")[1], re.I)]
-    return own + [l for l in out if l not in own]
+    own = [line for line in out if re.search(r"decision|belief", line.split("`")[1], re.I)]
+    return own + [line for line in out if line not in own]
 
 
 # ------------------------------------------------------------- LLM steps
 
 def parse_json(text):
     """Best-effort JSON extraction from an LLM reply."""
-    if not text:
-        return None
-    m = re.search(r"```(?:json)?\s*(.*?)```", text, re.S)
-    blob = m.group(1) if m else text
-    start = blob.find("[")
-    end = blob.rfind("]")
-    if start == -1 or end == -1:
-        return None
-    try:
-        return json.loads(blob[start:end + 1])
-    except ValueError:
-        return None
+    from llm import extract_json
+    return extract_json(text, list)
 
 
 def cluster_topics(captures):
@@ -442,7 +423,7 @@ Every file must belong to at least one topic. Write only a JSON array, nothing e
     covered = {s for t in clean for s in t["sources"]}
     for name, text in captures:
         if name not in covered:
-            first = next((l.lstrip("# ").strip() for l in text.splitlines() if l.strip()), name)
+            first = next((line.lstrip("# ").strip() for line in text.splitlines() if line.strip()), name)
             clean.append({"title": first[:80], "claim": text[:800], "sources": [name]})
     # Each topic argues in the language of the notes behind it. A Turkish voice
     # note should not come back as an English debate just because the vault's
@@ -993,7 +974,7 @@ def append_score(date_str, mode, topic, score):
            "moved": score["moved"], "moved_with_evidence": score["moved_with_evidence"], "both": score["both"],
            "votes": {r["persona"]: r["r1_vote"] for r in score["rows"]}}
     os.makedirs(STATE_DIR, exist_ok=True)
-    with open(SCORES_FILE, "a") as fh:
+    with open(SCORES_FILE, "a", encoding="utf-8") as fh:
         fh.write(json.dumps(rec, ensure_ascii=False) + "\n")
     return rec
 
@@ -1020,10 +1001,12 @@ def scorecard_markdown():
     if not recs:
         lines.append("No scored rounds yet.")
         return "\n".join(lines) + "\n"
-    yes = sum(r["yes"] for r in recs); voted = sum(r["voted"] for r in recs)
+    yes = sum(r["yes"] for r in recs)
+    voted = sum(r["voted"] for r in recs)
     topics3 = [r for r in recs if r["voted"] >= 3]
     unan = sum(1 for r in topics3 if r["unanimous"])
-    moved = sum(r["moved"] for r in recs); both = sum(r["both"] for r in recs)
+    moved = sum(r["moved"] for r in recs)
+    both = sum(r["both"] for r in recs)
     moved_ev = sum(r["moved_with_evidence"] for r in recs)
     affirm = yes / voted if voted else None
     flags = []
@@ -1067,7 +1050,7 @@ def write_scorecard():
 # ------------------------------------------------------------- output
 
 def _quote(text):
-    return "\n".join("> " + l if l.strip() else ">" for l in text.strip().splitlines())
+    return "\n".join("> " + line if line.strip() else ">" for line in text.strip().splitlines())
 
 
 def render_topic(topic, r1, r2, synthesis, link=None, score=None):
@@ -1237,13 +1220,13 @@ def write_status(date_str, mode, result, detail):
     experiment keeps its own `- night <date>:` lines in a second section so the
     checks that read the last day line never see a night line."""
     all_lines = read_file(STATUS_MD).splitlines()
-    nights = [l for l in all_lines if l.startswith("- night ")]
-    days = [l for l in all_lines if l.startswith("- ") and not l.startswith("- night ")]
+    nights = [line for line in all_lines if line.startswith("- night ")]
+    days = [line for line in all_lines if line.startswith("- ") and not line.startswith("- night ")]
     if mode == "night":
-        nights = [l for l in nights if not l.startswith(f"- night {date_str}:")] + [f"- night {date_str}: {result}, {detail}"]
+        nights = [line for line in nights if not line.startswith(f"- night {date_str}:")] + [f"- night {date_str}: {result}, {detail}"]
         nights = nights[-NIGHT_KEEP:]
     else:
-        days = [l for l in days if not l.startswith(f"- {date_str} {mode}:")] + [f"- {date_str} {mode}: {result}, {detail}"]
+        days = [line for line in days if not line.startswith(f"- {date_str} {mode}:")] + [f"- {date_str} {mode}: {result}, {detail}"]
         days = days[-14:]
     text = ("# Dialectic status\n\n"
             "Automatic: tools/dialectic.py (worker, 12:30 and 21:20). Last 14 runs; "
@@ -1294,12 +1277,8 @@ def judge_local_replies(topic, r1, r2):
 Write only a JSON object mapping each reply heading (exactly as written after ###) to "usable" or "unusable". Nothing else."""
     verdicts = {}
     out = run_prompt(prompt, timeout=300, lane="dialectic-judge") or ""
-    m = re.search(r"\{.*\}", out, re.S)
-    if m:
-        try:
-            verdicts = {str(k): str(v).strip().lower() for k, v in json.loads(m.group(0)).items()}
-        except ValueError:
-            verdicts = {}
+    from llm import extract_json
+    verdicts = {str(k): str(v).strip().lower() for k, v in (extract_json(out) or {}).items()}
     grades = {}
     for k in replies:
         name, rnd = k.rsplit(" ", 1)
@@ -1313,7 +1292,7 @@ def render_judgement(grades, usable, total):
     md = [f"**Local replies usable:** {usable}/{total} (graded by the cloud moderator; a reply without a Vote line is unusable)", "",
           "| Persona | Round 1 | Round 2 |", "|---|---|---|"]
     for name, g in grades.items():
-        cell = lambda k: ("usable" if g.get(k) else ("unusable" if k in g else NO_REPLY))
+        cell = lambda k, g=g: ("usable" if g.get(k) else ("unusable" if k in g else NO_REPLY))
         md.append(f"| {name} | {cell('r1')} | {cell('r2')} |")
     return "\n".join(md)
 
@@ -1488,8 +1467,10 @@ def main():
     day["runs"].append({"mode": mode, "time": now.strftime("%H:%M"), "path": path, "replies": replies,
                         "expected": expected})
     save_day(day)
-    yes = sum(sc["yes"] for sc in scores); voted = sum(sc["voted"] for sc in scores)
-    unanimous = sum(1 for sc in scores if sc["unanimous"]); moved = sum(sc["moved"] for sc in scores)
+    yes = sum(sc["yes"] for sc in scores)
+    voted = sum(sc["voted"] for sc in scores)
+    unanimous = sum(1 for sc in scores if sc["unanimous"])
+    moved = sum(sc["moved"] for sc in scores)
     both = sum(sc["both"] for sc in scores)
     stats = (f"affirm {yes}/{voted} ({_pct(yes / voted if voted else None)}), unanimous {unanimous}/{len(scores)}, "
              f"moved {moved}/{both}")

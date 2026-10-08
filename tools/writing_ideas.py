@@ -17,14 +17,12 @@ import argparse
 from datetime import datetime, timedelta
 import hashlib
 import json
-import os
 from pathlib import Path
 import re
 import sys
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from i18n import t  # noqa: E402
-import owner_profile as o  # noqa: E402
+from i18n import t
+import owner_profile as o
 
 VAULT = Path(o.VAULT)
 STATE_FILE = VAULT / ".agents/state/writing_pitches.json"
@@ -74,7 +72,7 @@ def material():
 
 def load_state():
     try:
-        return json.loads(STATE_FILE.read_text())
+        return json.loads(STATE_FILE.read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return {"pitches": []}
 
@@ -100,13 +98,8 @@ Answer ONLY with a JSON array of objects with keys: title, synopsis, venue, cate
 
 
 def parse(out):
-    m = re.search(r"\[.*\]", out or "", re.S)
-    if not m:
-        return []
-    try:
-        data = json.loads(m.group(0))
-    except ValueError:
-        return []
+    from llm import extract_json
+    data = extract_json(out, list) or []
     good = []
     for it in data if isinstance(data, list) else []:
         if not isinstance(it, dict) or not it.get("title") or not it.get("synopsis"):

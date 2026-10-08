@@ -8,5 +8,7 @@
   "dialectic_error": "Dialectic round failed: {error}",
   "llm_auth": "Linux'ta LLM auth hatasi (son cagri {stamp}); llm_status'a bak",
   "power_unplugged": "Worker {minutes} dakikadir sarj kablosunda degil (pil %{capacity}). Pil bitince kapanir; sarj kablosunu kontrol et.",
-  "power_battery_low": "Worker pili %{capacity} ve sarj olmuyor (esik %{threshold}). Sarj kablosunu hemen tak."
+  "power_battery_low": "Worker pili %{capacity} ve sarj olmuyor (esik %{threshold}). Sarj kablosunu hemen tak.",
+  "api_budget_warn": "API kredisi %{pct} ({spent} / {budget} USD bu dönem); durdurma eşiği %{stop}",
+  "api_budget_stop": "API kredisi %{pct} ({spent} / {budget} USD): anthropic hatları sıfırlanma gününe kadar yedekte"
 }

@@ -1,16 +1,14 @@
 """Regression tests for the 2026-09-28 public audit fixes."""
 import json
 import os
-import sys
 import unittest
 from unittest import mock
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(os.path.dirname(HERE))
-sys.path.insert(0, os.path.dirname(HERE))
 
-import llm  # noqa: E402
-import mac_notify  # noqa: E402
+import llm
+import mac_notify
 
 PAYLOAD = 'x" & (do shell script "touch /tmp/pwned") & ".pdf'
 

@@ -22,9 +22,8 @@ import os
 import re
 import sys
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from paths import vault_root  # noqa: E402
-import config  # noqa: E402
+from paths import vault_root
+import config
 
 LITE = {"init", "doctor", "add", "tick", "queue", "schedule", "concepts", "config", "profile",
         "compile", "digest", "search", "file", "lint", "calibrate", "dialectic",

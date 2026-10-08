@@ -5,15 +5,13 @@ bullets on concept pages, and that unchanged pages and placeholders stay quiet.
 
 Run: python3 -m unittest tools.tests.test_wiki_changes -v
 """
-import sys
 import tempfile
 import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(ROOT / "tools"))
-import i18n  # noqa: E402
-import wiki_changes as wc  # noqa: E402
+import i18n
+import wiki_changes as wc
 
 # English strings whatever the owner's language, without touching the profile.
 wc.t = lambda key, **kw: i18n.t(key, lang="en", **kw)

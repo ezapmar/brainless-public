@@ -8,13 +8,10 @@ the decision and `pacman -Syu` stay with a human. Goal: prevent silent aging.
 """
 import os
 import subprocess
-import sys
 
 VAULT = os.environ.get("BRAINLESS_VAULT") or os.path.expanduser("~/projects/brainless")
-sys.path.insert(0, os.path.join(VAULT, ".agents", "scripts"))
-sys.path.insert(0, os.path.join(VAULT, "tools"))
-from owner_profile import WORKER  # noqa: E402
-from i18n import t  # noqa: E402
+from owner_profile import WORKER
+from i18n import t
 from buzz_delivery import send
 from functools import partial
 send_buzz = partial(send, 'ops')
@@ -33,11 +30,11 @@ def main():
     except (FileNotFoundError, subprocess.TimeoutExpired):
         return  # checkupdates missing/hung: exit silently
     # checkupdates: returns 0 when updates exist, 2 when none; stdout lines are "pkg a -> b"
-    lines = [l for l in r.stdout.splitlines() if l.strip()]
+    lines = [line for line in r.stdout.splitlines() if line.strip()]
     if not lines:
         print("no updates")
         return
-    names = [l.split()[0] for l in lines]
+    names = [line.split()[0] for line in lines]
     security = sorted({n for n in names if any(s in n for s in SECURITY_PKGS)})
     msg = [t("update_check.msg_header", worker=WORKER, count=len(lines))]
     if security:

@@ -8,13 +8,11 @@ where the fetched text tries to issue instructions.
 """
 import json
 from pathlib import Path
-import sys
 import tempfile
 import unittest
 
 ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(ROOT / "tools"))
-import weekly_research as wr  # noqa: E402
+import weekly_research as wr
 
 
 SALVO = """## Bulgular

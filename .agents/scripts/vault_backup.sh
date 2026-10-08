@@ -3,10 +3,18 @@
 # Replaces the Obsidian Git plugin's "vault backup" commits, which silently
 # stopped on 2026-07-21. Runs from launchd (<prefix>.brainless.backup).
 cd "${BRAINLESS_VAULT:-$HOME/projects/brainless}" || exit 1
+export PYTHONPATH="$PWD/tools:$PWD/.agents/scripts${PYTHONPATH:+:$PYTHONPATH}"
 
 # Scoped run: `vault_backup.sh --only <path>...` commits those paths alone and
 # pushes, with the same network wait, remote guard and retry as the full run.
 # cron_wrapper.sh uses it to push the morning briefing within the hour.
+# `--no-index` is the full run without the semantic index refresh at the end;
+# the hourly job uses it, the refresh stays with the 21:30 run.
+NO_INDEX=0
+if [ "${1:-}" = "--no-index" ]; then
+  NO_INDEX=1
+  shift
+fi
 ONLY=()
 if [ "${1:-}" = "--only" ]; then
   shift
@@ -53,7 +61,7 @@ refresh_index() {
     && echo "$(date '+%Y-%m-%d %H:%M:%S') semantic index and link suggestions refreshed" \
     || echo "$(date '+%Y-%m-%d %H:%M:%S') semantic index refresh skipped"
 }
-[ "${#ONLY[@]}" -eq 0 ] && trap refresh_index EXIT
+[ "${#ONLY[@]}" -eq 0 ] && [ "$NO_INDEX" -eq 0 ] && trap refresh_index EXIT
 
 if wait_for_github; then
   # Fetch the captures the worker pushed (since 2026-08-26 the Telegram
@@ -102,7 +110,14 @@ if printf '%s' "$origin_url" | grep -qi 'brainless-public'; then
   exit 0
 fi
 if [ -n "$slug" ]; then
-  code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 "https://api.github.com/repos/$slug" || true)
+  # Three tries: right after a wake from sleep the first HTTPS request can fail
+  # (HTTP 000) even though the SSH probe passed. On 2026-10-07 one such failure
+  # refused the only push of the day and ten commits stayed local.
+  for try in 1 2 3; do
+    code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 "https://api.github.com/repos/$slug" || true)
+    [ "$code" != "000" ] && break
+    sleep $((try * 10))
+  done
   if [ "$code" != "404" ]; then
     echo "$(date '+%Y-%m-%d %H:%M:%S') push refused: github.com/$slug is public or unverifiable (HTTP $code)"
     exit 0

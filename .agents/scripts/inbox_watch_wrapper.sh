@@ -6,6 +6,7 @@ PY_BINS=$(ls -d "$HOME"/Library/Python/*/bin 2>/dev/null | sort -Vr | tr '\n' ':
 NODE_BIN=$(ls -d "$HOME"/.nvm/versions/node/*/bin 2>/dev/null | sort -V | tail -1)
 export PATH="${PY_BINS}$HOME/.local/bin:${NODE_BIN:+$NODE_BIN:}/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin"
 cd "${BRAINLESS_VAULT:-$HOME/projects/brainless}" || exit 1
+export PYTHONPATH="$PWD/tools:$PWD/.agents/scripts${PYTHONPATH:+:$PYTHONPATH}"
 
 LOG="logs/inbox_watch.log"
 MAX_BYTES=$((5 * 1024 * 1024))   # rotate at 5 MB, keep one previous generation

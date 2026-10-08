@@ -18,11 +18,9 @@ Usage in a prompt body:
 """
 import os
 import re
-import sys
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from paths import vault_root  # noqa: E402
-import config  # noqa: E402,F401  brainless.toml sets env defaults before anything reads env
+from paths import vault_root
+import config  # noqa: F401  brainless.toml sets env defaults before anything reads env
 VAULT = vault_root()
 PROFILE_FILE = os.path.join(VAULT, "_Agent-Context", "PROFILE.md")
 # Display names for common codes; any other code is passed to prompts as the code itself.
@@ -39,15 +37,8 @@ def _frontmatter(path):
             text = fh.read()
     except OSError:
         return {}
-    m = re.match(r"^---\s*\n(.*?)\n---", text, re.S)
-    if not m:
-        return {}
-    out = {}
-    for line in m.group(1).splitlines():
-        if ":" in line:
-            k, v = line.split(":", 1)
-            out[k.strip()] = v.strip().strip('"').strip("'")
-    return out
+    from frontmatter import parse
+    return parse(text)
 
 
 _fm = _frontmatter(PROFILE_FILE)

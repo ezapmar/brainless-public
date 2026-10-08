@@ -10,16 +10,14 @@ Run: python3 -B -m unittest tools.tests.test_ideas_once -v
 import contextlib
 import io
 import json
-import sys
 import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(ROOT / "tools"))
 
-import compile_resources as compiler  # noqa: E402
+import compile_resources as compiler
 
 
 class IdeasOnce(unittest.TestCase):
@@ -34,7 +32,7 @@ class IdeasOnce(unittest.TestCase):
         self.kept = self.ideas / "commute-is-a-daily-tax.md"
         self.kept.write_text('---\nlang: en\nzk: 202609300007\naliases: ["Commute time is a tax"]\n---\n'
                              "# Commute is a daily tax\n\nThe merged page.\n")
-        (self.root / ".wiki/_archive/ideas/commute-tax-old.md").write_text("# old\n")
+        (self.root / ".wiki/_archive/ideas/commute-tax-old.md").write_text("# The commute, an old title\n")
         for p in (patch.object(compiler, "VAULT", self.root),
                   patch.object(compiler, "WIKI", self.root / ".wiki"),
                   patch.object(compiler, "out_of_time", return_value=False)):
@@ -53,6 +51,7 @@ class IdeasOnce(unittest.TestCase):
             {"slug": "commute-is-a-daily-tax", "title": "Rewritten", "body": "x", "en": "x"},
             {"slug": "commute-tax-again", "title": "Commute time is a tax", "body": "x", "en": "x"},
             {"slug": "commute-tax-old", "title": "Yet another title", "body": "x", "en": "x"},
+            {"slug": "commute-new-slug", "title": "The commute, an old title", "body": "x", "en": "x"},
             {"slug": "write-first", "title": "Write first", "body": "A new idea.", "en": "new"},
         ])
         self.assertEqual(self.kept.read_text(), before)

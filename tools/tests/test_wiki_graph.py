@@ -8,14 +8,12 @@ Run: python3 -m unittest tools.tests.test_wiki_graph -v
 """
 import importlib
 import os
-import sys
 import tempfile
 import unittest
 from datetime import datetime
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(ROOT / "tools"))
 
 
 def fm(**kw):
@@ -99,6 +97,12 @@ class Graph(unittest.TestCase):
         self.assertIn("title", {s for s, _, _ in signals})
         self.assertIn("clash", {s for s, _, _ in signals})
         self.assertFalse(any({a, b} == {"pricing", "hiring-plan"} for _, a, b in signals))
+
+    def test_dedupe_leaves_an_entity_and_its_project_mirror_alone(self):
+        self.page("entities/Acme", "", aliases='["Acme Ltd"]')
+        self.page("projects/work/Acme (project)", "", aliases='["Acme"]')
+        pairs = [{Path(p["a"]).stem, Path(p["b"]).stem} for p in self.wd.proposals()]
+        self.assertNotIn({"Acme", "Acme (project)"}, pairs)
 
 
 if __name__ == "__main__":

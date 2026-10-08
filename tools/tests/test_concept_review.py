@@ -9,15 +9,13 @@ Run: python3 -m unittest tools.tests.test_concept_review -v
 import importlib
 import json
 import os
-import sys
 import tempfile
 import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(ROOT / "tools"))
 
-from tests.test_dreaming import Box, OWNER, msg  # noqa: E402
+from tests.test_dreaming import Box, OWNER, msg
 
 REGISTRY = """# Concept registry
 

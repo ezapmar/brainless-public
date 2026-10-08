@@ -8,29 +8,19 @@ Surfaces decisions that need attention so judgment can compound:
 
 Run it manually, or it feeds the dashboard. Read-only.
 """
-import os
 import re
 from datetime import date, datetime
 from pathlib import Path
-import sys
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from paths import folder, vault_root  # noqa: E402
+from paths import folder, vault_root
+import frontmatter
 
 VAULT = Path(vault_root())
 DEC = VAULT / folder("decisions")
-FM_RE = re.compile(r"^---\n(.*?)\n---\n", re.S)
 
 
 def fm(text):
-    m = FM_RE.match(text)
-    out = {}
-    if m:
-        for line in m.group(1).splitlines():
-            if ":" in line:
-                k, _, v = line.partition(":")
-                out[k.strip()] = v.partition("#")[0].strip()
-    return out
+    return frontmatter.parse(text, comments=True)
 
 
 def parse_date(s):
@@ -46,7 +36,7 @@ def scan():
     if not DEC.exists():
         return due, needs_pred, no_review
     for p in sorted(DEC.glob("*.md")):
-        text = p.read_text(errors="ignore")
+        text = p.read_text(errors="ignore", encoding="utf-8")
         meta = fm(text)
         status = meta.get("status", "").lower()
         rev = parse_date(meta.get("review", "")) or parse_date(meta.get("revisit", ""))

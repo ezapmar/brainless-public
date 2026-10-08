@@ -17,14 +17,12 @@ import subprocess
 import sys
 from datetime import datetime, timedelta
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from paths import vault_root  # noqa: E402
+from paths import vault_root
 VAULT = vault_root()
-sys.path.insert(0, os.path.join(VAULT, "tools"))
 from llm import run_prompt
-from owner_profile import OWNER, output_lang_directive  # noqa: E402
-from i18n import t, t_list  # noqa: E402
-from run_log import emit  # noqa: E402
+from owner_profile import OWNER, output_lang_directive
+from i18n import t, t_list
+from run_log import emit
 
 CONTEXT_FILE = os.path.join(VAULT, "_Agent-Context", "CONTEXT.md")
 REPORT_FILE = os.path.join(VAULT, "_Agent-Context", "CONTEXT-DRIFT.md")
@@ -34,8 +32,7 @@ PER_FILE_CAP = 4000
 TOTAL_CAP = 24000
 
 
-def log(msg):
-    print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] {msg}")
+from logline import log
 
 
 def last_week_briefings():
@@ -130,7 +127,7 @@ REPORT FORMAT (markdown, use exactly these headings):
         t("weekly_reconcile.report_title") + "\n\n"
         + t("weekly_reconcile.report_intro", date=date_str, owner=OWNER) + "\n\n"
     )
-    with open(REPORT_FILE, "w") as fh:
+    with open(REPORT_FILE, "w", encoding="utf-8") as fh:
         fh.write(header + result + "\n")
     log(f"Report written: {REPORT_FILE}")
     emit(report=1)

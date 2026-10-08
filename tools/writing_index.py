@@ -15,13 +15,10 @@ import argparse
 from collections import Counter
 from datetime import datetime
 import json
-import os
 from pathlib import Path
 import re
-import sys
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from i18n import t  # noqa: E402
+from i18n import t
 
 STATE_FILE = ".agents/state/writing_pitches.json"
 
@@ -91,7 +88,8 @@ def build(vault, *, writings_dir="Writings", drafts_dir="Writings/Drafts", narra
     out.append(f"## {t('writing.sec_pieces', lang=lang)}")
     out.append("")
     if not groups:
-        out.append(t("writing.none", lang=lang)); out.append("")
+        out.append(t("writing.none", lang=lang))
+        out.append("")
     for folder, files in sorted(groups.items()):
         out.append(f"### {writings_dir if folder == '.' else writings_dir + '/' + folder}")
         out.append("")
@@ -118,7 +116,8 @@ def build(vault, *, writings_dir="Writings", drafts_dir="Writings/Drafts", narra
     if rows:
         table(sorted(rows, key=lambda r: r[3], reverse=True), f"| {t('writing.col_title', lang=lang)} | {t('writing.col_path', lang=lang)} | {t('writing.col_status', lang=lang)} | {t('writing.col_updated', lang=lang)} |")
     else:
-        out.append(t("writing.none", lang=lang)); out.append("")
+        out.append(t("writing.none", lang=lang))
+        out.append("")
 
     # 3. Open pitches (state written by writing_ideas.py)
     out.append(f"## {t('writing.sec_pitches', lang=lang)}")
@@ -127,7 +126,7 @@ def build(vault, *, writings_dir="Writings", drafts_dir="Writings/Drafts", narra
     pitches = []
     if state_path.exists():
         try:
-            pitches = json.loads(state_path.read_text()).get("pitches", [])
+            pitches = json.loads(state_path.read_text(encoding="utf-8")).get("pitches", [])
         except ValueError:
             pitches = []
     open_p = [p for p in pitches if p.get("status", "open") == "open"]
@@ -135,7 +134,8 @@ def build(vault, *, writings_dir="Writings", drafts_dir="Writings/Drafts", narra
         table([(p.get("title", "?"), p.get("venue", "?"), p.get("date", "?"), p.get("path", "")) for p in open_p[-20:]],
               f"| {t('writing.col_title', lang=lang)} | {t('writing.col_venue', lang=lang)} | {t('writing.col_date', lang=lang)} | {t('writing.col_path', lang=lang)} |")
     else:
-        out.append(t("writing.none", lang=lang)); out.append("")
+        out.append(t("writing.none", lang=lang))
+        out.append("")
 
     # 4. Long-form homes (e-book, PR pieces and whatever else PROFILE names)
     out.append(f"## {t('writing.sec_longform', lang=lang)}")
@@ -152,7 +152,8 @@ def build(vault, *, writings_dir="Writings", drafts_dir="Writings/Drafts", narra
                 for p in sorted(_md_files(root), key=lambda x: x.stat().st_mtime, reverse=True)[:25]]
         table(rows, f"| {t('writing.col_title', lang=lang)} | {t('writing.col_path', lang=lang)} | {t('writing.col_words', lang=lang)} | {t('writing.col_updated', lang=lang)} |")
     if not any_lf:
-        out.append(t("writing.none", lang=lang)); out.append("")
+        out.append(t("writing.none", lang=lang))
+        out.append("")
 
     # 5. Published corpus (exports such as Medium): counts by year, latest titles
     out.append(f"## {t('writing.sec_corpus', lang=lang)}")
@@ -182,7 +183,8 @@ def build(vault, *, writings_dir="Writings", drafts_dir="Writings/Drafts", narra
             out.append(f"- {date} {title}".rstrip())
         out.append("")
     if not any_c:
-        out.append(t("writing.none", lang=lang)); out.append("")
+        out.append(t("writing.none", lang=lang))
+        out.append("")
 
     # 6. Voice and editing files
     out.append(f"## {t('writing.sec_editor', lang=lang)}")

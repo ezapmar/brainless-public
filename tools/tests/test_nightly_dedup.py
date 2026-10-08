@@ -8,13 +8,11 @@ rephrased task is dropped, a genuinely new one is not.
 """
 import importlib
 import os
-import sys
 import tempfile
 import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(ROOT / "tools"))
 
 
 class NightlyDedupTest(unittest.TestCase):

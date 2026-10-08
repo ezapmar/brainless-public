@@ -7,17 +7,13 @@ a single daily-driver surface. Run on cron Mon 05:00 / Fri 21:00 (Istanbul).
 Sections: time-sensitive items, active projects, open loops, nudges (the Part-3
 reminders: reflect / grade-decisions / feed-ideas), and the archived list.
 """
-import os
 import re
-import sys
 from datetime import datetime, date
 from pathlib import Path
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-import calibrate  # noqa: E402
+import calibrate
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from paths import vault_root  # noqa: E402
+from paths import vault_root
 VAULT = Path(vault_root())
 OUT = VAULT / "personaldashboard.md"
 CADENCE = VAULT / "Thinking" / "Thinking Cadence.md"
@@ -28,24 +24,15 @@ CADENCE = VAULT / "Thinking" / "Thinking Cadence.md"
 DEADLINE_GRACE_DAYS = 14
 DEADLINE_HORIZON_DAYS = 400
 
-import sys as _sys
-_sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from owner_profile import COMPANY_AREA, GENERIC_PRIVATE_SEGMENTS, PRIVATE_SEGMENTS as PROFILE_PRIVATE_SEGMENTS  # noqa: E402
-from i18n import t  # noqa: E402
+from owner_profile import COMPANY_AREA, GENERIC_PRIVATE_SEGMENTS, PRIVATE_SEGMENTS as PROFILE_PRIVATE_SEGMENTS
+from i18n import t
+import frontmatter
 
-FM_RE = re.compile(r"^---\n(.*?)\n---\n", re.S)
 PRIVATE = ("- Health", *GENERIC_PRIVATE_SEGMENTS, *PROFILE_PRIVATE_SEGMENTS)
 
 
 def fm(text):
-    m = FM_RE.match(text)
-    out = {}
-    if m:
-        for line in m.group(1).splitlines():
-            if ":" in line:
-                k, _, v = line.partition(":")
-                out[k.strip()] = v.strip().strip('"').strip("'")
-    return out
+    return frontmatter.parse(text)
 
 
 def is_private(p: Path) -> bool:
@@ -106,7 +93,7 @@ def days(d: date) -> int:
 def next_cadence_step():
     if not CADENCE.exists():
         return None
-    for line in CADENCE.read_text(errors="ignore").splitlines():
+    for line in CADENCE.read_text(errors="ignore", encoding="utf-8").splitlines():
         m = re.match(r"\s*- \[ \]\s+(.+)", line)
         if m:
             return m.group(1).strip()
@@ -204,7 +191,7 @@ def context_projects():
     """[[Names]] listed under '## Current Projects (Active)' in CONTEXT.md."""
     if not CONTEXT_FILE.exists():
         return []
-    body = section(CONTEXT_FILE.read_text(errors="ignore"), "Current Projects (Active)")
+    body = section(CONTEXT_FILE.read_text(errors="ignore", encoding="utf-8"), "Current Projects (Active)")
     names = []
     for line in body.splitlines():
         if re.match(r"\s*\d+\.", line):
@@ -228,7 +215,7 @@ def build_projects_active(now):
     today = now.date()
     rows, parked, archived = [], [], []
     for cat, name, n in project_notes():
-        text = n.read_text(errors="ignore")
+        text = n.read_text(errors="ignore", encoding="utf-8")
         meta = fm(text)
         status = meta.get("status", "active").lower() or "active"
         if "archiv" in status:
@@ -307,7 +294,7 @@ def build_projects_active(now):
 
     L.append("---")
     L.append(f"*Last updated: {now.strftime('%Y-%m-%d')} (auto)*")
-    PROJECTS_ACTIVE.write_text("\n".join(L) + "\n")
+    PROJECTS_ACTIVE.write_text("\n".join(L) + "\n", encoding="utf-8")
     print(f"wrote {PROJECTS_ACTIVE.relative_to(VAULT)}: {len(rows)} active, {len(homeless)} homeless, {len(parked)} parked")
 
 
@@ -319,7 +306,7 @@ def main():
 
     deadlines = []
     for cat, name, n in project_notes():
-        text = n.read_text(errors="ignore")
+        text = n.read_text(errors="ignore", encoding="utf-8")
         meta = fm(text)
         status = meta.get("status", "active").lower()
         if "archiv" in status or "hold" in status or "wind" in status:
@@ -343,7 +330,7 @@ def main():
     decisions = []
     if dec_dir.exists():
         for p in sorted(dec_dir.glob("*.md")):
-            meta = fm(p.read_text(errors="ignore"))
+            meta = fm(p.read_text(errors="ignore", encoding="utf-8"))
             st = meta.get("status", "").lower()
             if st in ("pending", "deferred"):
                 decisions.append((p.stem, st, meta.get("move_target", "")))
@@ -353,7 +340,7 @@ def main():
     beliefs = []
     if bel_dir.exists():
         for p in sorted(bel_dir.glob("*.md")):
-            meta = fm(p.read_text(errors="ignore"))
+            meta = fm(p.read_text(errors="ignore", encoding="utf-8"))
             beliefs.append((p.stem, meta.get("last_challenged", "?")))
     beliefs.sort(key=lambda b: b[1])
 
@@ -446,7 +433,7 @@ def main():
             L.append(f"- [{cat}] {name} ({st})")
         L.append("")
 
-    OUT.write_text("\n".join(L))
+    OUT.write_text("\n".join(L), encoding="utf-8")
     print(f"wrote {OUT.relative_to(VAULT)}: {len(active)} active, {len(open_loops)} open loops, {len(decisions)} decisions pending")
 
     build_projects_active(now)

@@ -73,8 +73,10 @@ tuned its timeout against a cloud model.
   anthropic         : the Claude API with a key, stdlib HTTP (/v1/messages).
                       Key: BRAINLESS_ANTHROPIC_API_KEY, ANTHROPIC_API_KEY, or the
                       secret store under "anthropic_api_key". Default model
-                      claude-opus-5. For people with an API key and no Claude
-                      subscription.
+                      claude-opus-5. A key linked to an account rather than a
+                      workspace also needs BRAINLESS_ANTHROPIC_WORKSPACE_ID
+                      (sent as anthropic-workspace-id). For people with an API
+                      key and no Claude subscription, or a plan's API credit.
   gemini-cli,       : the Gemini and Codex CLIs, signed in with the user's own
   codex-cli           account. Both are agents, so each call runs in an empty
                       temporary directory; Codex also in its read-only sandbox
@@ -93,13 +95,40 @@ Every real call drops a one-line breadcrumb at .agents/state/llm_status
 (timestamp, outcome, detail). health_check reads it so a silent auth expiry
 surfaces as red instead of the pipeline looking green while every call 401s.
 
+Cost ledger. Every anthropic call appends one JSON line to
+.agents/state/llm_costs.jsonl with its token counts and the price in USD from the
+list prices in _PRICES (override one model with BRAINLESS_PRICE_<MODEL>, four
+numbers "in,out,cache_write,cache_read" per million tokens). claude-cli calls
+record the cost the CLI itself reports (`--output-format json`), marked "plan"
+when the CLI is signed in with a subscription and "api" when ANTHROPIC_API_KEY
+is in the environment, so the ledger says what was actually billed where.
+
+Budget. BRAINLESS_API_BUDGET_USD caps what the anthropic provider may spend per
+billing period (0 or unset: no cap). The period starts on
+BRAINLESS_API_BUDGET_RESET_DAY (default 1) of each month. Past
+BRAINLESS_API_BUDGET_WARN (default 0.8) the health check and the watchdog say
+so; past BRAINLESS_API_BUDGET_STOP (default 0.9) every anthropic lane is routed
+to its fallback (or claude-cli) until the period resets, so a night's work is
+never cut off mid-run by an empty balance. The current state is kept in
+.agents/state/llm_budget.json for the health check. A billing error from the
+API ("credit balance", HTTP 402) is classified "billing", which also hands the
+call to the fallback.
+
+System prompt. The raw API carries none of the context the Claude Code CLI
+loads from the vault (CLAUDE.md and friends), so anthropic calls send the file
+named by BRAINLESS_SYSTEM_PROMPT_FILE (default _Agent-Context/LLM-SYSTEM.md,
+relative to the vault) as the system prompt when it exists: house rules only,
+a few lines, no personal data.
+
 Ops: `python3 tools/llm.py --lanes` prints every lane with the provider it
-currently resolves to, and `--probe <lane>` sends one throwaway prompt through
-that lane and reports the wall time, and `--models <provider>` lists what an
-HTTP provider serves. All three are read-only.
+currently resolves to, `--probe <lane>` sends one throwaway prompt through
+that lane and reports the wall time, `--models <provider>` lists what an
+HTTP provider serves, and `--usage [--days N]` sums the cost ledger per lane
+against the budget. All four are read-only.
 """
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -112,15 +141,33 @@ from datetime import datetime
 
 from resolve_bin import resolve, resolve_claude
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from paths import vault_root  # noqa: E402
-import config  # noqa: E402,F401  brainless.toml sets env defaults before anything reads env
+from paths import vault_root
+import config  # noqa: F401  brainless.toml sets env defaults before anything reads env
 VAULT = vault_root()
 STATUS_FILE = os.path.join(VAULT, ".agents", "state", "llm_status")
 # One line per call, kept short. STATUS_FILE holds only the latest outcome for
 # health_check; routing decisions need history to be readable at all.
 LOG_FILE = os.path.join(VAULT, ".agents", "state", "llm_log")
 LOG_KEEP = 300
+# One JSON line per priced call; the budget reads it back. Grows ~100 lines a day.
+COST_FILE = os.path.join(VAULT, ".agents", "state", "llm_costs.jsonl")
+# The budget state for the health check and the worker mirror, rewritten on
+# every API-billed call.
+BUDGET_FILE = os.path.join(VAULT, ".agents", "state", "llm_budget.json")
+
+# USD per million tokens: (input, output, cache write, cache read). Anthropic list
+# prices as of 2026-10; the longest key that prefixes the model id wins, so a
+# dated id still finds its family. Override: BRAINLESS_PRICE_CLAUDE_OPUS_4_8="5,25,6.25,0.5".
+_PRICES = {
+    "claude-opus-5-5":   (4.0, 20.0, 5.0, 0.20),
+    "claude-opus-5":     (5.0, 25.0, 6.25, 0.50),
+    "claude-opus-4-8":   (5.0, 25.0, 6.25, 0.50),
+    "claude-opus-4-7":   (5.0, 25.0, 6.25, 0.50),
+    "claude-sonnet-5-5": (2.0, 10.0, 2.5, 0.20),
+    "claude-sonnet-5":   (2.0, 10.0, 2.5, 0.20),
+    "claude-haiku-5-5":  (0.10, 0.50, 0.125, 0.01),
+    "claude-haiku-4-5":  (1.0, 5.0, 1.25, 0.10),
+}
 
 # Untrusted content enters the automation prompts; these tools are denied on
 # EVERY call, with no opt-in (code execution, file writes, sub-agents).
@@ -133,6 +180,10 @@ _DANGEROUS_TOOLS = _NEVER_TOOLS + _WEB_TOOLS
 # Substrings that mark an authentication/authorization failure in any backend.
 _AUTH_HINTS = ("401", "403", "unauthorized", "authenticate",
                "expired", "invalid api key", "invalid_api_key", "authentication")
+# Substrings that mean the key works but the account cannot pay: an exhausted
+# monthly credit, a spend limit, HTTP 402. Checked before the auth hints.
+_BILLING_HINTS = ("credit balance", "insufficient_credits", "insufficient credit",
+                  "spend limit", "billing", "402", "payment required")
 
 # Providers that run on the machine itself. A lane pinned to one of these is
 # pinned for privacy, so it never falls back to a cloud provider by accident.
@@ -288,6 +339,51 @@ def _api_key(provider: str) -> str:
 _CURRENT_LANE: str | None = None
 
 
+_THINK_RE = re.compile(r"<think>.*?</think>", re.S)
+_FENCE_RE = re.compile(r"```(?:json)?\s*(.*?)```", re.S)
+
+
+def iter_json(text: str | None, want=dict):
+    """Every JSON value of the wanted kind (dict or list) that parses inside a
+    model reply, in order. Thinking blocks are dropped first, fenced blocks are
+    tried before the bare text, and each candidate is read with raw_decode
+    from every opening bracket, so prose around or between values does not
+    matter and a brace inside the prose is skipped rather than fatal."""
+    if not text:
+        return
+    text = _THINK_RE.sub("", text)
+    opener = "{" if want is dict else "["
+    dec = json.JSONDecoder()
+    seen = set()
+    for blob in [m.group(1) for m in _FENCE_RE.finditer(text)] + [text]:
+        i = blob.find(opener)
+        while i != -1:
+            try:
+                val, end = dec.raw_decode(blob, i)
+            except ValueError:
+                i = blob.find(opener, i + 1)
+                continue
+            if isinstance(val, want):
+                key = json.dumps(val, sort_keys=True)
+                if key not in seen:
+                    seen.add(key)
+                    yield val
+            i = blob.find(opener, end)
+
+
+def extract_json(text: str | None, want=dict, *, last: bool = False):
+    r"""The first (or last) JSON object or list in a model reply, else None.
+
+    Eight callers had their own version of this, each a little different:
+    a greedy `\{.*\}` that swallowed two objects into one failed parse, a
+    fence-only reader, one that took the last flat object. This is the one
+    reader; `want` is dict or list."""
+    found = list(iter_json(text, want)) if last else next(iter(iter_json(text, want)), None)
+    if last:
+        return found[-1] if found else None
+    return found
+
+
 def _record(outcome: str, detail: str = "") -> None:
     """Drop a status breadcrumb for the health check, and a line in the log.
     Best-effort: a failure to write must never fail the call."""
@@ -296,7 +392,7 @@ def _record(outcome: str, detail: str = "") -> None:
     lane = _CURRENT_LANE or "-"
     try:
         os.makedirs(os.path.dirname(STATUS_FILE), exist_ok=True)
-        with open(STATUS_FILE, "w") as fh:
+        with open(STATUS_FILE, "w", encoding="utf-8") as fh:
             fh.write(f"{stamp}\t{outcome}\t[{lane}] {detail}\n")
     except OSError:
         pass
@@ -316,7 +412,7 @@ def _log(line: str) -> None:
         if os.path.exists(LOG_FILE):
             with open(LOG_FILE, errors="replace") as fh:
                 old = fh.read().splitlines()[-(LOG_KEEP - 1):]
-        with open(LOG_FILE, "w") as fh:
+        with open(LOG_FILE, "w", encoding="utf-8") as fh:
             fh.write("\n".join(old + [line]) + "\n")
     except OSError:
         pass
@@ -324,7 +420,185 @@ def _log(line: str) -> None:
 
 def _classify(blob: str) -> str:
     low = (blob or "").lower()
+    if any(h in low for h in _BILLING_HINTS):
+        return "billing"
     return "auth" if any(h in low for h in _AUTH_HINTS) else "error"
+
+
+# ─── cost ledger and budget ───────────────────────────────────────
+
+def _price(model: str) -> tuple | None:
+    """(in, out, cache write, cache read) USD per million tokens, or None."""
+    model = (model or "").strip()
+    env = "BRAINLESS_PRICE_" + re.sub(r"[^A-Z0-9]", "_", model.upper())
+    if os.environ.get(env, "").strip():
+        try:
+            parts = [float(x) for x in os.environ[env].split(",")]
+            if len(parts) == 4:
+                return tuple(parts)
+        except ValueError:
+            pass
+    for key in sorted(_PRICES, key=len, reverse=True):
+        if model.startswith(key):
+            return _PRICES[key]
+    return None
+
+
+def _tokens(usage: dict | None) -> dict:
+    """Token counts in one shape from either API usage block or the CLI's."""
+    u = usage or {}
+    return {"in": int(u.get("input_tokens") or 0),
+            "out": int(u.get("output_tokens") or 0),
+            "cw": int(u.get("cache_creation_input_tokens") or 0),
+            "cr": int(u.get("cache_read_input_tokens") or 0)}
+
+
+def cost_usd(model: str, usage: dict | None) -> float | None:
+    """What one call cost at list price, or None for an unpriced model."""
+    price = _price(model)
+    if not price:
+        return None
+    t = _tokens(usage)
+    return round((t["in"] * price[0] + t["out"] * price[1]
+                  + t["cw"] * price[2] + t["cr"] * price[3]) / 1_000_000, 6)
+
+
+def _ledger(provider: str, model: str, usage: dict | None, usd: float | None,
+            billed: str) -> None:
+    """Append one priced call. billed: api (a key paid), plan (a subscription
+    paid), local (nothing paid). Best-effort, never fails the call."""
+    row = {"ts": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+           "lane": _CURRENT_LANE or "-", "provider": provider, "model": model,
+           **_tokens(usage), "usd": usd, "billed": billed}
+    try:
+        os.makedirs(os.path.dirname(COST_FILE), exist_ok=True)
+        with open(COST_FILE, "a", encoding="utf-8") as fh:
+            fh.write(json.dumps(row, ensure_ascii=False) + "\n")
+    except OSError:
+        return
+    if billed == "api":
+        state = budget_state()
+        if state:
+            try:
+                with open(BUDGET_FILE, "w", encoding="utf-8") as fh:
+                    json.dump(state, fh)
+            except OSError:
+                pass
+
+
+def _float_env(name: str, default: float) -> float:
+    try:
+        return float(os.environ.get(name, "").strip() or default)
+    except ValueError:
+        return default
+
+
+def budget_period_start(now: datetime | None = None) -> datetime:
+    """Midnight of the most recent reset day (BRAINLESS_API_BUDGET_RESET_DAY)."""
+    now = now or datetime.now()
+    try:
+        day = max(1, min(28, int(os.environ.get("BRAINLESS_API_BUDGET_RESET_DAY", "1") or 1)))
+    except ValueError:
+        day = 1
+    year, month = now.year, now.month
+    if now.day < day:
+        month -= 1
+        if month == 0:
+            year, month = year - 1, 12
+    return datetime(year, month, day)
+
+
+def read_ledger(since: datetime | None = None) -> list[dict]:
+    """The ledger rows at or after `since` (all rows when None)."""
+    rows = []
+    try:
+        with open(COST_FILE, encoding="utf-8", errors="replace") as fh:
+            for line in fh:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    row = json.loads(line)
+                except ValueError:
+                    continue
+                if since and str(row.get("ts", "")) < since.strftime("%Y-%m-%d %H:%M:%S"):
+                    continue
+                rows.append(row)
+    except OSError:
+        pass
+    return rows
+
+
+def budget_state(now: datetime | None = None) -> dict | None:
+    """Spend against the budget this period, or None when no budget is set.
+
+    level: ok below the warn ratio, warn between warn and stop, stop at or over
+    the stop ratio (anthropic lanes are rerouted from there)."""
+    budget = _float_env("BRAINLESS_API_BUDGET_USD", 0.0)
+    if budget <= 0:
+        return None
+    warn = _float_env("BRAINLESS_API_BUDGET_WARN", 0.8)
+    stop = _float_env("BRAINLESS_API_BUDGET_STOP", 0.9)
+    start = budget_period_start(now)
+    spent = round(sum(float(r.get("usd") or 0) for r in read_ledger(start)
+                      if r.get("billed") == "api"), 4)
+    ratio = spent / budget
+    level = "stop" if ratio >= stop else "warn" if ratio >= warn else "ok"
+    return {"updated": (now or datetime.now()).strftime("%Y-%m-%d %H:%M:%S"),
+            "period_start": start.strftime("%Y-%m-%d"), "budget": budget,
+            "spent": spent, "ratio": round(ratio, 4), "warn": warn, "stop": stop,
+            "level": level}
+
+
+def budget_reroute(lane: str | None, provider: str) -> tuple[str, str | None]:
+    """(provider to use, reason) once the budget has hit its stop ratio.
+
+    Only the anthropic provider spends the budget, so only it is rerouted: to
+    the lane's configured fallback, else claude-cli, which bills the
+    subscription instead. Local lanes and the CLI are never touched."""
+    if provider != "anthropic":
+        return provider, None
+    state = budget_state()
+    if not state or state["level"] != "stop":
+        return provider, None
+    # The reroute is a billing choice, so it lands on the subscription. A lane
+    # whose failure fallback is a local model keeps that for failures; a month
+    # of budget overrun is not a reason to write its notes with a 4B model.
+    target = _lane_env("BRAINLESS_LLM_FALLBACK", lane) or "claude-cli"
+    if target.lower() in ("anthropic", "none", "off", "0") or _is_local(target):
+        target = "claude-cli"
+    return target, (f"budget {state['spent']:.2f}/{state['budget']:.0f} USD is past "
+                    f"the stop ratio {state['stop']:.0%}; anthropic -> {target} until "
+                    f"the period resets")
+
+
+_SYSTEM_PROMPT: dict = {}
+
+
+def system_prompt() -> str:
+    """The house rules sent as the system prompt on raw API calls, '' if none.
+    Read once per process; BRAINLESS_SYSTEM_PROMPT_FILE may be absolute or
+    vault-relative."""
+    name = os.environ.get("BRAINLESS_SYSTEM_PROMPT_FILE", "").strip() or os.path.join("_Agent-Context", "LLM-SYSTEM.md")
+    path = name if os.path.isabs(name) else os.path.join(VAULT, name)
+    if path in _SYSTEM_PROMPT:
+        return _SYSTEM_PROMPT[path]
+    text = ""
+    try:
+        with open(path, encoding="utf-8") as fh:
+            text = fh.read().strip()
+    except OSError:
+        text = ""
+    if text:
+        # The file ships generic; the owner's language comes from the profile,
+        # the same sentence every prompt in the vault already carries.
+        try:
+            from owner_profile import output_lang_directive
+            text = text[:8000] + "\n\nOwner's language: " + output_lang_directive()
+        except Exception:
+            text = text[:8000]
+    _SYSTEM_PROMPT[path] = text
+    return _SYSTEM_PROMPT[path]
 
 
 def _run_claude_cli(prompt: str, timeout: int, allowed_tools=None,
@@ -333,7 +607,10 @@ def _run_claude_cli(prompt: str, timeout: int, allowed_tools=None,
     claude = resolve_claude()
     env = os.environ.copy()
     env["PATH"] = os.path.dirname(claude) + os.pathsep + env.get("PATH", "")
-    cmd = [claude, "-p", prompt.replace("\x00", "")]  # argv does not accept null bytes
+    # The prompt goes in on stdin, never argv: one argv element is capped at
+    # 128 KiB on Linux (MAX_ARG_STRLEN), which a long Turkish digest prompt
+    # exceeds and raises E2BIG, and argv is readable in `ps` by every user.
+    cmd = [claude, "-p"]
     # Pin the batch brain to a specific model so the pipeline does not silently
     # drift when the CLI default changes. Overridable via env; empty string means
     # "use the CLI default" (do not pass --model at all).
@@ -355,24 +632,58 @@ def _run_claude_cli(prompt: str, timeout: int, allowed_tools=None,
     # built-in tool set is therefore exactly the grant (none by default), and the
     # user's own MCP servers (mail, chat, drives) never load in an automated call.
     cmd += ["--tools", ",".join(safe), "--strict-mcp-config"]
+    # JSON out: the same text, plus the cost the CLI computed for the call, so
+    # the ledger can say what a night of subscription work would cost on a key.
+    cmd += ["--output-format", "json"]
     try:
         r = subprocess.run(
-            cmd,
+            cmd, input=prompt.replace("\x00", ""),
             cwd=VAULT, capture_output=True, text=True, timeout=timeout, env=env,
         )
     except subprocess.TimeoutExpired:
         _record("timeout", "claude-cli web" if web else "claude-cli")
         return None
+    except OSError as e:
+        # Binary missing (resolve_claude falls back to the bare name) or not
+        # executable. Recorded, so the fallback lane gets its turn.
+        _record("error", f"claude-cli {type(e).__name__}: {e}")
+        return None
     if r.returncode != 0:
         blob = (r.stdout or "") + (r.stderr or "")
         _record(_classify(blob), blob.strip()[:200])
         return None
-    out = _clean(r.stdout.strip())
+    text, meta = _parse_cli_result(r.stdout)
+    if meta and meta.get("is_error"):
+        _record(_classify(text), ("claude-cli: " + text.strip())[:200])
+        return None
+    out = _clean(text.strip())
     if not out:
         _record("error", "claude-cli empty output")
         return None
+    if meta:
+        used = next(iter((meta.get("modelUsage") or {}).keys()), None) or model or "claude-cli"
+        usd = meta.get("total_cost_usd")
+        _ledger("claude-cli", used, meta.get("usage"),
+                round(float(usd), 6) if isinstance(usd, (int, float)) else None,
+                "api" if env.get("ANTHROPIC_API_KEY", "").strip() else "plan")
     _record("ok", "claude-cli web" if web else "claude-cli")
     return out
+
+
+def _parse_cli_result(stdout: str) -> tuple[str, dict | None]:
+    """(answer text, result envelope) from `claude -p --output-format json`.
+
+    The envelope is the last JSON object on stdout whose "type" is "result";
+    a tool manager (mise) or the CLI itself may print a notice line before it,
+    so the scan is not anchored to the first character. A CLI (or a test
+    double) that printed plain text is passed through unchanged."""
+    raw = (stdout or "").strip()
+    if "{" in raw:
+        for d in reversed(list(iter_json(raw, dict))):
+            if d.get("type") == "result" or ("result" in d and "is_error" in d):
+                res = d.get("result")
+                return (res if isinstance(res, str) else json.dumps(res, ensure_ascii=False)), d
+    return raw, None
 
 
 def _run_goose(prompt: str, timeout: int, model: str | None = None,
@@ -473,10 +784,19 @@ def _run_anthropic(prompt: str, timeout: int, model: str | None = None,
     payload = {"model": model,
                "max_tokens": int(os.environ.get("BRAINLESS_LLM_MAX_TOKENS", "16000")),
                "messages": [{"role": "user", "content": prompt}]}
+    rules = system_prompt()
+    if rules:
+        payload["system"] = rules
     url = os.environ.get("BRAINLESS_ANTHROPIC_BASE_URL", "").rstrip("/")
     url = f"{url}/v1/messages" if url else ANTHROPIC_URL
     headers = {"Content-Type": "application/json", "x-api-key": key,
                "anthropic-version": "2023-06-01"}
+    # A key linked to an account (user or service account) rather than to a
+    # workspace must name the workspace on every request, or the API answers
+    # 400. A workspace-scoped key ignores the header. The id is not a secret.
+    workspace = os.environ.get("BRAINLESS_ANTHROPIC_WORKSPACE_ID", "").strip()
+    if workspace:
+        headers["anthropic-workspace-id"] = workspace
     data = None
     for attempt in (1, 2):
         req = urllib.request.Request(url, data=json.dumps(payload).encode(), headers=headers)
@@ -488,6 +808,15 @@ def _run_anthropic(prompt: str, timeout: int, model: str | None = None,
             if e.code in (401, 403):
                 _record("auth", f"anthropic HTTP {e.code}")
                 return None
+            try:
+                body = e.read().decode("utf-8", "replace")[:400]
+            except Exception:
+                body = ""
+            if e.code == 402 or (e.code == 400 and _classify(body) == "billing"):
+                # The key works, the account cannot pay: credit gone or a spend
+                # limit hit. The fallback (subscription or local) takes the call.
+                _record("billing", f"anthropic HTTP {e.code}: " + " ".join(body.split())[:150])
+                return None
             if attempt == 1 and (e.code == 429 or e.code >= 500):
                 try:
                     wait = float(e.headers.get("retry-after") or 5)
@@ -495,7 +824,9 @@ def _run_anthropic(prompt: str, timeout: int, model: str | None = None,
                     wait = 5.0
                 time.sleep(min(max(wait, 1.0), 30.0))
                 continue
-            _record("error", f"anthropic HTTP {e.code}")
+            # The API's own message says which field it rejected; without it a
+            # 400 is a dead end in the log (2026-10-08). Bodies carry no secrets.
+            _record("error", f"anthropic HTTP {e.code}: " + " ".join(body.split())[:150])
             return None
         except Exception as e:  # network, timeout, JSON
             _record("error", f"anthropic {type(e).__name__}")
@@ -513,6 +844,8 @@ def _run_anthropic(prompt: str, timeout: int, model: str | None = None,
         return None
     if data.get("stop_reason") == "max_tokens":
         _log(f"{_CURRENT_LANE or '-'}\twarn\tanthropic hit max_tokens, output truncated")
+    usage = data.get("usage") if isinstance(data.get("usage"), dict) else None
+    _ledger("anthropic", model, usage, cost_usd(model, usage), "api")
     _record("ok", f"anthropic {model}")
     return out
 
@@ -624,7 +957,9 @@ def run_prompt(prompt: str, timeout: int = 300, allowed_tools=None,
     """
     global _CURRENT_LANE
     _CURRENT_LANE = lane
-    primary = resolve_provider(lane)
+    primary, why = budget_reroute(lane, resolve_provider(lane))
+    if why:
+        _log(f"{lane or '-'}\troute\t{why}")
     if web and primary != "claude-cli":
         _log(f"{lane or '-'}\troute\tweb call forced to claude-cli from {primary}")
         primary = "claude-cli"
@@ -680,18 +1015,29 @@ def list_models(provider: str) -> list[str] | None:
 
 def _cli() -> int:
     """Read-only operator helpers. --lanes shows routing, --probe times a lane."""
-    import sys
     args = sys.argv[1:]
     if args and args[0] == "--lanes":
         width = max(len(k) for k in LANES)
         print(f"global provider: {os.environ.get('BRAINLESS_LLM_PROVIDER', 'claude-cli')}")
         print(f"global fallback: {os.environ.get('BRAINLESS_LLM_FALLBACK', '(none)')}")
+        print(_budget_line())
         print()
         for lane, shape in LANES.items():
-            provider = resolve_provider(lane)
+            provider, why = budget_reroute(lane, resolve_provider(lane))
             fallback = _resolve_fallback(lane, provider)
             tail = f" -> {fallback}" if fallback else ""
-            print(f"{lane:<{width}}  {provider}{tail:<18}  {shape}")
+            mark = " (budget)" if why else ""
+            print(f"{lane:<{width}}  {provider}{mark}{tail:<18}  {shape}")
+        return 0
+    if args and args[0] == "--usage":
+        days = None
+        if len(args) == 3 and args[1] == "--days":
+            try:
+                days = max(1, int(args[2]))
+            except ValueError:
+                print("usage: llm.py --usage [--days N]")
+                return 2
+        print(usage_report(days))
         return 0
     if len(args) == 2 and args[0] == "--probe":
         lane = args[1]
@@ -714,8 +1060,45 @@ def _cli() -> int:
         print("\n".join(models))
         return 0
     print(__doc__.strip().splitlines()[0])
-    print("usage: llm.py --lanes | --probe <lane> | --models <provider>")
+    print("usage: llm.py --lanes | --probe <lane> | --models <provider> | --usage [--days N]")
     return 2
+
+
+def _budget_line() -> str:
+    state = budget_state()
+    if not state:
+        return "api budget: none (BRAINLESS_API_BUDGET_USD unset)"
+    return (f"api budget: {state['spent']:.2f} of {state['budget']:.0f} USD "
+            f"({state['ratio']:.0%}) since {state['period_start']}, level {state['level']}")
+
+
+def usage_report(days: int | None = None) -> str:
+    """Cost per lane for the budget period (or the last `days` days): calls,
+    USD billed to a key, USD the subscription absorbed (as the CLI priced it)."""
+    from datetime import timedelta
+    since = (datetime.now() - timedelta(days=days)) if days else budget_period_start()
+    rows = read_ledger(since)
+    per: dict = {}
+    for r in rows:
+        lane = per.setdefault(str(r.get("lane") or "-"), {"calls": 0, "api": 0.0, "plan": 0.0, "local": 0})
+        lane["calls"] += 1
+        billed, usd = r.get("billed"), float(r.get("usd") or 0)
+        if billed == "api":
+            lane["api"] += usd
+        elif billed == "plan":
+            lane["plan"] += usd
+        else:
+            lane["local"] += 1
+    width = max([len(k) for k in per] + [4])
+    lines = [f"since {since.strftime('%Y-%m-%d')}: {len(rows)} priced calls", _budget_line(), "",
+             f"{'lane':<{width}}  calls   api USD  plan USD"]
+    for name in sorted(per, key=lambda k: -(per[k]["api"] + per[k]["plan"])):
+        v = per[name]
+        lines.append(f"{name:<{width}}  {v['calls']:>5}  {v['api']:>8.2f}  {v['plan']:>8.2f}")
+    tot_api = sum(v["api"] for v in per.values())
+    tot_plan = sum(v["plan"] for v in per.values())
+    lines.append(f"{'total':<{width}}  {len(rows):>5}  {tot_api:>8.2f}  {tot_plan:>8.2f}")
+    return "\n".join(lines)
 
 
 if __name__ == "__main__":

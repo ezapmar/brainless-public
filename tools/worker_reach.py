@@ -37,15 +37,16 @@ import subprocess
 import sys
 import time
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from owner_profile import WORKER  # noqa: E402
+from owner_profile import WORKER
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from paths import vault_root  # noqa: E402
-import mac_notify  # noqa: E402
+from paths import vault_root
+import mac_notify
 VAULT = vault_root()
 STATE = os.path.join(VAULT, ".agents", "state", "worker_reach.json")
 LLM_MIRROR = os.path.join(VAULT, ".agents", "state", "worker_llm_status.json")
+# The worker's API budget state (tools/llm.py writes llm_budget.json on every
+# API-billed call); health_check shows it as the worker's "API credit" row.
+BUDGET_MIRROR = os.path.join(VAULT, ".agents", "state", "worker_llm_budget.json")
 WORKER_VAULT = os.environ.get("BRAINLESS_WORKER_VAULT", "projects/brainless")
 CONFIG = os.path.expanduser("~/.config/brainless/worker_ssh")
 ALERT_AFTER = 2       # consecutive failed hourly runs
@@ -64,7 +65,7 @@ def target():
     if v:
         return v
     try:
-        with open(CONFIG) as fh:
+        with open(CONFIG, encoding="utf-8") as fh:
             return fh.read().strip()
     except OSError:
         return ""
@@ -129,14 +130,34 @@ def fetch_llm_status(host, now):
     mirror = parse_llm_status(r.stdout, now) if r.returncode == 0 else None
     if mirror:
         os.makedirs(os.path.dirname(LLM_MIRROR), exist_ok=True)
-        with open(LLM_MIRROR, "w") as fh:
+        with open(LLM_MIRROR, "w", encoding="utf-8") as fh:
             json.dump(mirror, fh)
     return mirror
 
 
+def fetch_llm_budget(host):
+    """Copy the worker's llm_budget.json to BUDGET_MIRROR. Best-effort; the
+    worker has no budget file when no cap is set, and that is not a failure."""
+    f = f"{WORKER_VAULT}/.agents/state/llm_budget.json"
+    r = run(["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=8", host,
+             f"cat '{f}' 2>/dev/null"], timeout=20)
+    if r.returncode != 0 or not r.stdout.strip():
+        return None
+    try:
+        state = json.loads(r.stdout)
+    except ValueError:
+        return None
+    if not isinstance(state, dict) or "budget" not in state:
+        return None
+    os.makedirs(os.path.dirname(BUDGET_MIRROR), exist_ok=True)
+    with open(BUDGET_MIRROR, "w", encoding="utf-8") as fh:
+        json.dump(state, fh)
+    return state
+
+
 def load():
     try:
-        with open(STATE) as fh:
+        with open(STATE, encoding="utf-8") as fh:
             return json.load(fh)
     except (OSError, ValueError):
         return {}
@@ -169,9 +190,10 @@ def main():
     reason = down or check_pulse(now)
     if not down:
         fetch_llm_status(host, now)
+        fetch_llm_budget(host)
     state, message = step(load(), reason, now)
     os.makedirs(os.path.dirname(STATE), exist_ok=True)
-    with open(STATE, "w") as fh:
+    with open(STATE, "w", encoding="utf-8") as fh:
         json.dump(state, fh)
     if message:
         notify(message)

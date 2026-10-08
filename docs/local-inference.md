@@ -286,12 +286,14 @@ problem. The answer, lane by lane:
 | `resurface` | Sends 120 candidate notes and asks for the best 5. A deterministic pre-filter (keyword overlap with CONTEXT.md, recency, link count) could cut the catalogue to about 30 and the prompt by most of its length. Worth doing, changes a weekly output, so not done in passing. |
 | `capture-photo` | The privacy hole in the capture path: photographs of documents go to a cloud vision model. Local OCR (tesseract) plus a local model for the filing decision would close it, and this is the largest single privacy win available. Needs its own change; vision is not something the Goose provider does today. |
 | `dialectic-topics` | Clustering the day's captures. Already falls back to one topic per capture when the model fails, so the failure mode is safe, but the work itself is genuinely a language problem. |
-| `dialectic-persona` | Generative prose, but bounded (250 words, a fixed method card, a fixed tail) and produced at a time of day when the box is idle. Stays cloud for the 12:30 and 21:20 rounds; the night experiment below measures whether the local model can hold a persona at all. |
+| `dialectic-persona` | Generative prose, but bounded (250 words, a fixed method card, a fixed tail) and produced at a time of day when the box is idle. Stays cloud. The night experiment below tested whether the local model can hold a persona; it cannot (0 usable nights out of 11, closed 2026-10-02). |
 | `compile`, `nightly`, `closeout`, `reconcile`, `content`, `thinker-digest`, `thinking-loop`, `meeting-brief`, `capture-link`, `dialectic-synthesis`, `dialectic-connect`, `research-*` | Generative prose. No deterministic substitute exists, and a small local model would produce fluent nonsense. These stay cloud, with a local fallback for resilience. |
 
 ---
 
 ## The night window experiment
+
+**Closed 2026-10-02 by the kill rule.** Result at the end of this section.
 
 The worker is idle between 01:00 and 06:00: no voice notes, so no whisper, and no
 timer that talks to a person. `brainless-dialectic-night.timer` uses that window to run
@@ -322,3 +324,42 @@ closes the timer (`systemctl --user disable --now brainless-dialectic-night.time
 the result and the wall times go into this section, and no larger model is seeded
 for it. What to try next is a separate decision. If the rule passes, the night round
 stays and the day rounds stay on the cloud.
+
+### Result, 2026-10-02
+
+The rule failed on the fifth night (2026-09-26: zero usable nights out of five). The
+timer kept running six more nights before it was closed on 2026-10-02; those nights did
+not change the answer. Eleven nights, `Qwen3-4B-Instruct-2507` Q4_K_M, graded by the
+cloud judge, from the night section of `DIALECTIC-STATUS.md`:
+
+| Night | Replies passed | Wall time |
+|---|---|---|
+| 2026-09-22 | 0/12 | 91 min |
+| 2026-09-23 | 5/12 | 83 min |
+| 2026-09-24 | 0/12 | 111 min |
+| 2026-09-25 | 0/12 | 93 min |
+| 2026-09-26 | 6/12 | 91 min |
+| 2026-09-27 | 0/12 | 104 min |
+| 2026-09-28 | 2/12 | 110 min |
+| 2026-09-29 | 2/12 | 99 min |
+| 2026-09-30 | 3/12 | 106 min |
+| 2026-10-01 | 3/12 | 87 min |
+| 2026-10-02 | 1/12 | 115 min |
+
+- **Usable nights: 0/11.** The bar was 8/12 replies; the best night reached 6/12.
+  Overall 22 of 132 replies passed (17%).
+- **Reliability was never the problem.** Every night returned 12/12 replies with Vote
+  lines. The model answers on time and in format; it fails on content.
+- **Wall time: 99 min on average (83 to 115),** against the one hour budgeted. Still
+  inside the idle window, but the budget was off by about two thirds.
+- **How the replies fail.** Read from the 2026-10-02 note: the six personas collapse
+  into one voice. They pick the same objection, cite the same single vault file, and
+  vote the same way (all six CONDITIONAL at 40 to 55%, tripping the unanimity warning).
+  The method cards do not survive: in round 2 the "chosen objection" field comes back
+  as `?`. A 4B model can produce a persona's format but not hold its method.
+
+**Decision.** Timer disabled on the worker and its unit removed from
+`.agents/systemd/` (the installer enables every `*.timer` it finds, so leaving the file
+would bring it back on the next install). The service unit stays for manual runs:
+`systemctl --user start brainless-dialectic-night.service`. As the rule says, no larger
+model is seeded for this lane. `dialectic-persona` stays on the cloud.

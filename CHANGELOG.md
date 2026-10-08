@@ -3,10 +3,47 @@
 All notable changes to the public brainless engine. Dates are the day of the public
 push. The private vault this is exported from has its own history.
 
-## Unreleased
+## 0.9.0 (2026-10-08)
 
-Windows, Linux without systemd, and a public site.
+Windows, Linux without systemd, a public site, and the batch brain on a monthly API credit.
 
+- **The batch brain on an API credit.** Claude Max and Team plans carry a monthly Claude
+  Platform credit that pays for raw API calls, not for the interactive CLI. The `anthropic`
+  provider of `tools/llm.py` now has what it takes to run the night on it: a cost ledger
+  (`.agents/state/llm_costs.jsonl`, every call with its tokens and list price), a budget
+  (`api_budget_usd` in `brainless.toml`; past the warn ratio the health check and the
+  watchdog say so, past the stop ratio every API lane runs on its fallback until the reset
+  day), a `billing` error class that hands an exhausted balance to the fallback, and
+  `python3 tools/llm.py --usage` for the spend per lane. A key linked to an account rather
+  than a workspace sends `anthropic_workspace_id`. Guide: `docs/shed.md`.
+- **A system prompt for the raw API.** The API carries none of the context the Claude Code
+  CLI loads from the vault, so `anthropic` calls send `_Agent-Context/LLM-SYSTEM.md` (house
+  rules, a few lines) plus the owner's language from the profile. Measured the same day:
+  one empty `claude -p` call carries about 18k tokens of CLI context, which is why the
+  credit goes through the API and not the CLI.
+- **The CLI's own receipt.** `claude-cli` calls run with `--output-format json`, so the
+  ledger also records what the subscription absorbed, at the price the CLI reports, and the
+  answer is read past any notice a tool manager prints first.
+- **Shared git sync for the workers.** `git_sync.sh` replaces the inline pull in the
+  wrappers: it aborts a conflicting rebase, restores the autostash, alerts once per
+  incident and exits non-zero while the tree is unsafe, so a job skips its run instead of
+  committing conflict markers. A timer that fires in the seconds after wake waits for the
+  network, and the worker pushes every hour.
+- **One installer owns every unit.** `install.sh` substitutes the vault path into each unit,
+  sets `BRAINLESS_VAULT`, skips the owner-only units unless asked (`owner-only.txt`), and
+  seven timers gained `Persistent=true`. A test parses every unit and fails on drift.
+- **Engine hygiene.** `fsutil.atomic_write` behind every live wiki page, one timestamped
+  log line (`logline.py`), one frontmatter parser, one JSON reader, utf-8 named on every
+  file open for the Windows port, ruff in CI, a generated script index in `docs/scripts.md`
+  with a test that fails when it goes stale. Six bugs from a code scan fixed (a Buzz reply
+  with media, the lite path importing fcntl, a crashed job's lease, the compile digest
+  depending on the machine, Telegram redirects re-checked on every hop). Dead code and a
+  June-old archive removed; the entity phase reads the corpus once per run.
+- **The AI shed.** The always-on worker as a home for standing agent panes:
+  `brainless-herdr.service` runs a headless herdr server, attach from a laptop with
+  `herdr --remote` or a saved machine, from a phone with any SSH client. `docs/shed.md`
+  covers the billing split (what runs on the credit, what stays on the subscription), the
+  three layers that keep the credit the only money spent, and the first week's checks.
 - **A public site.** `docs/` now serves as a GitHub Pages site: a front page on the kilim
   brand with the loop, the six voices, the Medium and X writing and the install lines, and
   a what's new page with every release in plain words. `tools/build_site.py` writes

@@ -15,10 +15,8 @@ import sys
 import time
 from datetime import datetime
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from paths import vault_root  # noqa: E402
+from paths import vault_root
 VAULT_ROOT = vault_root()
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 # The compile makes serial LLM calls of up to 300s each. 30 minutes cut a large
 # backlog short every night (Sep 8-10, 2026); 90 minutes lets it drain.
@@ -75,13 +73,26 @@ def main():
     # Its exit code used to be dropped (check=False), so a night where most
     # model calls failed still looked like a clean run.
     compile_rc = -1
+    # Steps that raised. An ImportError is an addon that is not installed and
+    # is reported as skipped; anything else is a failure, and the run is
+    # marked partial so the health check shows it (until 2026-10-08 both
+    # printed "skipped" and the night looked clean).
+    failed = []
+
+    def failure(step, e):
+        if isinstance(e, ImportError):
+            print(f"{step} skipped (addon not installed): {e}")
+        else:
+            print(f"{step} failed: {type(e).__name__}: {e}")
+            failed.append(step)
+
     # Snapshot .wiki/ first so the change brief can say what this compile did.
     before = None
     try:
         import wiki_changes
         before = wiki_changes.snapshot()
     except Exception as e:
-        print(f"change brief snapshot skipped: {e}")
+        failure("change brief snapshot", e)
     try:
         compile_rc = subprocess.run(
             [sys.executable, "-u",
@@ -90,7 +101,7 @@ def main():
             cwd=VAULT_ROOT, check=False, timeout=COMPILE_TIMEOUT,
         ).returncode
     except Exception as e:
-        print(f"compile_resources error: {e}")
+        failure("compile_resources", e)
 
     proposed = weekly_propose()
     # Any proposal not yet in Buzz (a failed send, a hand-added row) goes out now.
@@ -98,14 +109,14 @@ def main():
         import concept_review
         concept_review.announce()
     except Exception as e:
-        print(f"concept proposal announcement skipped: {e}")
+        failure("concept proposal announcement", e)
 
     after = None
     if before is not None:
         try:
             after = wiki_changes.snapshot()
         except Exception as e:
-            print(f"change brief snapshot skipped: {e}")
+            failure("change brief snapshot", e)
 
     # Always refresh the lint report (non-blocking, report-only mode)
     try:
@@ -114,23 +125,24 @@ def main():
             cwd=VAULT_ROOT, check=False, timeout=180,
         )
     except Exception as e:
-        print(f"lint_wiki report refresh skipped: {e}")
+        failure("lint_wiki report refresh", e)
     # Semantic index follows the compile: only pages whose text changed
     # are embedded again. A no-op where the search addon is not installed.
     try:
         import semantic_index
         if semantic_index.available():
-            r = semantic_index.Index().build()
-            print(f"semantic index: {r['embedded']} passages embedded, {r['pages']} pages")
+            # Leave room for link suggestions, contradictions and the retrieval check.
+            r = semantic_index.Index().build(budget_seconds=max(300, min(3000, time_left() - 1800)))
+            print(f"semantic index: {r['embedded']} passages embedded, {r['pages']} pages, {r['pending']} pending")
             # Link suggestions read the fresh index. Report only: nothing is applied.
             import link_suggest
             s = link_suggest.suggest()
             if s:
-                link_suggest.REPORT.write_text(link_suggest.markdown(s))
+                link_suggest.REPORT.write_text(link_suggest.markdown(s), encoding="utf-8")
                 print(f"link suggestions: {len(s['orphan_homes'])} orphan homes, "
                       f"{len(s['new_links'])} new links, {len(s['near_identical'])} near-identical")
     except Exception as e:
-        print(f"semantic index skipped: {e}")
+        failure("semantic index", e)
 
     # Contradictions: tonight's summaries against their nearest pages, on the
     # index just rebuilt. Needs the search addon; stops at a time budget.
@@ -145,7 +157,7 @@ def main():
                 flags = cc.brief_lines(added)
                 conflicts = f" checked={n['checked']} conflicts={n['conflicts']}"
         except Exception as e:
-            print(f"contradiction check skipped: {e}")
+            failure("contradiction check", e)
 
     # The change brief: what the compile added, updated, linked and flagged,
     # read by the morning briefing (_Agent-Context/WIKI-CHANGES.md).
@@ -155,7 +167,7 @@ def main():
             d = wiki_changes.write(before, after, conflicts=flags)
             changed = f" wiki_changed={wiki_changes.count(d)}"
         except Exception as e:
-            print(f"change brief skipped: {e}")
+            failure("change brief", e)
     # Retrieval check after the compile: the same golden questions every
     # night, so a compile change that hurts search shows up as a number.
     hit5 = ""
@@ -165,9 +177,10 @@ def main():
         if res["n"]:
             hit5 = f" hit5={res['hit5']}"
     except Exception as e:
-        print(f"retrieval eval skipped: {e}")
+        failure("retrieval eval", e)
     print(f"RUNLOG compile_rc={compile_rc}{changed}{proposed}{conflicts}{hit5}"
-          + ("" if compile_rc == 0 else " status=partial"))
+          + (f" failed={','.join(failed)}" if failed else "")
+          + ("" if compile_rc == 0 and not failed else " status=partial"))
 
 
 if __name__ == "__main__":

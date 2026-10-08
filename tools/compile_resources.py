@@ -36,18 +36,18 @@ import unicodedata
 from datetime import datetime, timedelta
 from pathlib import Path
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from paths import extra_sources, folder, vault_root  # noqa: E402
+from fsutil import atomic_write
+from paths import extra_sources, folder, vault_root
 VAULT = Path(vault_root())
 WIKI = VAULT / ".wiki"
 from llm import run_prompt
-from owner_profile import LANG, lang_name, output_lang_directive, CROSS_LINK_RULE  # noqa: E402
-from owner_profile import COMPANY_AREA, GENERIC_PRIVATE_SEGMENTS, PRIVATE_SEGMENTS as PROFILE_PRIVATE_SEGMENTS  # noqa: E402
-from owner_profile import PRIVATE_NAME_PARTS as PROFILE_PRIVATE_NAME_PARTS  # noqa: E402
-from i18n import t, t_list  # noqa: E402
-import mac_notify  # noqa: E402
-import concepts as C  # noqa: E402
-import output_guard  # noqa: E402
+from owner_profile import LANG, lang_name, output_lang_directive, CROSS_LINK_RULE
+from owner_profile import COMPANY_AREA, GENERIC_PRIVATE_SEGMENTS, PRIVATE_SEGMENTS as PROFILE_PRIVATE_SEGMENTS
+from owner_profile import PRIVATE_NAME_PARTS as PROFILE_PRIVATE_NAME_PARTS
+from i18n import t, t_list
+import mac_notify
+import concepts as C
+import output_guard
 
 # Per-source prompt cap; smaller-context providers can shrink it (Phase 0 T5).
 MAX_CHARS = int(os.environ.get("BRAINLESS_LLM_MAX_CHARS", "30000"))
@@ -206,16 +206,46 @@ def sources_digest(paths, *, scope="") -> str:
     (2026-08-28: two company dossiers stayed frozen at the 24 August seed
     for this reason). A hash is independent of machine and sync.
     """
-    h = hashlib.sha256()
-    if scope:
-        h.update(scope.encode() + b"\0")
-    for p in sorted(paths, key=lambda x: str(x)):
+    return _digests(paths, scope)[0]
+
+
+def _rel_key(p: Path) -> str:
+    """The path as the hash sees it: vault-relative, "/" separators, NFC. The
+    absolute path was hashed until 2026-10-08, which made the digest depend on
+    the machine (a compile on the Mac, a moved vault, a Windows checkout)
+    and recompiled everything, contrary to the docstring above."""
+    try:
+        rel = Path(p).relative_to(VAULT).as_posix()
+    except ValueError:                      # a source outside the vault
+        rel = Path(p).as_posix()
+    return unicodedata.normalize("NFC", rel)
+
+
+def _digests(paths, scope="") -> tuple[str, str]:
+    """(digest, legacy digest). The legacy one hashed the absolute path; it is
+    still computed so pages stamped before the change are not all rebuilt on
+    the machine that compiled them. It can go once every stamp has rolled."""
+    data = {}
+    for p in paths:
         try:
-            h.update(str(p).encode())
-            h.update(p.read_bytes())
+            data[Path(p)] = p.read_bytes()
         except OSError:
             continue
-    return h.hexdigest()[:12]
+    out = []
+    for key in (_rel_key, str):
+        h = hashlib.sha256()
+        if scope:
+            h.update(scope.encode() + b"\0")
+        for p in sorted(data, key=key):
+            h.update(key(p).encode())
+            h.update(data[p])
+        out.append(h.hexdigest()[:12])
+    return out[0], out[1]
+
+
+def digest_matches(stored: str | None, paths, *, scope="") -> bool:
+    """Is the stamp on a compiled page current for these sources?"""
+    return stored is not None and stored in _digests(paths, scope)
 
 
 _DIGEST_RE = re.compile(r"^sources_hash:\s*([0-9a-f]{6,})\s*$", re.M)
@@ -226,7 +256,7 @@ def stored_digest(dst: Path) -> str | None:
     if not dst.exists():
         return None
     try:
-        head = dst.read_text(errors="replace")[:2000]
+        head = dst.read_text(errors="replace", encoding="utf-8")[:2000]
     except OSError:
         return None
     m = _DIGEST_RE.search(head)
@@ -245,7 +275,7 @@ def stored_zk(dst: Path) -> str | None:
     if not dst.exists():
         return None
     try:
-        head = dst.read_text(errors="replace")[:2000]
+        head = dst.read_text(errors="replace", encoding="utf-8")[:2000]
     except OSError:
         return None
     m = _ZK_RE.search(head)
@@ -272,9 +302,7 @@ def write_compiled(dst: Path, body: str, sources, *, scope="") -> bool:
         if end != -1:
             text = text[:end] + f"\nsources_hash: {digest}" + text[end:]
     dst.parent.mkdir(parents=True, exist_ok=True)
-    tmp = dst.with_suffix(dst.suffix + ".tmp")
-    tmp.write_text(text)
-    tmp.replace(dst)
+    atomic_write(dst, text)
     return True
 
 
@@ -283,7 +311,7 @@ def needs_rebuild(src: Path, dst: Path, full: bool) -> bool:
         return True
     stored = stored_digest(dst)
     if stored is not None:                      # for stamped files the hash is the authority
-        return stored != sources_digest([src])
+        return not digest_matches(stored, [src])
     return src.stat().st_mtime > dst.stat().st_mtime
 
 
@@ -321,7 +349,7 @@ def summarize_file(src: Path, dry: bool, full: bool) -> bool:
         print(f"[dry] summarize {rel} → {dst.relative_to(VAULT)}")
         return True
     try:
-        body = src.read_text()[:MAX_CHARS]
+        body = src.read_text(encoding="utf-8")[:MAX_CHARS]
     except Exception as e:
         print(f"[skip] {rel}: {e}")
         return False
@@ -380,14 +408,14 @@ def _archive_log(lines):
     log = WIKI / "_archive" / "LOG.md"
     if not lines or not log.exists():
         return
-    text = log.read_text()
+    text = log.read_text(encoding="utf-8")
     head, sep, rest = text.partition("|---")
     if sep:
         first_nl = rest.find("\n")
         text = head + sep + rest[:first_nl + 1] + "\n".join(lines) + "\n" + rest[first_nl + 1:]
     else:
         text = text.rstrip("\n") + "\n" + "\n".join(lines) + "\n"
-    log.write_text(text)
+    atomic_write(log, text)
 
 
 def _vault_exists(rel: str) -> bool:
@@ -442,10 +470,10 @@ def _retarget_links(mapping: dict[str, str]) -> int:
     for p in WIKI.rglob("*.md"):
         if "_archive" in p.relative_to(WIKI).parts:
             continue
-        text = p.read_text(errors="replace")
+        text = p.read_text(errors="replace", encoding="utf-8")
         new = pat.sub(lambda m: "[[" + mapping[m.group(1)], text)
         if new != text:
-            p.write_text(new)
+            atomic_write(p, new)
             changed += 1
     return changed
 
@@ -525,7 +553,7 @@ def phase_projects(dry: bool, full: bool):
             # Version the dependency policy so old notes-only mirrors are also
             # rebuilt when their other inputs are now excluded for privacy.
             scope = "project-files-v1"
-            if not full and stored_digest(dst) == sources_digest(sources, scope=scope):
+            if not full and digest_matches(stored_digest(dst), sources, scope=scope):
                 continue
             if dry:
                 print(f"[dry] mirror {notes.relative_to(VAULT)} → {dst.relative_to(VAULT)}")
@@ -535,7 +563,7 @@ def phase_projects(dry: bool, full: bool):
             blob = ""
             try:
                 for p in sources:
-                    blob += f"\n--- {p.relative_to(proj_dir)} ---\n" + p.read_text()[:8000]
+                    blob += f"\n--- {p.relative_to(proj_dir)} ---\n" + p.read_text(encoding="utf-8")[:8000]
             except (OSError, UnicodeError) as e:
                 print(f"[FAIL] project {proj_dir.name}: {e}", file=sys.stderr)
                 continue
@@ -589,7 +617,7 @@ def _inject_link(sp: Path, target: str, note: str = "") -> bool:
     True when added."""
     if not sp.exists():
         return False
-    txt = sp.read_text()
+    txt = sp.read_text(encoding="utf-8")
     if f"- [[{target}]]" in txt:
         return False
     link = f"- [[{target}]]" + (f": {note}" if note else "")
@@ -599,7 +627,7 @@ def _inject_link(sp: Path, target: str, note: str = "") -> bool:
         txt = txt.replace(f"{heading}\n", f"{heading}\n{link}\n", 1)
     else:
         txt = txt.rstrip() + f"\n\n{LINKS_HEADING}\n{link}\n"
-    sp.write_text(txt)
+    atomic_write(sp, txt)
     return True
 
 
@@ -669,9 +697,7 @@ def _stamp_concepts(path: Path, slugs, rev: str):
     text = C.read_page(path)
     text = C.set_fm_key(text, "concepts", json.dumps(sorted(set(slugs)), ensure_ascii=False))
     text = C.set_fm_key(text, "concepts_rev", rev)
-    tmp = path.with_suffix(".md.tmp")
-    tmp.write_text(text)
-    tmp.replace(path)
+    atomic_write(path, text)
 
 
 def _append_proposals(props, catalogue):
@@ -689,7 +715,7 @@ def _append_proposals(props, catalogue):
                          "scope": p["scope"]})
         if rows:
             text = text.rstrip("\n") + "\n" + "\n".join(C.registry_row(r) for r in rows) + "\n"
-            CONCEPT_REGISTRY.write_text(text)
+            atomic_write(CONCEPT_REGISTRY, text)
     return rows
 
 
@@ -934,9 +960,7 @@ def phase_concepts(dry: bool, full: bool):
             print(f"[FAIL] concept {row['slug']}: not produced, existing page kept", file=sys.stderr)
             continue
         dst.parent.mkdir(parents=True, exist_ok=True)
-        tmp = dst.with_suffix(".md.tmp")
-        tmp.write_text(text)
-        tmp.replace(dst)
+        atomic_write(dst, text)
         # Backlinks make the page reachable from every source behind it.
         for s in batch:
             _inject_backlink(s["stem"], row["slug"])
@@ -978,7 +1002,7 @@ def migrate_articles(dry: bool):
         return
     if new_rows:
         text = C.read_page(CONCEPT_REGISTRY).rstrip("\n")
-        CONCEPT_REGISTRY.write_text(text + "\n" + "\n".join(C.registry_row(r) for r in new_rows) + "\n")
+        atomic_write(CONCEPT_REGISTRY, text + "\n" + "\n".join(C.registry_row(r) for r in new_rows) + "\n")
     rev = _active_rev(concept_rows())
     for stem, slugs in seeds.items():
         s = catalogue[stem]
@@ -1015,10 +1039,15 @@ def known_ideas() -> tuple[dict, set]:
     from wiki_dedupe import aliases_of, title_of
     names = {}
     for p in sorted((WIKI / "ideas").glob("*.md")):
-        text = p.read_text(errors="replace")
+        text = p.read_text(errors="replace", encoding="utf-8")
         for name in (p.stem, title_of(p, text), *aliases_of(parse_fm(text))):
             names.setdefault(fold_name(str(name)), p.stem)
-    archived = {p.stem for p in (WIKI / "_archive" / "ideas").glob("*.md")}
+    archived = set()
+    for p in sorted((WIKI / "_archive" / "ideas").glob("*.md")):
+        archived.add(p.stem)
+        # A merged page's title, too: an alias over 60 characters is not
+        # stamped on the survivor, so the title would slip through otherwise.
+        names.setdefault(fold_name(title_of(p, p.read_text(errors="replace", encoding="utf-8"))), p.stem)
     return names, archived
 
 
@@ -1029,7 +1058,7 @@ def phase_ideas(dry: bool, full: bool):
             continue
         for p in d.rglob("*.md"):
             try:
-                blob += f"\n--- {p.relative_to(VAULT)} ---\n" + p.read_text()[:5000]
+                blob += f"\n--- {p.relative_to(VAULT)} ---\n" + p.read_text(encoding="utf-8")[:5000]
             except Exception:
                 pass
     if not blob.strip():
@@ -1060,12 +1089,10 @@ Output ONLY valid JSON. For the body: {output_lang_directive()}
     out = call_claude(prompt, timeout=240)
     if not out:
         return
-    import json
-    try:
-        m = re.search(r"\{.*\}", out, re.S)
-        data = json.loads(m.group(0)) if m else json.loads(out)
-    except Exception as e:
-        print(f"[ideas] parse fail: {e}")
+    from llm import extract_json
+    data = extract_json(out, dict)
+    if data is None:
+        print("[ideas] parse fail: no JSON object in the reply")
         return
     now = datetime.now()
     written = 0
@@ -1092,7 +1119,7 @@ status: seed
 {idea.get('body','')}
 """
         dst.parent.mkdir(parents=True, exist_ok=True)
-        dst.write_text(body)
+        atomic_write(dst, body)
         written += 1
         names[fold_name(slug)] = names[fold_name(str(idea.get("title", slug)))] = slug
         print(f"[ok] {dst.relative_to(VAULT)}")
@@ -1172,7 +1199,7 @@ def phase_index(dry: bool, full: bool):
                  f"# {topic}", "", "_Auto-generated by tools/compile_resources.py. Back to [[INDEX]]._", ""]
         order = reversed(pages) if topic in ("Daily digests", "Filed queries") else pages
         lines += [index_line(p) for p in order]
-        (INDEX_DIR / f"{stem}.md").write_text("\n".join(lines) + "\n")
+        (INDEX_DIR / f"{stem}.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
         sections.append(f"- [[{stem}]]: {topic} ({len(pages)} pages)")
     for old in INDEX_DIR.glob("*.md"):          # a topic that emptied out
         if old.name not in wanted:
@@ -1181,7 +1208,7 @@ def phase_index(dry: bool, full: bool):
             "# Wiki INDEX\n\n_Auto-generated by tools/compile_resources.py. Do not edit by hand. "
             "Read this first, open the pages that fit, follow links from there._\n\n"
             + "\n".join(sections) + "\n")
-    (WIKI / "INDEX.md").write_text(body)
+    atomic_write((WIKI / "INDEX.md"), body)
     print(f"[ok] wiki/INDEX.md + {len(wanted)} topic index(es)")
 
 
@@ -1208,7 +1235,7 @@ def parse_entity_registry():
     out = []
     if not ENTITY_REGISTRY.exists():
         return out
-    for line in ENTITY_REGISTRY.read_text().splitlines():
+    for line in ENTITY_REGISTRY.read_text(encoding="utf-8").splitlines():
         s = line.strip()
         if not s or s.startswith("#") or "|" not in s:
             continue
@@ -1242,7 +1269,7 @@ def _entity_corpus():
                 if _is_private(p) or p.name.startswith("."):
                     continue
                 try:
-                    text = _nfc(p.read_text(errors="replace")).casefold()
+                    text = _nfc(p.read_text(errors="replace", encoding="utf-8")).casefold()
                 except Exception:
                     continue
                 corpus.append((p, text))
@@ -1264,7 +1291,7 @@ def _entity_tasks(terms):
         return []
     low = [t.casefold() for t in terms if t]
     out = []
-    for line in TASKS_FILE.read_text().splitlines():
+    for line in TASKS_FILE.read_text(encoding="utf-8").splitlines():
         s = line.strip()
         if s.startswith("- [ ]") and any(t in s.casefold() for t in low):
             out.append(s)
@@ -1283,7 +1310,7 @@ def phase_entities(dry: bool, full: bool):
             continue
         # Staleness test by hash (mtime lies after a git sync, see sources_digest).
         # Old unstamped seeds are recompiled automatically.
-        if not (full or stored_digest(dst) != sources_digest(sources)):
+        if not (full or not digest_matches(stored_digest(dst), sources)):
             continue
         if dry:
             print(f"[dry] entity {name} ({etype}) <- {len(sources)} source(s)")
@@ -1292,7 +1319,7 @@ def phase_entities(dry: bool, full: bool):
         blob = ""
         for p in sources:
             try:
-                blob += f"\n--- {p.relative_to(VAULT)} ---\n" + p.read_text()[:5000]
+                blob += f"\n--- {p.relative_to(VAULT)} ---\n" + p.read_text(encoding="utf-8")[:5000]
             except Exception:
                 pass
         tasks = _entity_tasks(terms)
@@ -1343,7 +1370,7 @@ status: seed
             # otherwise a timeout leaves that entity as a permanent gap.
             print(f"[retry] {name} (sources {len(sources)} -> {len(sources)//2})")
             half = sources[:len(sources) // 2]
-            small = "".join(f"\n--- {p.relative_to(VAULT)} ---\n" + p.read_text()[:3000]
+            small = "".join(f"\n--- {p.relative_to(VAULT)} ---\n" + p.read_text(encoding="utf-8")[:3000]
                             for p in half)
             out = call_claude(prompt.split("SOURCES:")[0] + "SOURCES:\n" + small[:20000],
                               timeout=240)
@@ -1436,14 +1463,19 @@ Output ONLY JSON: {{"<stem>": ["alias", ...], ...}}
 # Aliases land in frontmatter, the index and search, so personal data in one
 # spreads everywhere. The prompt forbids it; this is the boundary behind the
 # prompt (the first run proposed a birth date as an alias for a person).
-_ALIAS_DATA = re.compile(r"\d{1,2}[./-]\d{1,2}[./-]\d{2,4}|\d{5,}|\+?\d[\d ]{8,}\d|[₺$€£]\s?\d|\d\s?(?:tl|try|gbp|usd|eur)\b",
+_MONTHS = (r"(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec|ocak|şubat|subat|mart|nisan|mayıs|mayis"
+           r"|haziran|temmuz|ağustos|agustos|eylül|eylul|ekim|kasım|kasim|aralık|aralik)\w*")
+_ALIAS_DATA = re.compile(r"\d{1,2}[./-]\d{1,2}[./-]\d{2,4}|\d{5,}|\+?\d[\d ]{8,}\d|[₺$€£]\s?\d|\d\s?(?:tl|try|gbp|usd|eur)\b"
+                         r"|\b\d{1,2}\s+" + _MONTHS + r"\s+\d{4}\b|\b" + _MONTHS + r"\s+\d{1,2},?\s+\d{4}\b",
                          re.IGNORECASE)
 
 
 def clean_alias(a: str) -> str | None:
     a = C.strip_dashes(str(a)).replace("|", "/").strip()
-    # Standard names are names ("ISO 27001", "BS 7858"), not data.
-    probe = re.sub(r"\b(?:ISO|IEC|BS|EN|SOC)\s?[\d:/-]+", "", a, flags=re.IGNORECASE)
+    # Standard names are names ("ISO 27001", "BS 7858"), not data. Case matters:
+    # lower-case "en" and "bs" are everyday Turkish words, and a phone number
+    # after one of them is still a phone number.
+    probe = re.sub(r"\b(?:ISO|IEC|BS|EN|SOC)\s?[\d:/-]+", "", a)
     if not a or len(a) > 60 or _ALIAS_DATA.search(probe):
         return None
     return a
@@ -1472,7 +1504,7 @@ def phase_aliases(dry: bool, full: bool):
                 added += 1
     if added:
         body = ALIAS_HEADER + "".join(f"{stem} | {', '.join(names)}\n" for stem, names in sorted(rows.items()))
-        ALIAS_FILE.write_text(body)
+        atomic_write(ALIAS_FILE, body)
     reg = _registry_aliases()
     stamped = 0
     for p in pages:
@@ -1487,7 +1519,7 @@ def phase_aliases(dry: bool, full: bool):
         value = json.dumps(names, ensure_ascii=False)
         fm, _ = C.split_frontmatter(text)
         if fm and C.fm_value(fm, "aliases") != value:
-            p.write_text(C.set_fm_key(text, "aliases", value))
+            atomic_write(p, C.set_fm_key(text, "aliases", value))
             stamped += 1
     _COUNTS["aliases"] = added
     print(f"phase aliases: {added} proposed, {stamped} page(s) stamped")
@@ -1575,7 +1607,7 @@ _REG_ROW = re.compile(r"^\|\s*(?P<a>[^|]+?)\s*\|\s*(?P<b>[^|]+?)\s*\|\s*(?P<d>[a
 def link_registry(path: Path = LINK_REGISTRY) -> list[dict]:
     """Rows of the registry: a, b (vault-relative paths), decision, reason, date."""
     try:
-        text = path.read_text()
+        text = path.read_text(encoding="utf-8")
     except OSError:
         return []
     return [m.groupdict() for m in map(_REG_ROW.match, text.splitlines()) if m and m["a"] != "a"]

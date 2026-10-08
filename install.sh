@@ -156,7 +156,7 @@ if [ "$SCHEDULE" -eq 1 ]; then
 <plist version="1.0"><dict>
   <key>Label</key><string>$label</string>
   <key>ProgramArguments</key><array>$args</array>
-  <key>EnvironmentVariables</key><dict><key>BRAINLESS_VAULT</key><string>$VAULT</string></dict>
+  <key>EnvironmentVariables</key><dict><key>BRAINLESS_VAULT</key><string>$VAULT</string><key>PYTHONPATH</key><string>$VAULT/tools:$VAULT/.agents/scripts</string></dict>
   <key>WorkingDirectory</key><string>$VAULT</string>
   $sched
   <key>StandardOutPath</key><string>$VAULT/logs/$label.log</string>

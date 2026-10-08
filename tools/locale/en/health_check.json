@@ -70,5 +70,11 @@
   "backup_label": "Backup",
   "backup_none": "no encrypted archive yet (tools/vault_archive.py create)",
   "backup_detail": "last archive {made} days ago, last restore test: {verified} days ago",
-  "backup_never": "never"
+  "backup_never": "never",
+  "api_budget": "API credit",
+  "api_budget_worker": "API credit ({worker})",
+  "api_budget_no_record": "no spend recorded yet this period",
+  "api_budget_ok": "{spent} of {budget} USD ({pct}%) since {start}",
+  "api_budget_warn": "{spent} of {budget} USD ({pct}%) since {start}: past the warning ratio",
+  "api_budget_stop": "{spent} of {budget} USD ({pct}%) since {start}: API lanes run on the fallback until the reset day"
 }

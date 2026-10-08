@@ -25,6 +25,8 @@ import re
 import subprocess
 import sys
 import time
+
+from paths import child_env
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -47,7 +49,6 @@ def host() -> str:
     if sys.platform == "darwin":
         return "mac"
     try:
-        sys.path.insert(0, str(Path(__file__).resolve().parent))
         from owner_profile import WORKER
         return WORKER
     except Exception:
@@ -86,7 +87,7 @@ def job_name(cmd: list[str]) -> str:
 def load(path: Path = STATE) -> list[dict]:
     rows = []
     try:
-        for line in path.read_text().splitlines():
+        for line in path.read_text(encoding="utf-8").splitlines():
             try:
                 rows.append(json.loads(line))
             except ValueError:
@@ -104,7 +105,7 @@ def record(job: str, status: str, secs: float, counts: dict, *, now: datetime | 
     rows.append(row)
     STATE.parent.mkdir(parents=True, exist_ok=True)
     tmp = STATE.with_suffix(".tmp")
-    tmp.write_text("".join(json.dumps(r, ensure_ascii=False) + "\n" for r in rows))
+    tmp.write_text("".join(json.dumps(r, ensure_ascii=False) + "\n" for r in rows), encoding="utf-8")
     tmp.replace(STATE)
     render(rows, now=now)
     return row
@@ -153,7 +154,7 @@ def render(rows: list[dict] | None = None, *, now: datetime | None = None):
     path = runs_file(h)
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_suffix(".tmp")
-    tmp.write_text("\n".join(lines) + "\n")
+    tmp.write_text("\n".join(lines) + "\n", encoding="utf-8")
     tmp.replace(path)
 
 
@@ -171,7 +172,7 @@ def run(cmd: list[str], job: str) -> int:
     counts = {}
     try:
         proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                                text=True, errors="replace", bufsize=1)
+                                text=True, errors="replace", bufsize=1, env=child_env())
     except OSError as exc:
         print(f"run_log: cannot start {cmd[0]}: {exc}", file=sys.stderr)
         rc = 127

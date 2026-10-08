@@ -16,17 +16,14 @@ Design notes:
 - NO urgent push (owner decision): everything is collected in the weekly digest.
 """
 import os
-import sys
 import urllib.request
 import xml.etree.ElementTree as ET
 from datetime import datetime, timedelta
 
 VAULT = os.environ.get("BRAINLESS_VAULT") or os.path.expanduser("~/projects/brainless")
-sys.path.insert(0, os.path.join(VAULT, "tools"))
-sys.path.insert(0, os.path.join(VAULT, ".agents", "scripts"))
 from llm import run_prompt
-from owner_profile import OWNER, WORKER, LANG, output_lang_directive  # noqa: E402
-from i18n import t  # noqa: E402
+from owner_profile import OWNER, WORKER, LANG, output_lang_directive
+from i18n import t
 from buzz_delivery import send
 from functools import partial
 send_buzz = partial(send, 'radar')
@@ -42,13 +39,12 @@ MAX_NEW_PER_FEED = 5       # a single feed must not flood the digest in one week
 SEEN_CAP = 4000
 
 
-def log(msg):
-    print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] {msg}")
+from logline import log
 
 
 def read(path):
     try:
-        with open(path) as fh:
+        with open(path, encoding="utf-8") as fh:
             return fh.read()
     except OSError:
         return ""
@@ -118,7 +114,7 @@ def recent_link_notes():
 def main():
     # Keep it ordered: trimming must drop the OLDEST first (trimming a set drops
     # random urls and an old post still sitting in the feed comes back as "new").
-    seen_list = [l for l in read(STATE_FILE).splitlines() if l.strip()]
+    seen_list = [line for line in read(STATE_FILE).splitlines() if line.strip()]
     seen = set(seen_list)
     first_run = not seen
     fresh, errors = [], []
@@ -131,21 +127,23 @@ def main():
         except Exception as e:
             errors.append(f"{name}: {type(e).__name__}")
             continue
-        unseen = [(ti, l) for ti, l in items if l not in seen]
+        unseen = [(ti, line) for ti, line in items if line not in seen]
         if first_run:
             # Baseline: count everything STILL SITTING in the feed as seen. Marking
             # only the first few would leak the rest of the archive as "new" the
             # following week (like the 219 old essays on Paul Graham).
-            for _, l in unseen:
-                seen.add(l); seen_list.append(l)
+            for _, line in unseen:
+                seen.add(line)
+                seen_list.append(line)
             continue
-        for ti, l in unseen[:MAX_NEW_PER_FEED]:
-            seen.add(l); seen_list.append(l)
-            fresh.append({"who": name, "topic": topic, "title": ti, "url": l})
+        for ti, line in unseen[:MAX_NEW_PER_FEED]:
+            seen.add(line)
+            seen_list.append(line)
+            fresh.append({"who": name, "topic": topic, "title": ti, "url": line})
 
     def save_seen():
         os.makedirs(os.path.dirname(STATE_FILE), exist_ok=True)
-        with open(STATE_FILE, "w") as fh:
+        with open(STATE_FILE, "w", encoding="utf-8") as fh:
             fh.write("\n".join(seen_list[-SEEN_CAP:]))
 
     if first_run:
@@ -206,7 +204,7 @@ RULES:
     stamp = datetime.now().strftime("%Y-%m-%d")
     os.makedirs(OUT_DIR, exist_ok=True)
     path = os.path.join(OUT_DIR, f"thinkers-{stamp}.md")
-    with open(path, "w") as fh:
+    with open(path, "w", encoding="utf-8") as fh:
         fh.write(f"---\nlang: {LANG}\nsummary_en: Weekly synthesis of tracked thinkers "
                  f"and links {OWNER} forwarded, with relevance to active projects.\n"
                  f"compiled_at: {datetime.now().isoformat(timespec='seconds')}\n"

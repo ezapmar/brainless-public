@@ -1,12 +1,9 @@
-import json
 from pathlib import Path
-import sys
 import tempfile
 import unittest
-from unittest.mock import Mock, patch
+from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(ROOT / 'tools'))
 import buzz_interactions as worker
 from buzz_delivery import Outbox
 from buzz_fixture import Relay, OWNER, reply
@@ -57,3 +54,23 @@ class PollTests(unittest.TestCase):
                 worker.poll_channel(self.box, 'tasks', 'tasks', OWNER)
         with self.box.db() as db:
             self.assertEqual(db.execute('SELECT since FROM cursors').fetchone()[0], 1)
+
+
+class AnswerTextTests(unittest.TestCase):
+    """media_from_message yields (url, mime, filename) triples; a voice reply must
+    unpack them (regression: a two-value unpack raised ValueError on every
+    media-bearing reply, 2026-10-08)."""
+
+    def _msg(self, url, mime):
+        return {'content': 'typed text', 'tags': [['imeta', f'url {url}', f'm {mime}', 'filename reply.m4a']]}
+
+    def test_voice_reply_is_transcribed(self):
+        import buzz_capture as capture
+        with patch.object(capture, 'download', return_value=True), \
+             patch.object(capture, 'transcribe_file', return_value='spoken words'):
+            text = worker.answer_text(self._msg('https://relay/media/a.m4a', 'audio/mp4'))
+        self.assertEqual(text, 'spoken words')
+
+    def test_non_audio_media_falls_back_to_content(self):
+        text = worker.answer_text(self._msg('https://relay/media/a.png', 'image/png'))
+        self.assertEqual(text, 'typed text')

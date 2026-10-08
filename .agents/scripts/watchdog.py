@@ -21,15 +21,12 @@ import json
 import os
 import subprocess
 import time
-import urllib.parse
-import urllib.request
 from datetime import datetime
 
 VAULT = os.environ.get("BRAINLESS_VAULT") or os.path.expanduser("~/projects/brainless")
-import sys  # noqa: E402
-sys.path.insert(0, os.path.join(VAULT, "tools"))
-from owner_profile import WORKER  # noqa: E402
-from i18n import t  # noqa: E402
+import sys
+from owner_profile import WORKER
+from i18n import t
 CONF_DIR = os.path.expanduser("~/.config/brainless")
 STATE_FILE = os.path.join(VAULT, ".agents", "state", "watchdog_state.json")
 MAC_SILENCE_HOURS = 26
@@ -41,13 +38,12 @@ POWER_LOW_PERCENT = 30
 POWER_DEDUPE_HOURS = 1
 
 
-def log(msg):
-    print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] {msg}")
+from logline import log
 
 
 def read_file(path):
     try:
-        with open(path) as fh:
+        with open(path, encoding="utf-8") as fh:
             return fh.read().strip()
     except OSError:
         return None
@@ -107,8 +103,8 @@ def check_failed_units(issues):
     r = subprocess.run(
         ["systemctl", "--user", "--failed", "--no-legend", "--plain"],
         capture_output=True, text=True)
-    failed = [l.split()[0] for l in r.stdout.splitlines()
-              if "brainless-" in l or "buzz-" in l]
+    failed = [line.split()[0] for line in r.stdout.splitlines()
+              if "brainless-" in line or "buzz-" in line]
     if failed:
         issues["units-failed"] = t("watchdog.units_failed", units=", ".join(failed))
 
@@ -126,9 +122,9 @@ def check_dialectic(issues):
     now = datetime.now()
     today = now.strftime("%Y-%m-%d")
     text = read_file(os.path.join(VAULT, "_Agent-Context", "DIALECTIC-STATUS.md")) or ""
-    lines = [l for l in text.splitlines() if l.startswith(f"- {today} ")]
-    have = {l.split()[2].rstrip(":") for l in lines}
-    errors = [l for l in lines if ": error," in l]
+    lines = [line for line in text.splitlines() if line.startswith(f"- {today} ")]
+    have = {line.split()[2].rstrip(":") for line in lines}
+    errors = [line for line in lines if ": error," in line]
     missing = []
     if now.hour * 60 + now.minute >= 14 * 60 and "noon" not in have:
         missing.append("noon (12:30)")
@@ -179,6 +175,18 @@ def check_power(issues, state, now):
                                         capacity=capacity, threshold=POWER_LOW_PERCENT)
 
 
+def check_api_budget(issues):
+    """The anthropic provider's monthly cap (tools/llm.py): one topic at the
+    warning ratio, another at the stop ratio, each deduped like the rest."""
+    import llm
+    state = llm.budget_state()
+    if not state or state.get("level") == "ok":
+        return
+    kw = dict(pct=int(round(state["ratio"] * 100)), spent=f"{state['spent']:.2f}",
+              budget=f"{state['budget']:.0f}", stop=int(round(state["stop"] * 100)))
+    issues["api-budget-" + state["level"]] = t("watchdog.api_budget_" + state["level"], **kw)
+
+
 def main():
     power_mode = "--power" in sys.argv[1:]
     state_file = POWER_STATE_FILE if power_mode else STATE_FILE
@@ -197,7 +205,7 @@ def main():
             log(f"check_power error: {e}")
     else:
         for check in (check_mac_silence, check_health_red, check_failed_units,
-                      check_llm_auth, check_dialectic, check_buzz):
+                      check_llm_auth, check_api_budget, check_dialectic, check_buzz):
             try:
                 check(issues)
             except Exception as e:
@@ -215,7 +223,7 @@ def main():
         log(f"Clean ({len(issues)} known topics)" if issues else "Clean")
 
     os.makedirs(os.path.dirname(state_file), exist_ok=True)
-    with open(state_file, "w") as fh:
+    with open(state_file, "w", encoding="utf-8") as fh:
         json.dump(state, fh)
 
 

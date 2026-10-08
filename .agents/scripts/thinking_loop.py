@@ -7,16 +7,14 @@ import argparse
 import json
 import os
 import re
-import sys
 import time
 from datetime import datetime, timedelta
 
 VAULT = os.environ.get("BRAINLESS_VAULT") or os.path.expanduser("~/projects/brainless")
-sys.path.insert(0, os.path.join(VAULT, "tools"))
-sys.path.insert(0, os.path.join(VAULT, ".agents", "scripts"))
-from llm import run_prompt  # noqa: E402
-from owner_profile import OWNER, LANG, output_lang_directive  # noqa: E402
-from i18n import t, t_list  # noqa: E402
+import frontmatter
+from llm import run_prompt
+from owner_profile import OWNER, LANG, output_lang_directive
+from i18n import t, t_list
 
 STATE_FILE = os.path.join(VAULT, ".agents", "state", "thinking_loop.json")
 CONF_DIR = os.path.expanduser("~/.config/brainless")
@@ -40,8 +38,8 @@ ANSWER_PREFIXES = tuple(t_list("thinking_loop.answer_prefix"))
 FM_RE = re.compile(r"^---\n(.*?)\n---\n", re.S)
 
 
-def log(msg):
-    print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] thinking_loop: {msg}")
+from logline import logger
+log = logger("thinking_loop")
 
 
 def read(path):
@@ -55,14 +53,14 @@ def read(path):
 def write(path, text):
     os.makedirs(os.path.dirname(path), exist_ok=True)
     tmp = path + ".tmp"
-    with open(tmp, "w") as fh:
+    with open(tmp, "w", encoding="utf-8") as fh:
         fh.write(text)
     os.replace(tmp, path)
 
 
 def load_state():
     try:
-        with open(STATE_FILE) as fh:
+        with open(STATE_FILE, encoding="utf-8") as fh:
             return json.load(fh)
     except (OSError, ValueError):
         return {}
@@ -70,35 +68,17 @@ def load_state():
 
 def save_state(state):
     os.makedirs(os.path.dirname(STATE_FILE), exist_ok=True)
-    with open(STATE_FILE, "w") as fh:
+    with open(STATE_FILE, "w", encoding="utf-8") as fh:
         json.dump(state, fh, ensure_ascii=False, indent=1)
 
 
 def fm(text):
-    m = FM_RE.match(text)
-    out = {}
-    if m:
-        for line in m.group(1).splitlines():
-            if ":" in line:
-                k, _, v = line.partition(":")
-                out[k.strip()] = v.partition("#")[0].strip().strip('"')
-    return out
+    return frontmatter.parse(text, comments=True)
 
 
 def set_fm(text, key, value):
-    """Replace or add the key line in the frontmatter (comments are dropped)."""
-    m = FM_RE.match(text)
-    if not m:
-        return f"---\n{key}: {value}\n---\n" + text
-    block = m.group(1)
-    lines = block.splitlines()
-    for i, line in enumerate(lines):
-        if re.match(rf"^{re.escape(key)}\s*:", line):
-            lines[i] = f"{key}: {value}"
-            break
-    else:
-        lines.append(f"{key}: {value}")
-    return text[:m.start(1)] + "\n".join(lines) + text[m.end(1):]
+    """Replace or add the key line in the frontmatter (comments are kept)."""
+    return frontmatter.set_key(text, key, value)
 
 
 def clean(s, limit=600):
@@ -239,12 +219,9 @@ RULES:
     out = run_prompt(prompt, timeout=240, lane="thinking-loop")
     if not out:
         return None
-    m = re.search(r"\{.*\}", out, re.S)
-    if not m:
-        return None
-    try:
-        d = json.loads(m.group(0))
-    except ValueError:
+    from llm import extract_json
+    d = extract_json(out, dict)
+    if d is None:
         return None
     return d if isinstance(d, dict) else None
 
@@ -275,11 +252,11 @@ def _replace_section_line(text, heading, pattern, replacement):
     """Under '## heading', up to the next '## ', replace the first line matching pattern."""
     lines = text.splitlines(keepends=True)
     in_sec = False
-    for i, l in enumerate(lines):
-        if l.startswith("## "):
-            in_sec = l[3:].strip().startswith(heading)
+    for i, line in enumerate(lines):
+        if line.startswith("## "):
+            in_sec = line[3:].strip().startswith(heading)
             continue
-        if in_sec and re.match(pattern, l.strip()):
+        if in_sec and re.match(pattern, line.strip()):
             lines[i] = replacement
             return "".join(lines), True
     return text, False
@@ -374,9 +351,9 @@ def apply(kind, target, d, answer, *, collect=None, stamp=None):
         text = read(CADENCE)
         if d.get("done"):
             lines = text.splitlines(keepends=True)
-            for i, l in enumerate(lines):
-                if re.match(r"\s*- \[ \]", l) and target[:40] in l:
-                    lines[i] = l.replace("- [ ]", "- [x]", 1).rstrip("\n") + f" ✅ {today}\n"
+            for i, line in enumerate(lines):
+                if re.match(r"\s*- \[ \]", line) and target[:40] in line:
+                    lines[i] = line.replace("- [ ]", "- [x]", 1).rstrip("\n") + f" ✅ {today}\n"
                     break
             put(CADENCE, "".join(lines))
             touched.append(CADENCE)
@@ -433,7 +410,8 @@ def main():
         if state.get("phase") != "asked":
             q = pick_question(state)
             if not q:
-                print("no question"); return
+                print("no question")
+                return
             state.update({"phase": "asked", "kind": q[0], "target": q[1], "question": q[2],
                           "asked_at": time.time(), "message_id": None})
         d = draft(state["kind"], state["target"], args.simulate)

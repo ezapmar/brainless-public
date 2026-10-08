@@ -27,9 +27,8 @@ from datetime import datetime
 from pathlib import Path
 from xml.sax.saxutils import escape, quoteattr
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-from lint_wiki import VAULT, WIKI, all_wiki_files, link_graph, orphan_pages, parse_fm  # noqa: E402
-import wiki_metrics as M  # noqa: E402
+from lint_wiki import VAULT, WIKI, all_wiki_files, link_graph, orphan_pages, parse_fm
+import wiki_metrics as M
 
 # Colour-blind-safe (Okabe-Ito), one per page type.
 COLOURS = {
@@ -74,7 +73,7 @@ def build(no_summaries=False, main_only=False):
     out = []
     for n in nodes:
         try:
-            fm = parse_fm(n.read_text(errors="replace"))
+            fm = parse_fm(n.read_text(errors="replace", encoding="utf-8"))
         except OSError:
             fm = {}
         out.append({"id": str(n.relative_to(WIKI)), "label": n.stem, "type": page_type(n),
@@ -138,7 +137,7 @@ def main(argv=None) -> int:
         f"brainless-{datetime.now():%Y-%m-%d}{'-concepts' if args.no_summaries else ''}"
         f"{'-main' if args.main_only else ''}.{args.format}")
     out.parent.mkdir(parents=True, exist_ok=True)
-    out.write_text(gexf(nodes, edges) if args.format == "gexf" else graphml(nodes, edges))
+    out.write_text(gexf(nodes, edges) if args.format == "gexf" else graphml(nodes, edges), encoding="utf-8")
     top = sorted(nodes, key=lambda n: -n["betweenness"])[:3]
     print(f"[ok] {out}: {len(nodes)} nodes, {len(edges)} edges; "
           f"top bridges: {', '.join(n['label'] for n in top)}")

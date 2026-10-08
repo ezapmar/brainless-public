@@ -17,12 +17,9 @@ The artifact patterns are per language (the audio language of the owner) and
 live in tools/locale/<lang>/transcript_filter.json; the current language and
 English are merged. Add new hallucinations there as they show up.
 """
-import os
 import re
-import sys
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from i18n import t_list  # noqa: E402
+from i18n import t_list
 
 # Matched against the normalised transcript (lowercased, brackets removed,
 # punctuation stripped, whitespace collapsed) with fullmatch.
@@ -59,9 +56,11 @@ if __name__ == "__main__":
     ok = True
     for t in _drop:
         if not is_empty_transcript(t):
-            print(f"FAIL drop: {t!r}"); ok = False
+            print(f"FAIL drop: {t!r}")
+            ok = False
     for t in _keep:
         if is_empty_transcript(t):
-            print(f"FAIL keep: {t!r}"); ok = False
+            print(f"FAIL keep: {t!r}")
+            ok = False
     print("all ok" if ok else "FAILURES above")
     raise SystemExit(0 if ok else 1)

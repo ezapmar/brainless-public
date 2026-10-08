@@ -19,16 +19,14 @@ import imaplib
 import os
 import re
 import ssl
-import sys
 from datetime import datetime, timedelta
 from email.header import decode_header, make_header
 from email.utils import parseaddr, parsedate_to_datetime
 from html.parser import HTMLParser
 
 VAULT = os.environ.get("BRAINLESS_VAULT") or os.path.expanduser("~/projects/brainless")
-sys.path.insert(0, os.path.join(VAULT, "tools"))
-from transcript_filter import is_empty_transcript  # noqa: E402
-from i18n import t  # noqa: E402
+from transcript_filter import is_empty_transcript
+from i18n import t
 
 CONF_DIR = os.path.expanduser("~/.config/brainless")
 STATE_FILE = os.path.join(VAULT, ".agents", "state", "spiky_uid")
@@ -37,13 +35,12 @@ SENDER = "no-reply@report.spiky.ai"
 FOOTER_MARK = "Please do not reply to this email"
 
 
-def log(msg):
-    print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] {msg}")
+from logline import log
 
 
 def read_file(path):
     try:
-        with open(path) as fh:
+        with open(path, encoding="utf-8") as fh:
             return fh.read().strip()
     except OSError:
         return None
@@ -148,7 +145,7 @@ def process(uid, raw):
         if os.path.exists(alt):
             return  # the same report was already processed (backfill run again)
         path = alt
-    with open(path, "w") as fh:
+    with open(path, "w", encoding="utf-8") as fh:
         fh.write(t("spiky_capture.note_header", title=title, when=when.strftime('%Y-%m-%d %H:%M'))
                  + f"{body}\n")
     log(f"Report written: {path}")
@@ -199,7 +196,7 @@ def main():
     if last is None and not args.backfill:
         # First run: set the baseline, do not process old mail.
         os.makedirs(os.path.dirname(STATE_FILE), exist_ok=True)
-        with open(STATE_FILE, "w") as fh:
+        with open(STATE_FILE, "w", encoding="utf-8") as fh:
             fh.write(str(uids[-1]))
         log(f"Baseline set (uid {uids[-1]}); new reports start flowing.")
         M.logout()
@@ -221,7 +218,7 @@ def main():
         # Backfill works with All Mail UIDs; leave the INBOX baseline alone.
         top = max(uids[-1], int(last or 0))
         os.makedirs(os.path.dirname(STATE_FILE), exist_ok=True)
-        with open(STATE_FILE, "w") as fh:
+        with open(STATE_FILE, "w", encoding="utf-8") as fh:
             fh.write(str(top))
     M.logout()
 

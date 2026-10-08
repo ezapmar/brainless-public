@@ -1,10 +1,8 @@
 import json
 from pathlib import Path
-import sys
 import tempfile
 import unittest
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import writing_index
 from buzz_delivery import ROUTES, HARNESS_CHANNELS
 import buzz_interactions

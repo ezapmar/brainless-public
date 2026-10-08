@@ -3,7 +3,8 @@
 
 Writes docs/whats-new.html (every release, newest first) and docs/feed.xml (Atom, one
 entry per released version) so people can follow releases without watching GitHub.
-docs/index.html is written by hand and is not touched here.
+docs/index.html is written by hand; this only restamps its site.css and site.js links
+with a content hash, so a changed file gets a new URL past the Pages cache.
 
     python3 tools/build_site.py            # rebuild both files
     python3 tools/build_site.py --check    # exit 1 if the files are stale
@@ -18,6 +19,7 @@ from __future__ import annotations
 
 import argparse
 import datetime as dt
+import hashlib
 import html
 import re
 import sys
@@ -32,6 +34,23 @@ SITE = "https://ezapmar.github.io/brainless-public"
 HEADING = re.compile(r"^## (?P<version>\S+)(?: \((?P<date>\d{4}-\d{2}-\d{2})\))?\s*$")
 BULLET = re.compile(r"^(?P<indent>\s*)[-*] (?P<text>.*)$")
 NUMBERED = re.compile(r"^(?P<indent>\s*)\d+\. (?P<text>.*)$")
+
+
+
+ASSET_LINK = re.compile(r'(href|src)="(site\.(?:css|js))(?:\?v=[0-9a-f]+)?"')
+
+
+def asset_version() -> str:
+    """Short hash of site.css and site.js, appended to their links so a changed file
+    gets a new URL. GitHub Pages serves everything with a ten-minute cache."""
+    h = hashlib.sha1()
+    for name in ("site.css", "site.js"):
+        h.update((DOCS / name).read_bytes())
+    return h.hexdigest()[:8]
+
+
+def stamp(text: str, version: str) -> str:
+    return ASSET_LINK.sub(lambda m: f'{m.group(1)}="{m.group(2)}?v={version}"', text)
 
 
 class Release:
@@ -132,7 +151,7 @@ def release_html(r: Release) -> str:
     )
 
 
-def page_html(releases: list[Release]) -> str:
+def page_html(releases: list[Release], version: str) -> str:
     chips = "".join(
         f'<a href="#{r.anchor}">{"main" if r.version == "Unreleased" else r.version}</a>' for r in releases
     )
@@ -149,7 +168,7 @@ def page_html(releases: list[Release]) -> str:
 <link rel="alternate" type="application/atom+xml" title="brainless releases" href="feed.xml">
 <title>brainless: what's new</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@500;700;800&family=Hanken+Grotesk:ital,wght@0,400;0,500;0,600;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap">
-<link rel="stylesheet" href="site.css">
+<link rel="stylesheet" href="site.css?v={version}">
 </head>
 <body>
 <header class="site-nav">
@@ -194,7 +213,7 @@ def page_html(releases: list[Release]) -> str:
   </div>
 </footer>
 
-<script src="site.js"></script>
+<script src="site.js?v={version}"></script>
 </body>
 </html>
 """
@@ -257,15 +276,23 @@ def main(argv: list[str]) -> int:
     if not releases:
         print("no releases found in CHANGELOG.md", file=sys.stderr)
         return 1
-    outputs = {DOCS / "whats-new.html": page_html(releases), DOCS / "feed.xml": feed_xml(releases)}
+    version = asset_version()
+    index = DOCS / "index.html"
+    outputs = {
+        DOCS / "whats-new.html": page_html(releases, version),
+        DOCS / "feed.xml": feed_xml(releases),
+        index: stamp(index.read_text(encoding="utf-8"), version),
+    }
     stale = [p for p, s in outputs.items() if not p.exists() or p.read_text(encoding="utf-8") != s]
     if args.check:
         for p in stale:
             print(f"stale: {p.relative_to(ROOT)}")
         return 1 if stale else 0
     for p, s in outputs.items():
-        p.write_text(s, encoding="utf-8")
-        print(f"wrote {p.relative_to(ROOT)} ({len(s)} bytes)")
+        if p in stale:
+            p.write_text(s, encoding="utf-8")
+            print(f"wrote {p.relative_to(ROOT)} ({len(s)} bytes)")
+    print(f"asset version {version}")
     print(f"{len(releases)} sections, latest {releases[1].version if releases[0].version == 'Unreleased' else releases[0].version}")
     return 0
 

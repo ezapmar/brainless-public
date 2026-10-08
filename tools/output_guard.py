@@ -45,11 +45,8 @@ _NESTED_FM = re.compile(r"\n---\s*\n(?:[a-z_]+:.*\n)*?(?:summary_en|lang):", re.
 
 
 def _split(text: str) -> tuple[str, str]:
-    if text.startswith("---\n"):
-        end = text.find("\n---", 4)
-        if end != -1:
-            return text[4:end], text[end + 4:]
-    return "", text
+    from frontmatter import split
+    return split(text)
 
 
 _FENCE = re.compile(r"^```.*?^```", re.S | re.M)

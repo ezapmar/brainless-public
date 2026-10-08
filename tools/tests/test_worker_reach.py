@@ -6,14 +6,12 @@ first failing check is the one reported.
 
 Run: python3 -B -m unittest tools.tests.test_worker_reach -v
 """
-import sys
 import unittest
 from pathlib import Path
 from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(ROOT / "tools"))
-import worker_reach as wr  # noqa: E402
+import worker_reach as wr
 
 
 class Step(unittest.TestCase):

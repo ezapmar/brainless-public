@@ -1,7 +1,6 @@
 """Durable Buzz outbox. No Telegram fallback. CLI credentials never enter logs."""
 import argparse
 from contextlib import contextmanager
-import fcntl
 import hashlib
 import json
 import os
@@ -12,6 +11,8 @@ import sqlite3
 import subprocess
 import sys
 import time
+
+from vault_lock import lock_exclusive
 
 VAULT = Path(os.environ.get('BRAINLESS_VAULT') or Path(__file__).resolve().parents[1])
 ROUTES = {'ops': 'watchdog', 'tasks': 'tasks', 'radar': 'radar', 'content': 'content',
@@ -53,9 +54,9 @@ class Buzz:
     def credentials(self, identity):
         if not re.fullmatch(r'[a-z0-9_-]+', identity):
             raise ValueError('Invalid Buzz identity')
-        text = (self.config / 'keys' / identity).read_text()
-        secret = next((l.split(':', 1)[1].strip() for l in text.splitlines() if l.startswith('Secret key:')), '')
-        public = next((l.split(':', 1)[1].strip() for l in text.splitlines() if l.startswith('Public key:')), '')
+        text = (self.config / 'keys' / identity).read_text(encoding="utf-8")
+        secret = next((line.split(':', 1)[1].strip() for line in text.splitlines() if line.startswith('Secret key:')), '')
+        public = next((line.split(':', 1)[1].strip() for line in text.splitlines() if line.startswith('Public key:')), '')
         if not secret:
             raise ValueError('Buzz identity has no key')
         return secret, public
@@ -64,10 +65,10 @@ class Buzz:
         owner = os.environ.get('BUZZ_OWNER_PUBKEY', '')
         p = self.config / 'owner_pubkey'
         if not owner and p.exists():
-            owner = p.read_text().strip()
+            owner = p.read_text(encoding="utf-8").strip()
         if not owner:
             for p in sorted(self.config.glob('*.env')):
-                for line in p.read_text().splitlines():
+                for line in p.read_text(encoding="utf-8").splitlines():
                     if line.startswith('BUZZ_ACP_AGENT_OWNER='):
                         owner = line.split('=', 1)[1].strip().strip('"\'')
                         break
@@ -79,7 +80,7 @@ class Buzz:
 
     def call(self, identity, args, content=None):
         secret, _ = self.credentials(identity)
-        relay = os.environ.get('BUZZ_RELAY_URL') or (self.config / 'relay_url').read_text().strip()
+        relay = os.environ.get('BUZZ_RELAY_URL') or (self.config / 'relay_url').read_text(encoding="utf-8").strip()
         binary = shutil.which('buzz') or str(Path.home() / '.cargo/bin/buzz')
         result = subprocess.run([binary, *args], input=content, text=True, capture_output=True,
                                 timeout=60, env={**os.environ, 'BUZZ_PRIVATE_KEY': secret, 'BUZZ_RELAY_URL': relay})
@@ -91,7 +92,7 @@ class Buzz:
     def channel(self, name, identity):
         cache = self.config / 'channels.json'
         if cache.exists():
-            cid = json.loads(cache.read_text()).get(name)
+            cid = json.loads(cache.read_text(encoding="utf-8")).get(name)
             if cid:
                 return cid
         data = self.call(identity, ['channels', 'list'])
@@ -145,7 +146,7 @@ class Outbox:
     @contextmanager
     def lock(self, name='delivery'):
         with self.path.with_suffix('.' + name + '.lock').open('a') as f:
-            fcntl.flock(f, fcntl.LOCK_EX)
+            lock_exclusive(f)
             yield
 
     def enqueue(self, identity, channel, body, *, key=None, parent=None):
@@ -214,7 +215,7 @@ class Outbox:
             self.deliver(key)
         with self.db() as db:
             pending = db.execute('SELECT count(*) FROM outgoing WHERE event IS NULL').fetchone()[0]
-        (self.path.parent / 'buzz_delivery_status.json').write_text(json.dumps({'checked_at': int(time.time()), 'pending': pending}) + '\n')
+        (self.path.parent / 'buzz_delivery_status.json').write_text(json.dumps({'checked_at': int(time.time()), 'pending': pending}) + '\n', encoding="utf-8")
         return pending
 
 

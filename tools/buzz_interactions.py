@@ -10,7 +10,7 @@ import time
 
 from buzz_delivery import Outbox, ROUTES, HARNESS_CHANNELS, VAULT, event_id, messages
 from i18n import t
-from today_buzz import parents, handle as today_handle, send_queue
+from today_buzz import parents, handle as today_handle
 import thinking_buzz
 import dreaming
 import concept_review
@@ -18,11 +18,10 @@ import concept_review
 
 def answer_text(msg):
     # Reuse the existing authenticated Buzz media downloader and local whisper.
-    sys.path.insert(0, str(VAULT / '.agents/scripts'))
     import buzz_capture as capture
     content = msg.get('content', '').strip()
-    for url, mime in capture.media_from_message(msg):
-        kind, extension = capture.classify(url, mime)
+    for url, mime, name in capture.media_from_message(msg):
+        kind, extension = capture.classify(url, mime, name)
         if kind != 'audio':
             continue
         with tempfile.TemporaryDirectory() as tmp:
@@ -69,12 +68,12 @@ def read_only_answer(msg, channel, identity, box, text):
     for hit in json.loads(result.stdout):
         p = (VAULT / hit['path']).resolve()
         if p.is_relative_to(VAULT.resolve()) and p.is_file() and not _is_private(p):
-            sources.append(hit['path'] + '\n' + p.read_text()[:3500])
+            sources.append(hit['path'] + '\n' + p.read_text(encoding="utf-8")[:3500])
     from llm import run_prompt
     from owner_profile import output_lang_directive
     # The owner's standing preferences, shared by every agent (_Agent-Context/LEARNINGS.md).
     learn = VAULT / '_Agent-Context' / 'LEARNINGS.md'
-    learnings = learn.read_text()[:6000] if learn.is_file() else ''
+    learnings = learn.read_text(encoding="utf-8")[:6000] if learn.is_file() else ''
     body = run_prompt('''You are the read-only brainless conversation assistant. Answer the owner in this Buzz thread.
 Use the supplied vault sources and cite their exact paths. If evidence is missing say so.
 You cannot execute actions, edit human notes, send external messages or change services.
@@ -180,7 +179,7 @@ def main():
         with box.db() as db:
             replies = db.execute('SELECT count(*) FROM incoming WHERE status="pending"').fetchone()[0]
         (box.path.parent / 'buzz_interactions_status.json').write_text(json.dumps(
-            {'checked_at': int(time.time()), 'failures': failures, 'pending_replies': replies, 'pending_messages': pending}) + '\n')
+            {'checked_at': int(time.time()), 'failures': failures, 'pending_replies': replies, 'pending_messages': pending}) + '\n', encoding="utf-8")
         print(f'Buzz: {pending} pending messages, {replies} pending replies, {failures} failures')
         return 1 if failures else 0
 

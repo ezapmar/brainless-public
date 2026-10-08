@@ -5,13 +5,14 @@
 # posted by tools/evening_closeout.py when it is written.
 set -u
 VAULT="${BRAINLESS_VAULT:-$HOME/projects/brainless}"
+export PYTHONPATH="$VAULT/tools:$VAULT/.agents/scripts${PYTHONPATH:+:$PYTHONPATH}"
 STATE="$VAULT/.agents/state/buzz_briefing_posted"
 TODAY="$(date +%F)"
 FILE="$VAULT/Daily Briefings/daily-briefing-$TODAY.md"
 # Close-out marker and "no morning briefing" note as written by tools/evening_closeout.py,
 # read from the locale (current language plus English) so any vault language works.
-MARKERS="$(cd "$VAULT" && python3 -c 'import sys; sys.path.insert(0, "tools"); from i18n import t_list; print("\t".join(t_list("evening_closeout.section_marker")))' 2>/dev/null)"
-NO_MORNING="$(cd "$VAULT" && python3 -c 'import sys; sys.path.insert(0, "tools"); from i18n import t_list; print("\n".join(t_list("evening_closeout.missing_briefing_note")))' 2>/dev/null)"
+MARKERS="$(cd "$VAULT" && python3 -c 'from i18n import t_list; print("\t".join(t_list("evening_closeout.section_marker")))' 2>/dev/null)"
+NO_MORNING="$(cd "$VAULT" && python3 -c 'from i18n import t_list; print("\n".join(t_list("evening_closeout.missing_briefing_note")))' 2>/dev/null)"
 [ -n "$MARKERS" ] || MARKERS="## Evening Close-out"
 [ -s "$FILE" ] || exit 0
 grep -qx "$TODAY" "$STATE" 2>/dev/null && exit 0

@@ -6,7 +6,8 @@ OnFailure=brainless-notify-failure@%n.service
 [Service]
 Type=oneshot
 WorkingDirectory=%h/projects/brainless
-# Dry run for the first two weeks: the candidates are listed in the scorecard
-# and nothing moves. Add --apply once the list has been read twice and reads
-# right. The Spiky move was applied by hand on 2026-09-19 and needs no flag.
-ExecStart=/bin/bash %h/projects/brainless/.agents/scripts/worker_job.sh tools/wiki_prune.py --count --archive
+# Applies since 2026-10-04. The first two weeks were a dry run: the candidates
+# were listed in the scorecard and nothing moved, so six Spiky reports sat in
+# Inbox past their date. Nothing is deleted; every move is in .wiki/_archive/LOG.md.
+# Drop --apply to go back to listing only.
+ExecStart=/bin/bash %h/projects/brainless/.agents/scripts/worker_job.sh tools/wiki_prune.py --count --archive --apply

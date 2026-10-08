@@ -21,7 +21,7 @@ created: 2026-09-06
 
 | Writer | Role | Owns | Push cadence |
 |---|---|---|---|
-| Mac | primary author | human areas (Tunca's edits), `.wiki/` compile, morning briefing, `_Agent-Context/` | 21:30 backup job (currently the only push) |
+| Mac | primary author | human areas (Tunca's edits), `.wiki/` compile, morning briefing, `_Agent-Context/` | hourly: the hourly job commits everything, Tunca's edits included, and pushes. 21:30: the backup job does the same and then refreshes the semantic index |
 | omarchy | 24/7 worker | `Inbox/`, `Thinking/Daily/`, evening closeout, `CONTEXT-DRIFT.md`, `.wiki/relationships/`, `.wiki/digests/queries/`, `DIALECTIC-STATUS.md` (dialectic rounds) | immediately after each job |
 
 Rules:
@@ -37,6 +37,10 @@ Rules:
 4. Write. Stage only the paths you own. Commit.
 5. **The job that writes is the job that pushes.** Local-only state older than a few minutes is the root cause of the incident above.
 6. Retry the push up to three times with backoff; re-sync between attempts.
+
+On the Mac, `vault_backup.sh` is the only script that pushes. The hourly job (`cron_wrapper.sh`) calls it, scoped (`--only <paths>`) for the morning briefing and in full (`--no-index`) for everything else, so the network wait, the private-remote guard and the retry live in one place. The guard asks the GitHub API whether the remote is private and refuses the push if it cannot tell; it tries three times, because the first HTTPS request after a wake from sleep can fail.
+
+**Incident behind the hourly push:** on 2026-10-07 the Mac was asleep at 21:30. The backup ran at 22:44 as it woke, the guard's single request failed (HTTP 000) and the only push of the day was refused. The hourly job kept committing and ten commits stayed local until the next morning.
 
 ## 4. Conflict policy
 
@@ -75,11 +79,15 @@ This says who owns what, when to push, and how to merge.
 ## 7. Observability and SLO
 
 - Freshness SLO: the newest Mac-attributed commit on GitHub is at most 26 hours old. The watchdog alerts on breach.
-- Triage order on alert: 1) `logs/vault_backup.log` for push rejections or "rebase aborted" lines, 2) `launchctl list | grep brainless` for the last exit code, 3) machine asleep or off.
+- Unpushed commits on the Mac: the health check warns from one and turns red at ten. With the hourly push, more than two or three means several hourly runs in a row failed to push.
+- Triage order on alert: 1) `logs/vault_backup.log` for "push refused", push rejections or "rebase aborted" lines, 2) `launchctl list | grep brainless` for the last exit code, 3) machine asleep or off.
 - Two consecutive "rebase aborted" lines mean divergence. The scripts do not self-heal by design; resolve by hand.
 
 ## Open decisions
 
-- Which job pushes the morning briefing: the hourly processor or the briefing script itself?
 - Adopt the `merge=union` attribute for append-only paths, or keep manual resolution?
-- Should Tunca's Obsidian edits wait for the 21:30 push, or should the hourly job push as well?
+
+## Decided
+
+- 2026-10-02: the hourly job pushes the morning briefing as soon as the file exists.
+- 2026-10-08: the hourly job commits and pushes everything, Tunca's Obsidian edits included. The 21:30 backup stays as a second chance and as the run that refreshes the semantic index. A note or an agent session caught mid-edit is committed as it stands; the next run commits the rest.

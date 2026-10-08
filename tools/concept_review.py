@@ -29,7 +29,6 @@ Usage:
   python3 tools/concept_review.py --decide SLUG yes|no
 """
 import argparse
-import fcntl
 import hashlib
 import json
 import os
@@ -38,8 +37,8 @@ import time
 from contextlib import contextmanager
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-import concepts as C  # noqa: E402
+import concepts as C
+from vault_lock import lock_exclusive
 
 VAULT = Path(os.environ.get("BRAINLESS_VAULT") or Path(__file__).resolve().parents[1])
 REGISTRY = VAULT / "_Agent-Context" / "concepts.md"
@@ -56,7 +55,7 @@ def registry_lock():
     the reply worker (every two minutes) may be changing a status."""
     STATE.parent.mkdir(parents=True, exist_ok=True)
     with (STATE.parent / "concepts-registry.lock").open("a") as lock:
-        fcntl.flock(lock, fcntl.LOCK_EX)
+        lock_exclusive(lock)
         yield
 
 
@@ -64,8 +63,8 @@ def registry_lock():
 def locked():
     STATE.parent.mkdir(parents=True, exist_ok=True)
     with STATE.with_suffix(".lock").open("a") as lock:
-        fcntl.flock(lock, fcntl.LOCK_EX)
-        state = json.loads(STATE.read_text()) if STATE.exists() else {}
+        lock_exclusive(lock)
+        state = json.loads(STATE.read_text(encoding="utf-8")) if STATE.exists() else {}
         state.setdefault("announced", {})
         state.setdefault("handled", [])
         yield state
@@ -167,7 +166,7 @@ def waiting_list(now: float | None = None) -> list[tuple[str, int]]:
     """(label, days waiting) for the change brief; personal rows show no title."""
     from i18n import t
     now = now or time.time()
-    state = json.loads(STATE.read_text()) if STATE.exists() else {"announced": {}}
+    state = json.loads(STATE.read_text(encoding="utf-8")) if STATE.exists() else {"announced": {}}
     out = []
     for r in pending():
         since = state.get("announced", {}).get(r["slug"], {}).get("created")

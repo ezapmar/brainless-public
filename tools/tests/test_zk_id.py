@@ -8,13 +8,11 @@ this tool, and about never touching an id that already exists.
 from datetime import datetime
 from pathlib import Path
 import os
-import sys
 import tempfile
 import unittest
 
 ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(ROOT / "tools"))
-import zk_id  # noqa: E402
+import zk_id
 
 NOTE = """---
 date: 2026-08-13

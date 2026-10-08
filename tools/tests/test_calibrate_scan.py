@@ -8,15 +8,13 @@ Run: python3 -B -m unittest discover -s tools/tests -v
 """
 from datetime import date, timedelta
 from pathlib import Path
-import sys
 import tempfile
 import unittest
 from unittest.mock import patch
 
 
 ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(ROOT / "tools"))
-import calibrate  # noqa: E402
+import calibrate
 
 PAST = (date.today() - timedelta(days=10)).isoformat()
 FUTURE = (date.today() + timedelta(days=10)).isoformat()

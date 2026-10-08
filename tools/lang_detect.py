@@ -20,12 +20,10 @@ always gets a usable code and never has to handle "unknown".
     from lang_detect import detect
     code, confidence = detect(note_text)     # ("tr", 0.91)
 """
-import os
 import re
 import sys
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from owner_profile import LANG  # noqa: E402
+from owner_profile import LANG
 
 # Characters that appear in Turkish and effectively never in English prose.
 # u-umlaut, o-umlaut and c-cedilla are deliberately excluded: they show up in
@@ -55,7 +53,8 @@ _TOKEN = re.compile(r"[^\W\d_]+", re.UNICODE)
 def _strip_noise(text: str) -> str:
     """Drop the parts of a note that carry no language signal and skew counts:
     frontmatter, code fences, URLs, wikilink targets, hashtags."""
-    text = re.sub(r"^---\s*\n.*?\n---\s*\n", "", text, flags=re.S)
+    from frontmatter import strip
+    text = strip(text)
     text = re.sub(r"```.*?```", " ", text, flags=re.S)
     text = re.sub(r"`[^`]*`", " ", text)
     text = re.sub(r"https?://\S+", " ", text)

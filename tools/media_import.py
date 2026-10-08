@@ -42,8 +42,7 @@ import urllib.request
 from datetime import datetime
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-from paths import folder, vault_root  # noqa: E402
+from paths import folder, vault_root
 VAULT = Path(vault_root())
 QUEUE = VAULT / ".agents" / "state" / "media_queue"
 DONE_LOG = VAULT / ".agents" / "state" / "media_done.jsonl"
@@ -88,13 +87,13 @@ def enqueue(url: str, comment: str = "", source: str = "manual") -> tuple[str, b
         return jid, False
     path.write_text(json.dumps({"id": jid, "url": url, "kind": kind, "comment": comment,
                                 "source": source, "added": datetime.now().isoformat(timespec="seconds"),
-                                "attempts": 0}, ensure_ascii=False))
+                                "attempts": 0}, ensure_ascii=False), encoding="utf-8")
     return jid, True
 
 
 def done_ids() -> set[str]:
     try:
-        return {json.loads(l)["id"] for l in DONE_LOG.read_text().splitlines() if l.strip()}
+        return {json.loads(line)["id"] for line in DONE_LOG.read_text(encoding="utf-8").splitlines() if line.strip()}
     except (OSError, ValueError, KeyError):
         return set()
 
@@ -187,7 +186,7 @@ def youtube(url: str, tmp: Path) -> dict:
           "--sub-format", "vtt", "-o", str(tmp / "sub.%(ext)s"), url], 180)
     subs = sorted(tmp.glob("sub*.vtt"), key=lambda p: (".orig" in p.name, "auto" in p.name))
     if subs:
-        info["cues"], info["method"] = parse_vtt(subs[0].read_text(errors="replace")), "captions"
+        info["cues"], info["method"] = parse_vtt(subs[0].read_text(errors="replace", encoding="utf-8")), "captions"
         if info["cues"]:
             return info
     r = _run([ytdlp, "-x", "--audio-format", "mp3", "--no-playlist", "-o", str(tmp / "audio.%(ext)s"), url], 1800)
@@ -229,7 +228,6 @@ def _public(url: str) -> bool:
     if urllib.parse.urlparse(url).scheme not in ("http", "https") or not host:
         return False
     try:
-        sys.path.insert(0, str(VAULT / ".agents" / "scripts"))
         from telegram_capture import _is_public_host
         return _is_public_host(host)
     except Exception:
@@ -343,7 +341,7 @@ def process(job: dict) -> Path:
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     date = info["published"] or datetime.now().strftime("%Y-%m-%d")
     path = OUT_DIR / f"{date} {slug(info['title'])}.md"
-    path.write_text(render(info, body, job))
+    path.write_text(render(info, body, job), encoding="utf-8")
     return path
 
 
@@ -359,7 +357,7 @@ def run(max_jobs: int = 1) -> tuple[int, int]:
     done = failed = 0
     jobs = sorted(QUEUE.glob("*.json")) if QUEUE.exists() else []
     for jp in jobs[:max_jobs]:
-        job = json.loads(jp.read_text())
+        job = json.loads(jp.read_text(encoding="utf-8"))
         job["attempts"] = job.get("attempts", 0) + 1
         t0 = time.monotonic()
         try:
@@ -373,13 +371,13 @@ def run(max_jobs: int = 1) -> tuple[int, int]:
                 _log_done(job, "failed", reason)
                 notify(f"Transkript alınamadı: {job['url']}\n{reason}", f"media-fail:{job['id']}")
             else:
-                jp.write_text(json.dumps(job, ensure_ascii=False))
+                jp.write_text(json.dumps(job, ensure_ascii=False), encoding="utf-8")
             failed += 1
             continue
         jp.unlink()
         rel = path.relative_to(VAULT)
         _log_done(job, "done", str(rel))
-        words = len(path.read_text().split())
+        words = len(path.read_text(encoding="utf-8").split())
         print(f"[ok] {rel} ({words} words, {time.monotonic() - t0:.0f}s)")
         notify(f"Transkript hazır: {path.stem}\n{words} kelime, {rel}", f"media-done:{job['id']}")
         done += 1
@@ -388,7 +386,7 @@ def run(max_jobs: int = 1) -> tuple[int, int]:
 
 def _log_done(job, status, detail):
     DONE_LOG.parent.mkdir(parents=True, exist_ok=True)
-    with open(DONE_LOG, "a") as fh:
+    with open(DONE_LOG, "a", encoding="utf-8") as fh:
         fh.write(json.dumps({"id": job["id"], "url": job["url"], "status": status, "detail": detail,
                              "at": datetime.now().isoformat(timespec="seconds")}, ensure_ascii=False) + "\n")
 
@@ -408,7 +406,7 @@ def main(argv=None) -> int:
         print(f"{'queued' if new else 'already queued or done'}: {jid}")
     elif args.cmd == "list":
         for jp in sorted(QUEUE.glob("*.json")) if QUEUE.exists() else []:
-            j = json.loads(jp.read_text())
+            j = json.loads(jp.read_text(encoding="utf-8"))
             print(f"{j['id']}  {j['kind']:<8} attempts={j['attempts']}  {j['url']}")
     else:
         done, failed = run(args.max)

@@ -15,9 +15,8 @@ import unittest
 from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(ROOT / "tools"))
-import config  # noqa: E402
-import paths  # noqa: E402
+import config
+import paths
 
 FOLDER_VARS = [f"BRAINLESS_FOLDER_{k.upper()}" for k in paths.FOLDER_KEYS] + ["BRAINLESS_SOURCES"]
 
@@ -153,7 +152,7 @@ class TestImportTimeFolders(unittest.TestCase):
                 '[folders]\ndaily = "Notlar"\ndecisions = "Düşünce/Kararlar"\n', encoding="utf-8")
             env = {k: v for k, v in os.environ.items() if not k.startswith("BRAINLESS_")}
             env["BRAINLESS_VAULT"] = vault
-            code = ("import sys; sys.path.insert(0, 'tools'); import calibrate, nightly_processor as n; "
+            code = ("import calibrate, nightly_processor as n; "
                     "print(calibrate.DEC); print(n.CAPTURE_DIR)")
             out = subprocess.run([sys.executable, "-c", code], cwd=ROOT, env=env,
                                  capture_output=True, text=True, timeout=60).stdout.splitlines()

@@ -18,7 +18,6 @@ Dependencies: requirements-google.txt (pip install -r it into the venv).
 """
 import os
 import re
-import sys
 from datetime import datetime
 
 from google.auth.transport.requests import Request
@@ -26,8 +25,7 @@ from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
 
 VAULT = os.environ.get("BRAINLESS_VAULT") or os.path.expanduser("~/projects/brainless")
-sys.path.insert(0, os.path.join(VAULT, "tools"))
-from i18n import t, t_list  # noqa: E402
+from i18n import t, t_list
 
 TASKS_FILE = os.path.join(VAULT, "_Agent-Context", "TASKS.md")
 CRED_DIR = os.path.join(VAULT, "tools", "tasks-sync")
@@ -41,8 +39,7 @@ HEADING_ALIASES = {"## " + name: key for key in SECTIONS
 SOURCE_MARKERS = t_list("gtasks_sync.note_source")
 
 
-def log(msg):
-    print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] {msg}")
+from logline import log
 
 
 def get_service():
@@ -51,7 +48,7 @@ def get_service():
     if not creds.valid:
         if creds.expired and creds.refresh_token:
             creds.refresh(Request())
-            with open(token, "w") as fh:
+            with open(token, "w", encoding="utf-8") as fh:
                 fh.write(creds.to_json())
             os.chmod(token, 0o600)  # permissions must not loosen after refresh
         else:
@@ -89,7 +86,7 @@ def parse_local(lines):
 
 
 def main():
-    with open(TASKS_FILE) as fh:
+    with open(TASKS_FILE, encoding="utf-8") as fh:
         lines = fh.readlines()
     service = get_service()
     changed = False
@@ -135,8 +132,8 @@ def main():
             if title not in local_titles and rt["status"] == "needsAction" \
                     and not any(m in (rt.get("notes") or "") for m in SOURCE_MARKERS):
                 row = f"- [ ] {title} | | {datetime.now().strftime('%Y-%m-%d')}\n"
-                for i, l in enumerate(lines):
-                    if HEADING_ALIASES.get(l.strip()) == key:
+                for i, line in enumerate(lines):
+                    if HEADING_ALIASES.get(line.strip()) == key:
                         end = i + 1
                         while end < len(lines) and not lines[end].startswith("## "):
                             end += 1
@@ -147,7 +144,7 @@ def main():
                 local_titles.add(title)
 
     if changed:
-        with open(TASKS_FILE, "w") as fh:
+        with open(TASKS_FILE, "w", encoding="utf-8") as fh:
             fh.writelines(lines)
 
 

@@ -127,6 +127,23 @@ extensions, because an extension is how a Goose agent gets a shell. Every real c
 writes a one-line breadcrumb to `.agents/state/llm_status` and a line to
 `.agents/state/llm_log`, which keeps the last 300 calls with lane, provider and timing.
 
+**Ledger and budget.** Every priced call also appends a JSON line to
+`.agents/state/llm_costs.jsonl`: lane, provider, model, the four token counts and the
+cost in USD. `anthropic` calls are priced from the list prices in `_PRICES` (override one
+model with `BRAINLESS_PRICE_<MODEL>="in,out,cache_write,cache_read"` per million) and
+marked `api`; `claude-cli` runs with `--output-format json` and records the cost the CLI
+reports, marked `plan` when the CLI is signed in with a subscription. `BRAINLESS_API_BUDGET_USD`
+caps what `anthropic` may spend per period, which starts on `BRAINLESS_API_BUDGET_RESET_DAY`;
+past `_WARN` (0.8) the health check and the watchdog say so, past `_STOP` (0.9) every
+`anthropic` lane runs on its fallback (or `claude-cli`) until the reset. A billing error
+from the API (credit exhausted, HTTP 402) is classified `billing` and handed to the
+fallback the same way. The state is written to `.agents/state/llm_budget.json` for
+`health_check.py`, which `worker_reach.py` mirrors from the worker. Raw API calls send the
+file named by `BRAINLESS_SYSTEM_PROMPT_FILE` (default `_Agent-Context/LLM-SYSTEM.md`) as the
+system prompt, because the API carries none of the context the CLI loads from the vault.
+`python3 tools/llm.py --usage [--days N]` prints the spend per lane. See
+[The AI shed](shed.md) for the billing split this serves.
+
 **Lanes.** Every call site passes `lane="<name>"` from the `LANES` table, and each lane
 can be routed on its own with `BRAINLESS_LLM_PROVIDER_<LANE>` (dashes become
 underscores), falling back to the global variable. `BRAINLESS_LLM_FALLBACK[_<LANE>]`
@@ -997,8 +1014,8 @@ conclusion and fields, the vote table and the proposal first; the method trace (
 question, hypotheses, tests, one row per persona) second; the raw rounds under a collapsed
 callout. Flags: `--run noon|evening|night`, `--topic "<thesis>"`, `--local` (no Buzz),
 `--parallel` (all personas at once; one at a time is the default), `--dry-run`,
-`--scorecard`. `--run night` is the local-model experiment: see
-[local inference](local-inference.md#the-night-window-experiment).
+`--scorecard`. `--run night` is the local-model experiment, closed 2026-10-02 (no timer; manual runs
+only): see [local inference](local-inference.md#result-2026-10-02).
 
 **Philosophy.** Isolated first rounds maximise the diversity of arguments; people and
 models both anchor on whoever spoke first. The scoring is deterministic so that the
@@ -1324,11 +1341,13 @@ writes `_Agent-Context/PILE-SCORECARD.md`: captures per graded decision, filed a
 per decision, Inbox files older than fourteen days (a machine ledger such as `Inbox/CRM`
 is not counted), orphan wiki pages, concept pages
 that draw on more than one home, decisions and challenged beliefs in the window, pages
-archived. `--archive` lists what four mechanical rules would move to `.wiki/_archive/`
-and `--apply` moves it: an unlinked analysis after 30 days (research, decision and
-dialectic notes exempt), a summary whose source left the compiled roots after 60, any
-orphan after 60, a meeting report that has been summarised and mined after 14 days in
-Inbox. Every move goes to `.wiki/_archive/LOG.md` with its rule and reason; nothing is
+archived. A file in Inbox is dated by its `captured` stamp when it has one (a podcast is
+named after the day it was published), and a standing pad (`type: inbox`) is not counted.
+`--archive` lists what five mechanical rules would move and `--apply` moves it: to
+`.wiki/_archive/`, an unlinked analysis after 30 days (research, decision and dialectic
+notes exempt), a summary whose source left the compiled roots after 60 and any orphan
+after 60; to `Archive/`, a meeting report that has been summarised and mined, and a
+weekly content drafts file that has been summarised, each after 14 days in Inbox. Every move goes to `.wiki/_archive/LOG.md` with its rule and reason; nothing is
 deleted. `health_check.py` carries the Inbox count into the briefing.
 
 **Philosophy.** "Capture everything, filter later" turns into "filter never" unless
@@ -1428,8 +1447,17 @@ once. A rephrased task is dropped; a new one is added once.
 **Philosophy, for all of them.** No credentials and no model calls, so they run anywhere,
 including public CI:
 
+How the tools find each other: the Python lives in `tools/` and `.agents/scripts/`
+and imports across the two by bare module name. A launcher sets `PYTHONPATH`
+to both directories once: `brainless` (every command, and `brainless run
+<script.py>` for anything else), `tools/run_log.py exec` and the job queue for
+scheduled runs, the shell wrappers, and the installed systemd units and launchd
+plists. A tool run directly as `python3 tools/x.py` still finds its own
+directory, so the commands in this file keep working; a script that reaches
+across (`.agents/scripts/*.py`, the lead machine) is run through `brainless run`.
+
 ```bash
-python3 -B -m unittest discover -s tools/tests -v
+brainless test -v
 ```
 
 Each test is a mistake that either happened or nearly did. They are less a proof that
@@ -1454,3 +1482,117 @@ things are. The map is regenerated, so it is never stale and never hand-edited. 
 are proposals with sources; the owner decides in the thread, and nothing is published by
 the system. See [writing-agent.md](writing-agent.md).
 
+## Script index
+
+<!-- script-index:start -->
+_Generated by `tools/docs_index.py` from each script's own docstring or header comment; run `python3 tools/docs_index.py` after adding a script._
+
+| Path | What it does |
+| --- | --- |
+| `.agents/scripts/buzz_briefing_sync.sh` | Buzz Layer 1: post today's morning briefing to #daily once ("briefing" identity). |
+| `.agents/scripts/buzz_capture.py` | Buzz capture channel worker (worker, every 2 minutes). |
+| `.agents/scripts/buzz_capture_worker.sh` | Buzz #inbox capture worker (worker, every 2 minutes via brainless-buzz-capture.timer). |
+| `.agents/scripts/buzz_crm_sync.sh` | Buzz Layer 1: post the CRM snapshot (_Agent-Context/CRM.md) to #crm as the |
+| `.agents/scripts/buzz_post.sh` | Persist every notification before delivery. A nonzero exit means enqueue failed. |
+| `.agents/scripts/buzz_think_sync.sh` | Buzz Layer 1: post today's thinking surface (THINKING.md) to #thinking once, |
+| `.agents/scripts/content_engine.py` | Weekly content engine (worker, Tuesday 09:00). |
+| `.agents/scripts/crm_capture.py` | CRM snapshot (Pipedrive first provider; hourly on the laptop, daily on the worker). |
+| `.agents/scripts/cron_wrapper.sh` | Enhanced PATH so user tools (claude, node) are discoverable. |
+| `.agents/scripts/git_sync.sh` | Shared pull for the worker wrappers: worker_backup.sh, telegram_worker.sh, |
+| `.agents/scripts/gtasks_sync.py` | _Agent-Context/TASKS.md <-> Google Tasks two-way sync (worker). |
+| `.agents/scripts/inbox_watch_wrapper.sh` | Fires on every change to Inbox/ (launchd WatchPaths, <prefix>.brainless.inbox) |
+| `.agents/scripts/meeting_brief.py` | Automatic pre-meeting brief (worker, every 15 minutes). |
+| `.agents/scripts/notify_failure.py` | Buzz alert for a failed systemd unit. |
+| `.agents/scripts/relationship_radar.py` | Relationship radar (worker, weekly). |
+| `.agents/scripts/smart_processor.py` | (no description) |
+| `.agents/scripts/spiky_actions.py` | Action extraction from Spiky reports -> _Agent-Context/TASKS.md (worker). |
+| `.agents/scripts/spiky_capture.py` | Spiky meeting report ingest (runs on the worker). |
+| `.agents/scripts/task_reminder.py` | Morning Today queue (worker, existing daily 08:00 reminder schedule). |
+| `.agents/scripts/tasks_worker.sh` | Task line (worker, every 30 min): Spiky action extraction + Google Tasks sync. |
+| `.agents/scripts/telegram_capture.py` | Capture-only Telegram inbox. Owner text, images and audio enter the vault. |
+| `.agents/scripts/telegram_worker.sh` | 7/24 Linux worker (worker): Telegram capture + push. |
+| `.agents/scripts/thinker_digest.py` | Weekly thinker/source digest (worker, Friday 07:00). |
+| `.agents/scripts/thinking_loop.py` | Weekly thinking question selection, draft generation and note rendering. |
+| `.agents/scripts/update_check.py` | Arch update notification (worker, weekly). |
+| `.agents/scripts/vault_backup.sh` | Daily vault backup: commit everything and push to origin. |
+| `.agents/scripts/watchdog.py` | brainless watchdog (runs hourly on the worker). |
+| `.agents/scripts/worker_backup.sh` | Worker vault backup: commit and push edits made on the always-on machine. |
+| `.agents/scripts/worker_job.sh` | Worker generic job runner: the nightly family (closeout, nightly, lint, |
+| `tools/batch_markitdown.py` | (no description) |
+| `tools/brand.py` | brainless colours, one table for the terminal and any future interface. |
+| `tools/build_dashboard.py` | build_dashboard.py: regenerate personaldashboard.md from the vault. |
+| `tools/build_site.py` | Build the public site's generated pages from CHANGELOG.md. |
+| `tools/buzz_delivery.py` | Durable Buzz outbox. No Telegram fallback. CLI credentials never enter logs. |
+| `tools/buzz_interactions.py` | Poll owner replies in Buzz, handle bounded workflows, and answer in-thread. |
+| `tools/calibrate.py` | calibrate.py: close the decision feedback loop. |
+| `tools/chat_import.py` | chat_import.py: years of chat history into the vault, filtered on the way in. |
+| `tools/cli.py` | brainless command line: one dispatcher for macOS, Linux and Windows. |
+| `tools/compile_resources.py` | compile_resources.py: human-tree → .wiki compiler. |
+| `tools/concept_review.py` | concept_review.py: concept proposals the owner answers in Buzz. |
+| `tools/concepts.py` | Concept pages: the pure half of the concept layer. |
+| `tools/config.py` | brainless.toml: the one settings file, and the secret store beside it. |
+| `tools/contradiction_check.py` | contradiction_check.py: does tonight's new source disagree with the vault? |
+| `tools/dialectic.py` | Critical dialectic engine (moderator) for the brainless vault. |
+| `tools/dialectic_trigger.py` | Buzz-native trigger for the dialectic engine. |
+| `tools/docs_index.py` | docs_index.py: regenerate the script index table at the end of docs/scripts.md. |
+| `tools/doctor.py` | `brainless doctor`: is this lite vault able to do its job? One line per check. |
+| `tools/dreaming.py` | dreaming.py: a nightly pass that turns link suggestions into proposals the owner approves. |
+| `tools/evening_closeout.py` | Evening close-out for the brainless vault. |
+| `tools/export_public.py` | Export the public engine repo from this vault (open-source plan, Phase 1). |
+| `tools/file_query.py` | file_query.py: file a thinking-command's output into the wiki loopback. |
+| `tools/frontmatter.py` | The frontmatter block: the lines between an opening and a closing `---`. |
+| `tools/fsutil.py` | Write a file so that readers see either the old text or the new one. |
+| `tools/graph_export.py` | graph_export.py: the wiki's link graph as a file Gephi opens ready to look at. |
+| `tools/health_check.py` | Pipeline heartbeat for the brainless vault. |
+| `tools/hooks/claude_guard.py` | claude_guard.py: Claude Code hooks for the vault. |
+| `tools/i18n.py` | Locale strings for deterministic, user-facing text (labels, headings, bot |
+| `tools/init_wizard.py` | `brainless init`: set up a lite vault in this checkout, one question at a time. |
+| `tools/jobqueue.py` | A job queue for one machine that is not always on. |
+| `tools/kill_criteria.py` | kill_criteria.py: the quit rule, on rails. |
+| `tools/lang_detect.py` | Deterministic Turkish/English detection for a single piece of text. |
+| `tools/lighten_vault.py` | Keep the originals out of git and the knowledge in. |
+| `tools/link_suggest.py` | link_suggest.py: pages that mean the same thing but do not link. Propose, never write. |
+| `tools/lint_wiki.py` | lint_wiki.py: integrity checks + auto-fix for the wiki layer. |
+| `tools/llm.py` | Minimal, provider-pluggable LLM helper for vault automation scripts. |
+| `tools/llm_bench.py` | Measure what a provider can actually do on this machine, per lane shape. |
+| `tools/logline.py` | One log line for every tool: `[YYYY-MM-DD HH:MM:SS] message` on stdout. |
+| `tools/mac_notify.py` | macOS notification that never lets its text become AppleScript. |
+| `tools/markitdown_native.py` | Native markitdown conversion. |
+| `tools/mcp_server.py` | mcp_server.py: the wiki, read-only, for any MCP client. |
+| `tools/media_import.py` | media_import.py: YouTube videos and podcast episodes in, as transcripts. |
+| `tools/net_wait.py` | Wait for outbound network before a timer job touches the network. |
+| `tools/nightly_compile.py` | Nightly wiki compile (worker, brainless-compile.timer at 23:20). |
+| `tools/nightly_processor.py` | (no description) |
+| `tools/note_classify.py` | Tag each captured note as epic, story or task, so research triggers on weight. |
+| `tools/output_guard.py` | output_guard.py: model output that is about the model, not about the source. |
+| `tools/owner_profile.py` | Owner profile for prompts: who the vault belongs to and which language the |
+| `tools/paths.py` | Where the vault is and what its human folders are called. |
+| `tools/profiles.py` | Which `brainless` commands a lite vault shows. |
+| `tools/resolve_bin.py` | Resolve external CLI binaries without hardcoding version-pinned paths. |
+| `tools/resurface.py` | Weekly note resurfacing for the brainless vault. |
+| `tools/retract_source.py` | retract_source.py: take a bad source back out of the wiki. |
+| `tools/retrieval_eval.py` | retrieval_eval.py: does asking the vault still find the right page? |
+| `tools/run_log.py` | run_log.py: one line per scheduled run, with what the run actually did. |
+| `tools/schedule.py` | The one scheduler entry of the lite profile: run `jobqueue.py tick` every 15 |
+| `tools/semantic_index.py` | semantic_index.py: find a page by what it means, not the words it uses. |
+| `tools/task_dedup.py` | Near-duplicate check for task titles, shared by every writer of TASKS.md. |
+| `tools/think_surface.py` | think_surface.py - the lightweight daily thinking surface. |
+| `tools/thinking_buzz.py` | Weekly thinking over Buzz. Workflow state and prepared writes survive crashes. |
+| `tools/today_buzz.py` | Today actions addressed to a Buzz thread, with revision-bound approval. |
+| `tools/today_queue.py` | A bounded daily queue. Selection is local; source writes require explicit apply. |
+| `tools/today_telegram.py` | Retired transport. Telegram is capture-only; use today_buzz.handle. |
+| `tools/transcript_filter.py` | Empty-transcript filter for the ingest side. |
+| `tools/vault_archive.py` | vault_archive.py: a monthly encrypted copy of the vault that sync cannot reach. |
+| `tools/vault_lock.py` | An exclusive lock on an open file, on POSIX and on Windows. |
+| `tools/weekly_reconcile.py` | Weekly memory reconciliation for the brainless vault. |
+| `tools/weekly_research.py` | Weekly deep research, triggered by weight rather than by the calendar. |
+| `tools/wiki_changes.py` | wiki_changes.py: what the nightly compile changed, as a short brief. |
+| `tools/wiki_dedupe.py` | wiki_dedupe.py: find pages that are probably one page. Propose, never merge. |
+| `tools/wiki_metrics.py` | wiki_metrics.py: four numbers that say whether the wiki is a graph or a folder. |
+| `tools/wiki_prune.py` | Count the pile, then drain it. No model is called here. |
+| `tools/wiki_search.py` | wiki_search.py: small CLI search over wiki/. |
+| `tools/worker_reach.py` | Can the Mac still reach the always-on worker? (Mac, hourly via cron_wrapper.sh) |
+| `tools/writing_ideas.py` | Pitch round for the writing channel (worker, every second month). |
+| `tools/writing_index.py` | Compile the writing map: every long-form asset in the vault, one page. |
+| `tools/zk_id.py` | Slip-box addresses: report, and on request assign, the `zk:` id of a note. |
+<!-- script-index:end -->

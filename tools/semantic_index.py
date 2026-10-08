@@ -35,7 +35,6 @@ import sys
 import time
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 VAULT = Path(os.environ.get("BRAINLESS_VAULT") or Path(__file__).resolve().parents[1])
 WIKI = VAULT / ".wiki"
@@ -52,6 +51,7 @@ os.environ.setdefault("HF_HUB_DISABLE_XET", "1")
 PREFIX = {"intfloat/": ("query: ", "passage: ")}
 PASSAGE_CHARS = 1200
 OVERLAP = 200
+GROUP_PASSAGES = 96  # pages are embedded and saved in groups of about this many passages
 MAX_PASSAGES = 12  # a 40-page raw import is mostly noise past the first dozen
 
 
@@ -120,13 +120,16 @@ class Index:
     def load(self) -> bool:
         import numpy as np
         try:
-            self.meta = json.loads((self.dir / "meta.json").read_text())
+            self.meta = json.loads((self.dir / "meta.json").read_text(encoding="utf-8"))
             self.vecs = np.load(self.dir / "vectors.npy")
         except (OSError, ValueError):
             return False
         return len(self.meta["rows"]) == len(self.vecs)
 
-    def build(self, root: Path = WIKI, log=print) -> dict:
+    def build(self, root: Path = WIKI, log=print, budget_seconds: float | None = None) -> dict:
+        """Update the index. Pages are embedded in groups and the index is saved after
+        each group, so a run that is killed or runs out of budget keeps what it did.
+        Pages not reached stay out of the index and are the first thing the next run does."""
         import numpy as np
         self.load()
         old_pages, old_rows = self.meta.get("pages", {}), self.meta.get("rows", [])
@@ -134,43 +137,62 @@ class Index:
         keep = {}  # rel -> list of old row indexes, for pages whose text is unchanged
         for i, (rel, _) in enumerate(old_rows):
             keep.setdefault(rel, []).append(i)
-        pages, rows, chunks, reuse = {}, [], [], []
+        pages, rows, reuse = {}, [], []
         todo = []
         for p in _pages(root):
             rel = os.path.relpath(p, VAULT)
             try:
-                text = p.read_text(errors="ignore")
+                text = p.read_text(errors="ignore", encoding="utf-8")
             except OSError:
                 continue
             h = hashlib.sha1(text.encode()).hexdigest()
-            pages[rel] = h
             if old_pages.get(rel) == h and rel in keep:
+                pages[rel] = h
                 for i in keep[rel]:
                     rows.append(old_rows[i])
                     reuse.append(old_vecs[i])
             else:
-                todo.append((rel, passages(text, p.stem)))
+                todo.append((rel, h, passages(text, p.stem)))
         _, ppre = _prefixes(self.model)
-        for rel, ps in todo:
-            for j, t in enumerate(ps):
-                chunks.append(ppre + t)
-                rows.append([rel, j])
         t0 = time.time()
-        new = []
-        if chunks:
-            log(f"embedding {len(chunks)} passages from {len(todo)} pages with {self.model}")
-            new = list(self._embedder().embed(chunks, batch_size=32))
+        new, embedded, done = [], 0, 0
+        total = sum(len(ps) for _, _, ps in todo)
+        if todo:
+            log(f"embedding {total} passages from {len(todo)} pages with {self.model}")
+        i = 0
+        while i < len(todo):
+            if budget_seconds is not None and time.time() - t0 > budget_seconds:
+                log(f"budget spent: {done}/{len(todo)} pages embedded, the rest waits for the next run")
+                break
+            group, n = [], 0
+            while i < len(todo) and n < GROUP_PASSAGES:
+                group.append(todo[i])
+                n += len(todo[i][2])
+                i += 1
+            chunks = [ppre + t for _, _, ps in group for t in ps]
+            vecs_g = list(self._embedder().embed(chunks, batch_size=32))
+            new.extend(vecs_g)
+            for rel, h, ps in group:
+                pages[rel] = h
+                rows.extend([rel, j] for j in range(len(ps)))
+            embedded += len(chunks)
+            done += len(group)
+            self._save(np, reuse, new, pages, rows)
+        if not todo or done == 0:
+            self._save(np, reuse, new, pages, rows)
+        return {"pages": len(pages), "passages": len(rows), "embedded": embedded,
+                "pending": len(todo) - done, "seconds": round(time.time() - t0, 1)}
+
+    def _save(self, np, reuse, new, pages, rows) -> None:
         vecs = np.array(reuse + new, dtype=np.float32) if (reuse or new) else np.zeros((0, 1), np.float32)
         if len(vecs):
             vecs /= np.linalg.norm(vecs, axis=1, keepdims=True) + 1e-9
         self.vecs = vecs.astype(np.float16)
         self.meta = {"model": self.model, "built": time.strftime("%Y-%m-%dT%H:%M:%S"),
-                     "pages": pages, "rows": rows}
+                     "pages": dict(pages), "rows": list(rows)}
         self.dir.mkdir(parents=True, exist_ok=True)
         np.save(self.dir / "vectors.npy", self.vecs)
-        (self.dir / "meta.json").write_text(json.dumps(self.meta, ensure_ascii=False))
-        return {"pages": len(pages), "passages": len(rows), "embedded": len(chunks),
-                "seconds": round(time.time() - t0, 1)}
+        (self.dir / "meta.json").write_text(json.dumps(self.meta, ensure_ascii=False), encoding="utf-8")
 
     def query(self, text: str, k: int = 50) -> list[tuple[float, str, int]]:
         """[(cosine, rel path, best passage no)] by page, best first."""

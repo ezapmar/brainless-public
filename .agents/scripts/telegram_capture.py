@@ -9,19 +9,18 @@ import os
 import re
 import shutil
 import subprocess
-import sys
 import tempfile
 import time
+import urllib.error
 import urllib.parse
 import urllib.request
 from datetime import datetime
 
 VAULT = os.environ.get("BRAINLESS_VAULT") or os.path.expanduser("~/projects/brainless")
-sys.path.insert(0, os.path.join(VAULT, "tools"))
 from llm import run_prompt
-from owner_profile import OWNER, LANG, possessive, output_lang_directive  # noqa: E402
-from transcript_filter import is_empty_transcript  # noqa: E402
-from i18n import t  # noqa: E402
+from owner_profile import OWNER, LANG, possessive, output_lang_directive
+from transcript_filter import is_empty_transcript
+from i18n import t
 
 CONF_DIR = os.path.expanduser("~/.config/brainless")
 TOKEN_FILE = os.path.join(CONF_DIR, "telegram_token")
@@ -41,8 +40,7 @@ WHISPER = next(
 MAX_FILE_BYTES = 20 * 1024 * 1024  # Telegram bot API download cap
 
 
-def log(msg):
-    print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] {msg}")
+from logline import log
 
 
 def api(token, method, params=None, timeout=30):
@@ -75,7 +73,7 @@ def ack(token, chat_id, text):
 
 def read_file(path):
     try:
-        with open(path) as fh:
+        with open(path, encoding="utf-8") as fh:
             return fh.read().strip()
     except OSError:
         return None
@@ -83,7 +81,7 @@ def read_file(path):
 
 def touch_state(offset=None):
     os.makedirs(os.path.dirname(STATE_FILE), exist_ok=True)
-    with open(STATE_FILE, "w") as fh:
+    with open(STATE_FILE, "w", encoding="utf-8") as fh:
         fh.write(str(offset if offset is not None else read_file(STATE_FILE) or 0))
 
 
@@ -134,19 +132,45 @@ def _is_public_host(host):
     return True
 
 
+def _public_url(url):
+    """The reason a URL may not be fetched, or None when it may: http(s) only,
+    and every address its host resolves to is on the public internet."""
+    parsed = urllib.parse.urlparse(url)
+    if parsed.scheme not in ("http", "https") or not parsed.hostname:
+        return "not an http(s) link"
+    if not _is_public_host(parsed.hostname):
+        return f"private/internal address: {parsed.hostname}"
+    return None
+
+
+class _GuardedRedirect(urllib.request.HTTPRedirectHandler):
+    """Re-run the SSRF check on every hop. The first check covered the link the
+    owner sent; without this a public page could 3xx to the LAN or to the
+    cloud metadata address and urlopen would follow it."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        reason = _public_url(urllib.parse.urljoin(req.full_url, newurl))
+        if reason:
+            raise urllib.error.HTTPError(newurl, code, f"redirect refused ({reason})", headers, fp)
+        return super().redirect_request(req, fp, code, msg, headers, newurl)
+
+
+_TEXT_TYPES = ("text/html", "text/plain", "application/xhtml")
+
+
 def fetch_page_text(url):
     """Download the page and reduce it to readable text (with spiky_capture's converter)."""
     from spiky_capture import html_to_text
-    parsed = urllib.parse.urlparse(url)
-    if parsed.scheme not in ("http", "https") or not parsed.hostname:
-        return ""
-    if not _is_public_host(parsed.hostname):  # SSRF: reject internal network/loopback/metadata
-        log(f"Link to a private/internal address rejected: {parsed.hostname}")
+    reason = _public_url(url)
+    if reason:
+        if "private" in reason:
+            log(f"Link to a private/internal address rejected: {urllib.parse.urlparse(url).hostname}")
         return ""
     req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 (brainless)"})
-    with urllib.request.urlopen(req, timeout=30) as resp:
+    opener = urllib.request.build_opener(_GuardedRedirect())
+    with opener.open(req, timeout=30) as resp:
         ctype = resp.headers.get("Content-Type", "")
-        if not any(t in ctype for t in ("text/html", "text/plain", "application/xhtml", "")):
+        if not any(t in ctype for t in _TEXT_TYPES):
             log(f"Non-text content skipped: {ctype}")
             return ""
         raw = resp.read(2_000_000)
@@ -207,7 +231,7 @@ def handle_link(raw_text, url_match, stamp=None):
     os.makedirs(LINKS_DIR, exist_ok=True)
     domain = re.sub(r"^www\.", "", urllib.parse.urlparse(url).netloc) or "link"
     path = os.path.join(LINKS_DIR, f"{stamp[:10]} {domain} {stamp[11:]}.md")
-    with open(path, "w") as fh:
+    with open(path, "w", encoding="utf-8") as fh:
         fh.write(note + f"\n\n---\n{t('telegram_capture.source_label')}: {url}\n{t('telegram_capture.source_telegram_link')}, {stamp}\n")
     log(f"Note written: {path}")
     return note.splitlines()[0].lstrip("# ").strip()
@@ -337,7 +361,7 @@ def handle_message(token, msg, chat_id=None):
         note = make_photo_note(img, caption) or f"# {t('telegram_capture.image_note_title')}\n\n{caption}".rstrip()
         note += f"\n\n![[{os.path.basename(img)}]]"
         path = os.path.join(CAPTURE_DIR, f"{stamp}-telegram.md")
-        with open(path, "w") as fh:
+        with open(path, "w", encoding="utf-8") as fh:
             fh.write(note + f"\n\n---\n{t('telegram_capture.source_label')}: {t('telegram_capture.source_telegram_image')}, {stamp}\n")
         log(f"Note written: {path}")
         return note.splitlines()[0].lstrip("# ").strip()
@@ -360,7 +384,7 @@ def handle_message(token, msg, chat_id=None):
     note = make_note(text, source) or f"# {t('telegram_capture.quick_note_title')}\n\n{text}"
     os.makedirs(CAPTURE_DIR, exist_ok=True)
     path = os.path.join(CAPTURE_DIR, f"{stamp}-telegram.md")
-    with open(path, "w") as fh:
+    with open(path, "w", encoding="utf-8") as fh:
         fh.write(note + f"\n\n---\n{t('telegram_capture.source_label')}: Telegram {source}, {stamp}\n")
     log(f"Note written: {path}")
     title = note.splitlines()[0].lstrip("# ").strip() if note else t("telegram_capture.note_title_fallback")
@@ -372,7 +396,7 @@ def retry_pending(token, allowed):
     from buzz_delivery import send
     for pending in sorted((Path(STATE_FILE).parent / "telegram_pending").glob("*.json")):
         try:
-            record = json.loads(pending.read_text())
+            record = json.loads(pending.read_text(encoding="utf-8"))
             chat, msg = record["chat"], record["message"]
             if chat != allowed:
                 continue
@@ -451,7 +475,7 @@ def main():
                 log(f"No whitelist, adoption disabled; chat {chat_id} ignored")
                 continue
             os.makedirs(CONF_DIR, exist_ok=True)
-            with open(CHAT_FILE, "w") as fh:
+            with open(CHAT_FILE, "w", encoding="utf-8") as fh:
                 fh.write(chat_id)
             os.chmod(CHAT_FILE, 0o600)
             allowed = chat_id

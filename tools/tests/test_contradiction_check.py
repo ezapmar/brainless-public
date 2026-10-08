@@ -10,14 +10,12 @@ Run: python3 -m unittest tools.tests.test_contradiction_check -v
 import importlib
 import json
 import os
-import sys
 import tempfile
 import unittest
 from datetime import datetime, timedelta
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(ROOT / "tools"))
 
 
 class Index:

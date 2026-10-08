@@ -26,8 +26,7 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from i18n import t  # noqa: E402
+from i18n import t
 
 VAULT = Path(os.environ.get("BRAINLESS_VAULT") or Path(__file__).resolve().parents[1])
 WIKI = VAULT / ".wiki"
@@ -67,7 +66,7 @@ def page_record(text: str, rel: str) -> dict:
     rec = {
         "sha": hashlib.sha1(text.encode("utf-8")).hexdigest()[:12],
         "title": m.group(1).strip() if m else Path(rel).stem,
-        "links": sorted({l.strip() for l in _LINK_RE.findall(body)}),
+        "links": sorted({line.strip() for line in _LINK_RE.findall(body)}),
     }
     if kind_of(rel) == "concepts":
         rec["contested"] = section_bullets(body, t("compile_resources.concept_contested_heading"))

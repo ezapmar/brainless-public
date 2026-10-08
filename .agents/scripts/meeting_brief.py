@@ -11,7 +11,6 @@ venv python (google libraries). State: .agents/state/brief_done.
 import os
 import re
 import subprocess
-import sys
 from datetime import datetime, timedelta, timezone
 
 from google.auth.transport.requests import Request
@@ -19,15 +18,13 @@ from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
 
 VAULT = os.environ.get("BRAINLESS_VAULT") or os.path.expanduser("~/projects/brainless")
-sys.path.insert(0, os.path.join(VAULT, "tools"))
-sys.path.insert(0, os.path.join(VAULT, ".agents", "scripts"))
 from llm import run_prompt
-from owner_profile import OWNER, output_lang_directive  # noqa: E402
-from i18n import t  # noqa: E402
+from owner_profile import OWNER, output_lang_directive
+from i18n import t
 from buzz_delivery import send
 from functools import partial
 send_buzz = partial(send, 'tasks')
-from net_wait import wait_for_network  # noqa: E402
+from net_wait import wait_for_network
 
 TOKEN = os.path.join(VAULT, "tools", "tasks-sync", "token_gcal.json")
 SPIKY_DIR = os.path.join(VAULT, "Inbox", "Spiky")
@@ -38,13 +35,12 @@ WINDOW_MIN = 45
 SELF = OWNER.split()[0].lower() if OWNER else "me"  # owner's first name, to drop self from attendees
 
 
-def log(msg):
-    print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] {msg}")
+from logline import log
 
 
 def read_file(path):
     try:
-        with open(path) as fh:
+        with open(path, encoding="utf-8") as fh:
             return fh.read()
     except OSError:
         return None
@@ -55,7 +51,7 @@ def get_service():
         TOKEN, ["https://www.googleapis.com/auth/calendar.readonly"])
     if not creds.valid and creds.expired and creds.refresh_token:
         creds.refresh(Request())
-        with open(TOKEN, "w") as fh:
+        with open(TOKEN, "w", encoding="utf-8") as fh:
             fh.write(creds.to_json())
         os.chmod(TOKEN, 0o600)  # permissions must not loosen on refresh
     return build("calendar", "v3", credentials=creds, cache_discovery=False)
@@ -182,7 +178,7 @@ def main():
     # Do not clobber what a concurrently running copy wrote: merge before writing.
     done |= set((read_file(STATE_FILE) or "").splitlines())
     os.makedirs(os.path.dirname(STATE_FILE), exist_ok=True)
-    with open(STATE_FILE, "w") as fh:
+    with open(STATE_FILE, "w", encoding="utf-8") as fh:
         fh.write("\n".join(sorted(done)[-200:]))
 
 

@@ -8,5 +8,7 @@
   "dialectic_error": "Dialectic round failed: {error}",
   "llm_auth": "LLM auth error on Linux (last call {stamp}); check llm_status",
   "power_unplugged": "The worker has been off the charger for {minutes} minutes (battery {capacity}%). It shuts down when the battery runs out; check the charger cable.",
-  "power_battery_low": "Worker battery at {capacity}% and not charging (threshold {threshold}%). Plug in the charger now."
+  "power_battery_low": "Worker battery at {capacity}% and not charging (threshold {threshold}%). Plug in the charger now.",
+  "api_budget_warn": "API credit at {pct}% ({spent} of {budget} USD this period); the stop ratio is {stop}%",
+  "api_budget_stop": "API credit at {pct}% ({spent} of {budget} USD): anthropic lanes now run on the fallback until the reset day"
 }

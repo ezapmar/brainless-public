@@ -6,14 +6,12 @@ Run: python3 -m unittest tools.tests.test_dreaming -v
 """
 import importlib
 import os
-import sys
 import tempfile
 import time
 import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(ROOT / "tools"))
 
 OWNER = "o" * 64
 
@@ -170,6 +168,20 @@ class Dreaming(unittest.TestCase):
         self.assertEqual(sum(p["verdict"] == "duplicate" for p in state["proposals"].values()), 2)
         self.assertEqual(len(state["waiting"]), 2)
         self.assertEqual(len(calls), before)  # the waiting one was not judged again
+
+    def test_pairs_with_a_deleted_page_are_dropped(self):
+        import json
+        self.run_()
+        self.assertEqual(len(json.loads(self.d.STATE.read_text())["waiting"]), 0)
+        state = json.loads(self.d.STATE.read_text())
+        state["waiting"] = [{"a": ".wiki/summaries/x.md", "b": ".wiki/summaries/gone.md",
+                             "sim": .9, "verdict": "duplicate", "reason": "r"}]
+        self.d.STATE.write_text(json.dumps(state))
+        (self.root / ".wiki/summaries/meeting.md").unlink()
+        self.run_()
+        state = json.loads(self.d.STATE.read_text())
+        self.assertEqual(state["waiting"], [])
+        self.assertEqual(self.proposal("meeting")["status"], "expired")
 
     def test_kill_rule_stops_and_says_so(self):
         import json

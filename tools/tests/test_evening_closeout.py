@@ -17,9 +17,8 @@ from pathlib import Path
 from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(ROOT / "tools"))
 
-import evening_closeout as ec  # noqa: E402
+import evening_closeout as ec
 
 
 class CloseoutCase(unittest.TestCase):

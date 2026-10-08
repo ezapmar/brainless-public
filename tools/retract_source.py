@@ -36,8 +36,8 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-import concepts as C  # noqa: E402
+import frontmatter
+import concepts as C
 
 VAULT = Path(os.environ.get("BRAINLESS_VAULT") or Path(__file__).resolve().parents[1])
 WIKI = VAULT / ".wiki"
@@ -61,7 +61,7 @@ def _exists(rel: str) -> bool:
 
 def rows() -> list[dict]:
     try:
-        text = REGISTRY.read_text()
+        text = REGISTRY.read_text(encoding="utf-8")
     except OSError:
         return []
     return [{"date": m[1], "source": m[2].strip("`"), "reason": m[3]}
@@ -115,7 +115,7 @@ def trace(source: str) -> dict:
     contradictions = 0
     creport = VAULT / "_Agent-Context" / "CONTRADICTIONS.md"
     if creport.exists():
-        contradictions = sum(1 for s in stems if f"[[{s}]]" in creport.read_text())
+        contradictions = sum(1 for s in stems if f"[[{s}]]" in creport.read_text(encoding="utf-8"))
     return {"source": source, "group": group, "summaries": summaries, "stems": stems,
             "concepts": concepts, "others": others, "link_rows": link_rows,
             "contradictions": contradictions}
@@ -172,7 +172,7 @@ def apply(tr: dict, reason: str, run=None, now: datetime | None = None) -> dict:
 
     # 1. The registry first: whatever fails below, the compiler stops using it.
     if tr["source"] not in {r["source"] for r in rows()}:
-        head = REGISTRY.read_text() if REGISTRY.exists() else REGISTRY_HEAD
+        head = REGISTRY.read_text(encoding="utf-8") if REGISTRY.exists() else REGISTRY_HEAD
         atomic_write(REGISTRY, head.rstrip("\n") + f"\n| {day} | `{tr['source']}` | {reason} |\n")
 
     # 2. Concept pages, one model call each, guarded by the validator.
@@ -186,7 +186,7 @@ def apply(tr: dict, reason: str, run=None, now: datetime | None = None) -> dict:
         old = C.read_page(p)
         out = run(concept_prompt(old, stems, reason, month))
         new = C.strip_dashes((out or "").strip()) + "\n" if out else ""
-        if new and not new.startswith("---\n"):
+        if new and not frontmatter.has(new):
             m = re.search(r"(?m)^---\n(?=[a-z_]+:)", new)
             new = new[m.start():] if m else new
         problems = C.validate_update(old, new, min_ratio=0.4, retracted=frozenset(stems)) if new else ["no reply"]
@@ -210,7 +210,7 @@ def apply(tr: dict, reason: str, run=None, now: datetime | None = None) -> dict:
         if tr["link_rows"] and LINK_REGISTRY.exists():
             paths = {s.relative_to(VAULT).as_posix() for s in tr["summaries"]}
             lines = []
-            for line in LINK_REGISTRY.read_text().splitlines():
+            for line in LINK_REGISTRY.read_text(encoding="utf-8").splitlines():
                 cells = [c.strip() for c in line.split("|")]
                 if len(cells) > 4 and (cells[1] in paths or cells[2] in paths) and cells[3] in ("link", "merge"):
                     cells[3] = "retracted"
@@ -224,7 +224,7 @@ def apply(tr: dict, reason: str, run=None, now: datetime | None = None) -> dict:
     # 5. Contradiction entries that cite it.
     creport = VAULT / "_Agent-Context" / "CONTRADICTIONS.md"
     if creport.exists() and stems:
-        blocks = re.split(r"(?m)^(?=<!-- c:)", creport.read_text())
+        blocks = re.split(r"(?m)^(?=<!-- c:)", creport.read_text(encoding="utf-8"))
         kept = [b for b in blocks if not any(f"[[{s}]]" in b for s in stems)]
         if len(kept) != len(blocks):
             atomic_write(creport, "".join(kept))

@@ -25,23 +25,20 @@ Usage:
   python3 tools/lint_wiki.py --fix --dry-run  # preview what --fix would do
 """
 import argparse
-import json
-import os
-import sys
 import re
 from collections import Counter
 from datetime import datetime
 from pathlib import Path
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from owner_profile import LANG, COMPANY_AREA  # noqa: E402
+from fsutil import atomic_write
+import frontmatter
+from owner_profile import LANG, COMPANY_AREA
 
 # Company name as it appears in wikilinks/paths, derived from the profile so the linter
 # stays deployment-neutral (e.g. company_area "Work/Acme Co" -> tokens acme co, acme-co, acme).
 _C = COMPANY_AREA.strip("/").split("/")[-1].lower()
 _COMPANY_TOKENS = tuple({_C, _C.replace(" ", "-"), _C.split()[0]}) if _C else ()
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from paths import vault_root  # noqa: E402
+from paths import vault_root
 VAULT = Path(vault_root())
 WIKI = VAULT / ".wiki"
 
@@ -50,21 +47,7 @@ FM_RE = re.compile(r"^---\n(.*?)\n---\n", re.S)
 
 
 def parse_fm(text: str) -> dict:
-    m = FM_RE.match(text)
-    if not m:
-        return {}
-    fm = {}
-    for line in m.group(1).splitlines():
-        if ":" in line:
-            k, _, v = line.partition(":")
-            v = v.strip()
-            if len(v) >= 2 and v[0] == v[-1] == '"':
-                try:
-                    v = json.loads(v)
-                except ValueError:
-                    v = v[1:-1]
-            fm[k.strip()] = v
-    return fm
+    return frontmatter.parse(text)
 
 
 # --- Link noise suppression & classification helpers ---
@@ -78,6 +61,7 @@ PLACEHOLDER_PATTERNS = [
 ]
 
 PLACEHOLDER_RE = re.compile("|".join(PLACEHOLDER_PATTERNS), re.IGNORECASE)
+
 
 
 def is_likely_placeholder(target: str) -> bool:
@@ -149,7 +133,7 @@ def extract_summary_en(body: str, path: Path) -> str:
                 return " ".join(para.split())[:280]
 
     # General: first non-empty paragraph after the first heading
-    lines = [l.strip() for l in body.splitlines() if l.strip()]
+    lines = [ln.strip() for ln in body.splitlines() if ln.strip()]
     paras = []
     current = []
     for line in lines:
@@ -237,7 +221,7 @@ def ensure_frontmatter(path: Path, dry_run: bool = False) -> list[str]:
     new_text = new_fm + "\n" + body_without_fm if body_without_fm else new_fm
 
     try:
-        path.write_text(new_text, encoding="utf-8")
+        atomic_write(path, new_text)
         return list(additions.keys())
     except Exception as e:
         print(f"[fix error] {path.relative_to(VAULT)}: {e}")
@@ -307,7 +291,7 @@ def link_graph(files):
     for p in files:
         if "_commands" in str(p) or p.name == "INDEX.md":
             continue
-        text = p.read_text(errors="ignore")
+        text = p.read_text(errors="ignore", encoding="utf-8")
         for m in LINK_RE.finditer(text):
             target = m.group(1).strip()
             outbound[p] += 1
@@ -356,7 +340,7 @@ def name_index(files) -> dict:
     from wiki_dedupe import aliases_of, title_of     # imports this module, so not at the top
     claims: dict[str, set] = {}
     for p in files:
-        text = p.read_text(errors="replace")
+        text = p.read_text(errors="replace", encoding="utf-8")
         for name in {p.stem, title_of(p, text), *aliases_of(parse_fm(text))}:
             key = fold_name(str(name))
             if key:
@@ -375,7 +359,7 @@ def fix_links_in_file(path: Path, broken_targets: set, remap, dry_run: bool = Fa
     wikilink is a missing-page signal (and harmless in Obsidian), not an error.
     Only with `prune` are they de-linked to plain display text.
     """
-    text = path.read_text(errors="ignore")
+    text = path.read_text(errors="ignore", encoding="utf-8")
     counts = {"remapped": 0, "delinked": 0}
 
     def repl(m):
@@ -396,7 +380,7 @@ def fix_links_in_file(path: Path, broken_targets: set, remap, dry_run: bool = Fa
 
     new_text = FIX_LINK_RE.sub(repl, text)
     if new_text != text and not dry_run:
-        path.write_text(new_text, encoding="utf-8")
+        atomic_write(path, new_text)
     return counts
 
 
@@ -417,7 +401,6 @@ def main():
 
     files = all_wiki_files()
     graph = link_graph(files)
-    inbound, outbound = graph["inbound"], graph["outbound"]
     real_broken, external_refs = graph["broken"], graph["external"]
     placeholder_count = graph["placeholders"]
     by_stem, by_relpath = graph["by_stem"], graph["by_relpath"]
@@ -466,7 +449,7 @@ def main():
     summaries_dir = WIKI / "summaries"
     if summaries_dir.exists():
         for s in summaries_dir.glob("*.md"):
-            fm = parse_fm(s.read_text(errors="ignore"))
+            fm = parse_fm(s.read_text(errors="ignore", encoding="utf-8"))
             src = fm.get("source", "")
             if not src:
                 continue
@@ -481,7 +464,7 @@ def main():
     for p in files:
         if "_commands" in str(p) or p.name == "INDEX.md":
             continue
-        fm = parse_fm(p.read_text(errors="ignore"))
+        fm = parse_fm(p.read_text(errors="ignore", encoding="utf-8"))
         missing = [k for k in ("lang", "summary_en", "compiled_at") if k not in fm]
         if missing:
             fm_issues.append((p, missing))
@@ -580,7 +563,7 @@ def main():
     for p in files:
         if "_commands" in p.parts or "_index" in p.parts:
             continue
-        found = output_guard.problems(p.read_text(errors="replace"))
+        found = output_guard.problems(p.read_text(errors="replace", encoding="utf-8"))
         if found:
             junk.append((p, found[0]))
     requeued = []
@@ -589,13 +572,13 @@ def main():
             if p.relative_to(WIKI).parts[0] in ("summaries", "entities", "projects"):
                 # A hash that matches no source set: removing it would fall back
                 # to file dates, which a fresh write makes look current.
-                text = p.read_text()
+                text = p.read_text(encoding="utf-8")
                 if re.search(r"^sources_hash:", text, re.M):
                     new = re.sub(r"^sources_hash:.*$", "sources_hash: 000000", text, count=1, flags=re.M)
                 else:
                     new = re.sub(r"\A---\n", "---\nsources_hash: 000000\n", text, count=1)
                 if new != text:
-                    p.write_text(new)
+                    atomic_write(p, new)
                     requeued.append(p)
     lines += ["## Model output instead of content", ""]
     if junk:
@@ -619,7 +602,7 @@ def main():
         lines += [f"_graph health / dedupe skipped: {e}_", ""]
 
     out = WIKI / "_lint-report.md"
-    out.write_text("\n".join(lines))
+    atomic_write(out, "\n".join(lines))
     print(f"[ok] {out.relative_to(VAULT)}")
     print(f"real_broken={len(real_broken)} placeholders_suppressed={placeholder_count} "
           f"external={len(external_refs)} orphans={len(orphans)} stale={len(stale)} "

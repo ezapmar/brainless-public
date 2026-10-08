@@ -62,7 +62,7 @@ exist on the worker in `~/.config/brainless/buzz/`. No keys are created or print
 by the interaction worker. It reuses the keys configured for existing channels.
 
 1. Back up `today_queue.json`, `thinking_loop.json` and any existing Buzz outbox.
-2. Deploy the code and run `python3 -B -m unittest discover -s tools/tests`.
+2. Deploy the code and run `brainless test`.
 3. Install `brainless-buzz-interactions.service` and `.timer` from
    `.agents/systemd/` into the user's systemd directory; run daemon-reload.
 4. Run `python3 tools/today_queue.py --send` once to migrate pending Today items.

@@ -12,11 +12,9 @@ with different suffixes every week.
 from pathlib import Path
 import importlib.util
 import os
-import sys
 import unittest
 
 ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(ROOT / "tools"))
 os.environ.setdefault("BRAINLESS_VAULT", str(ROOT))
 
 _spec = importlib.util.spec_from_file_location(

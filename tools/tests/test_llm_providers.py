@@ -12,15 +12,13 @@ from pathlib import Path
 import json
 import os
 import stat
-import sys
 import tempfile
 import threading
 import unittest
 from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(ROOT / "tools"))
-import llm  # noqa: E402
+import llm
 
 EM, EN = chr(0x2014), chr(0x2013)
 
@@ -59,8 +57,11 @@ def chat(text):
     return 200, {"choices": [{"message": {"content": text}}]}
 
 
-def message(text, stop="end_turn"):
-    return 200, {"content": [{"type": "text", "text": text}], "stop_reason": stop}
+def message(text, stop="end_turn", usage=None):
+    body = {"content": [{"type": "text", "text": text}], "stop_reason": stop}
+    if usage:
+        body["usage"] = usage
+    return 200, body
 
 
 class ProviderTest(unittest.TestCase):
@@ -81,15 +82,26 @@ class ProviderTest(unittest.TestCase):
         state = Path(self.tmp.name)
         keep = {k: v for k, v in os.environ.items()
                 if not k.startswith(("BRAINLESS_", "ANTHROPIC_"))}
-        keep.update(BRAINLESS_SECRETS_BACKEND="file", XDG_CONFIG_HOME=str(state))
+        keep.update(BRAINLESS_SECRETS_BACKEND="file", XDG_CONFIG_HOME=str(state),
+                    BRAINLESS_SYSTEM_PROMPT_FILE=str(state / "no-rules.md"))
         for patcher in (mock.patch.dict(os.environ, keep, clear=True),
                         mock.patch.object(llm, "STATUS_FILE", str(state / "llm_status")),
                         mock.patch.object(llm, "LOG_FILE", str(state / "llm_log")),
+                        mock.patch.object(llm, "COST_FILE", str(state / "llm_costs.jsonl")),
+                        mock.patch.object(llm, "BUDGET_FILE", str(state / "llm_budget.json")),
                         mock.patch.object(llm, "_KEYS", {}),
+                        mock.patch.object(llm, "_SYSTEM_PROMPT", {}),
                         mock.patch.object(llm.time, "sleep")):
             patcher.start()
             self.addCleanup(patcher.stop)
         self.status = state / "llm_status"
+        self.costs = state / "llm_costs.jsonl"
+        self.state = state
+
+    def ledger(self):
+        if not self.costs.exists():
+            return []
+        return [json.loads(line) for line in self.costs.read_text().splitlines() if line.strip()]
 
     def env(self, **kv):
         os.environ.update(kv)
@@ -203,6 +215,67 @@ class TestAnthropic(ProviderTest):
         Stub.script = [message("", stop="refusal")]
         self.assertIsNone(llm.run_prompt("hello"))
 
+    def test_usage_is_priced_and_ledgered(self):
+        usage = {"input_tokens": 1000, "output_tokens": 200,
+                 "cache_creation_input_tokens": 0, "cache_read_input_tokens": 0}
+        Stub.script = [message("x", usage=usage)]
+        llm.run_prompt("hello", lane="compile", model="claude-opus-4-8")
+        rows = self.ledger()
+        self.assertEqual(len(rows), 1)
+        row = rows[0]
+        self.assertEqual((row["lane"], row["provider"], row["billed"]), ("compile", "anthropic", "api"))
+        # 1000 in at $5/M + 200 out at $25/M
+        self.assertAlmostEqual(row["usd"], 0.005 + 0.005, places=6)
+        self.assertEqual((row["in"], row["out"]), (1000, 200))
+
+    def test_price_override_and_unknown_model(self):
+        self.env(BRAINLESS_PRICE_CLAUDE_OPUS_4_8="1,1,1,1")
+        self.assertAlmostEqual(llm.cost_usd("claude-opus-4-8", {"input_tokens": 1_000_000}), 1.0)
+        self.assertIsNone(llm.cost_usd("some-other-model", {"input_tokens": 5}))
+        # a dated id still finds its family
+        self.assertIsNotNone(llm.cost_usd("claude-sonnet-5-5-20260901", {"input_tokens": 5}))
+
+    def test_billing_error_is_classified_and_handed_to_the_fallback(self):
+        self.env(BRAINLESS_LLM_FALLBACK="claude-cli")
+        Stub.script = [(400, {"type": "error", "error": {"type": "invalid_request_error",
+                                                         "message": "Your credit balance is too low to access the Anthropic API."}})]
+        with mock.patch.object(llm, "_run_claude_cli", return_value="from the plan") as cli:
+            self.assertEqual(llm.run_prompt("hello", lane="compile"), "from the plan")
+        cli.assert_called_once()
+        self.assertEqual(len(Stub.calls), 1)  # a billing error is not retried
+        log = (self.state / "llm_log").read_text()
+        self.assertIn("\tbilling\t", log)
+        self.assertIn("falling back to claude-cli", log)
+
+    def test_402_is_billing(self):
+        Stub.script = [(402, {"type": "error"})]
+        self.assertIsNone(llm.run_prompt("hello"))
+        self.assertIn("\tbilling\t", self.status.read_text())
+
+    def test_system_prompt_file_is_sent_when_present(self):
+        rules = self.state / "rules.md"
+        rules.write_text("No dashes. Turkish for notes.\n")
+        self.env(BRAINLESS_SYSTEM_PROMPT_FILE=str(rules))
+        Stub.script = [message("x")]
+        llm.run_prompt("hello")
+        system = Stub.calls[0]["body"]["system"]
+        self.assertTrue(system.startswith("No dashes. Turkish for notes."))
+        self.assertIn("Owner's language: Write in", system)
+
+    def test_workspace_header_only_when_configured(self):
+        Stub.script = [message("x")]
+        llm.run_prompt("hello")
+        self.assertNotIn("anthropic-workspace-id", Stub.calls[0]["headers"])
+        self.env(BRAINLESS_ANTHROPIC_WORKSPACE_ID="wrkspc_123")
+        Stub.script = [message("x")]
+        llm.run_prompt("hello")
+        self.assertEqual(Stub.calls[1]["headers"]["anthropic-workspace-id"], "wrkspc_123")
+
+    def test_no_system_prompt_without_the_file(self):
+        Stub.script = [message("x")]
+        llm.run_prompt("hello")
+        self.assertNotIn("system", Stub.calls[0]["body"])
+
 
 class TestAgentCli(ProviderTest):
     def fake(self, name, script):
@@ -227,6 +300,79 @@ class TestAgentCli(ProviderTest):
         with mock.patch.object(llm, "resolve", return_value=None):
             self.assertIsNone(llm.run_prompt("hi"))
         self.assertIn("not installed", self.status.read_text())
+
+
+class TestClaudeCli(ProviderTest):
+    """The claude CLI gets the prompt on stdin, and a missing binary is a recorded
+    failure, not an exception that skips the fallback lane (2026-10-08)."""
+
+    def fake_claude(self, script):
+        bindir = Path(self.tmp.name) / "bin"
+        bindir.mkdir(exist_ok=True)
+        path = bindir / "claude"
+        path.write_text("#!/bin/sh\n" + script)
+        path.chmod(path.stat().st_mode | stat.S_IEXEC)
+        return mock.patch.object(llm, "resolve_claude", return_value=str(path))
+
+    def test_prompt_arrives_on_stdin_not_argv(self):
+        self.env(BRAINLESS_LLM_PROVIDER="claude-cli")
+        with self.fake_claude('printf "argv:%s|stdin:" "$*"; cat\n'):
+            out = llm.run_prompt("secret prompt")
+        self.assertIsNotNone(out)
+        self.assertNotIn("secret prompt", out.split("|stdin:")[0])
+        self.assertTrue(out.endswith("stdin:secret prompt"))
+
+    def test_long_prompt_survives(self):
+        self.env(BRAINLESS_LLM_PROVIDER="claude-cli", BRAINLESS_LLM_MAX_CHARS="1000000")
+        with self.fake_claude('wc -c | tr -d " "\n'):
+            out = llm.run_prompt("ş" * 200_000)
+        self.assertEqual(out, str(len("ş".encode()) * 200_000))
+
+    def test_missing_binary_is_recorded(self):
+        self.env(BRAINLESS_LLM_PROVIDER="claude-cli")
+        with mock.patch.object(llm, "resolve_claude", return_value=str(Path(self.tmp.name) / "no-such-claude")):
+            self.assertIsNone(llm.run_prompt("hi"))
+        self.assertIn("FileNotFoundError", self.status.read_text())
+
+    def test_json_envelope_is_unwrapped_and_costed(self):
+        self.env(BRAINLESS_LLM_PROVIDER="claude-cli")
+        envelope = json.dumps({"type": "result", "is_error": False, "result": "hello there",
+                               "total_cost_usd": 0.1234,
+                               "usage": {"input_tokens": 3, "output_tokens": 4,
+                                         "cache_creation_input_tokens": 18000, "cache_read_input_tokens": 0},
+                               "modelUsage": {"claude-opus-4-8": {}}})
+        script = "case \"$*\" in *--output-format*json*) ;; *) echo no-json-flag; exit 3;; esac\n"
+        script += "cat >/dev/null; printf '%s' '" + envelope + "'\n"
+        with self.fake_claude(script):
+            self.assertEqual(llm.run_prompt("hi", lane="nightly"), "hello there")
+        rows = self.ledger()
+        self.assertEqual(len(rows), 1)
+        self.assertEqual((rows[0]["provider"], rows[0]["model"], rows[0]["billed"]),
+                         ("claude-cli", "claude-opus-4-8", "plan"))
+        self.assertEqual((rows[0]["usd"], rows[0]["cw"]), (0.1234, 18000))
+
+    def test_notice_line_before_the_envelope_is_ignored(self):
+        self.env(BRAINLESS_LLM_PROVIDER="claude-cli")
+        envelope = json.dumps({"type": "result", "result": "clean answer", "total_cost_usd": 0.02, "usage": {}})
+        script = "cat >/dev/null; printf 'mise ~/.config/mise/config.toml tools: claude 9.9.9\\n%s' '" + envelope + "'\n"
+        with self.fake_claude(script):
+            self.assertEqual(llm.run_prompt("hi"), "clean answer")
+        self.assertEqual(self.ledger()[0]["usd"], 0.02)
+
+    def test_json_envelope_error_is_a_failure(self):
+        self.env(BRAINLESS_LLM_PROVIDER="claude-cli")
+        envelope = json.dumps({"type": "result", "is_error": True, "result": "Credit balance is too low"})
+        with self.fake_claude("cat >/dev/null; printf '%s' '" + envelope + "'\n"):
+            self.assertIsNone(llm.run_prompt("hi"))
+        self.assertIn("\tbilling\t", self.status.read_text())
+        self.assertEqual(self.ledger(), [])
+
+    def test_key_in_env_marks_the_call_api_billed(self):
+        self.env(BRAINLESS_LLM_PROVIDER="claude-cli", ANTHROPIC_API_KEY="sk-ant-x")
+        envelope = json.dumps({"type": "result", "result": "ok", "total_cost_usd": 0.01, "usage": {}})
+        with self.fake_claude("cat >/dev/null; printf '%s' '" + envelope + "'\n"):
+            llm.run_prompt("hi")
+        self.assertEqual(self.ledger()[0]["billed"], "api")
 
 
 class TestWebLane(ProviderTest):

@@ -36,15 +36,13 @@ import subprocess
 import sys
 from datetime import datetime
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from paths import vault_root  # noqa: E402
+from paths import vault_root
 VAULT = vault_root()
-sys.path.insert(0, os.path.join(VAULT, "tools"))
 from llm import run_prompt
 from calibrate import scan as calibration_scan
-from owner_profile import OWNER, output_lang_directive  # noqa: E402
-from i18n import t, t_list  # noqa: E402
-from run_log import emit  # noqa: E402
+from owner_profile import OWNER, output_lang_directive
+from i18n import t, t_list
+from run_log import emit
 
 CAPTURE_DIR = os.path.join(VAULT, "Thinking", "Daily")
 TASKS_FILE = os.path.join(VAULT, "_Agent-Context", "TASKS.md")  # the single task ledger
@@ -57,8 +55,7 @@ MARKER = t("evening_closeout.section_marker")
 MARKERS = t_list("evening_closeout.section_marker")
 
 
-def log(msg):
-    print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] {msg}")
+from logline import log
 
 
 def latest_llm_status():
@@ -97,12 +94,12 @@ def todays_changes():
             ["git", "log", "--since=midnight", "--name-only", "--format="],
             cwd=VAULT, capture_output=True, text=True, timeout=30,
         )
-        names.update(l for l in r.stdout.splitlines() if l.strip())
+        names.update(line for line in r.stdout.splitlines() if line.strip())
         r = subprocess.run(
             ["git", "status", "--porcelain"], cwd=VAULT,
             capture_output=True, text=True, timeout=30,
         )
-        names.update(l[3:] for l in r.stdout.splitlines() if l.strip())
+        names.update(line[3:] for line in r.stdout.splitlines() if line.strip())
     except Exception:
         pass
     # Plumbing noise (logs, agent state) is not "what happened today".
@@ -114,8 +111,8 @@ def todays_changes():
 def open_tasks():
     try:
         with open(TASKS_FILE, errors="replace") as fh:
-            return "\n".join(l for l in fh.read().splitlines()
-                             if l.strip().startswith("- [ ]"))[:3000]
+            return "\n".join(line for line in fh.read().splitlines()
+                             if line.strip().startswith("- [ ]"))[:3000]
     except OSError:
         return ""
 
@@ -253,7 +250,7 @@ def main():
         header = (t("evening_closeout.missing_briefing_title", date=date_str) + "\n\n"
                   + t("evening_closeout.missing_briefing_note") + "\n")
         section = header + section
-    with open(briefing_path, "a") as fh:
+    with open(briefing_path, "a", encoding="utf-8") as fh:
         fh.write(section)
     log(f"Close-out appended to {briefing_path}")
     emit(closeout=1)

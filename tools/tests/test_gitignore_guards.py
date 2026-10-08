@@ -19,14 +19,12 @@ from pathlib import Path
 import os
 import re
 import subprocess
-import sys
 import unittest
 
 ROOT = Path(__file__).resolve().parents[2]
 # Read the profile of the tree under test, not whatever vault sits at the default path.
 os.environ.setdefault("BRAINLESS_VAULT", str(ROOT))
-sys.path.insert(0, str(ROOT / "tools"))
-from owner_profile import (  # noqa: E402
+from owner_profile import (
     GITIGNORE_NETS, PRIVATE_NAME_PARTS, PROTECTED_HOMES, private_segment_patterns)
 
 # Every home that must never reach the remote. The list is deployment data and

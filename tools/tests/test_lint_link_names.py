@@ -6,15 +6,13 @@ link whose target matches the file name stays a bare link.
 
 Run: python3 -B -m unittest tools.tests.test_lint_link_names -v
 """
-import sys
 import tempfile
 import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(ROOT / "tools"))
 
-import lint_wiki as lw  # noqa: E402
+import lint_wiki as lw
 
 
 class LinkNames(unittest.TestCase):

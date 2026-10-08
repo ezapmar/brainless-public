@@ -3,6 +3,8 @@ Description=brainless: dreaming at 04:00, after the nightly compile (23:20) and 
 
 [Timer]
 OnCalendar=*-*-* 04:00:00
+# Never catch up a missed night during the day: proposals are meant to wait
+# for the morning, as with the night dialectic.
 Persistent=false
 
 [Install]

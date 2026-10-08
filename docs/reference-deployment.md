@@ -67,7 +67,7 @@ verbatim by `.agents/systemd/install.sh`:
 | When | Runs | What it does |
 |---|---|---|
 | 12:30 and 21:20 | `tools/dialectic.py` | six personas argue the day's new notes (isolated round one, quoted round two), moderator posts the scorecard and synthesis to `#dialectic` and files them; on a silent day the evening run argues one vault topic instead |
-| 02:00 | `tools/dialectic.py --run night` | the local-model experiment: the six personas answer through the worker's own model, one at a time, while the moderator and a judge lane stay on the cloud and grade each reply; a replay of the day's first topic, scored nowhere, with a five-night kill rule (see [local inference](local-inference.md#the-night-window-experiment)) |
+| ~~02:00~~ | `tools/dialectic.py --run night` | closed 2026-10-02 by its five-night kill rule (0 usable nights out of 11); the service remains for manual runs, the timer is gone (see [local inference](local-inference.md#result-2026-10-02)) |
 | 21:00 | `closeout` | propose one seed idea, one decision worth writing down, one contradiction with your beliefs |
 | 23:00 | `nightly` | write the digest, archive the raw capture |
 | 23:20 | `compile` | compile `.wiki/`, lint report, search index, retrieval score; every night, captures or not |

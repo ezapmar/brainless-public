@@ -15,9 +15,8 @@ import sys
 import time
 from datetime import datetime
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from paths import FOLDER_KEYS, folder, vault_root  # noqa: E402
-import config  # noqa: E402
+from paths import FOLDER_KEYS, folder, vault_root
+import config
 
 KEY_SECRET = {"anthropic": "anthropic_api_key", "openai": "openai_api_key", "grok": "xai_api_key",
               "gemini": "gemini_api_key", "openrouter": "openrouter_api_key"}
@@ -71,16 +70,7 @@ def checks(probe=False):
                                           else "test call failed; see .agents/state/llm_log")
 
     import schedule
-    import subprocess
-    kind = schedule.platform()
-    if kind == "macos":
-        loaded = subprocess.run(["launchctl", "print", f"gui/{os.getuid()}/{schedule.LABEL}"],
-                                capture_output=True).returncode == 0
-    elif kind == "linux":
-        loaded = subprocess.run(["systemctl", "--user", "is-active", f"{schedule.UNIT}.timer"],
-                                capture_output=True).returncode == 0
-    else:
-        loaded = subprocess.run(["schtasks", "/Query", "/TN", schedule.UNIT], capture_output=True).returncode == 0
+    loaded = schedule.loaded()
     yield ("ok" if loaded else "warn"), ("scheduler entry loaded" if loaded
                                          else "no scheduler entry; runs happen only when you type `brainless tick`")
 

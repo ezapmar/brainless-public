@@ -4,10 +4,7 @@
 At most one decision, one commitment, and one evidence review per day.
 Repeated runs do not resend today's items.
 """
-from pathlib import Path
-import sys
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "tools"))
 from today_queue import send_queue
 from net_wait import wait_for_network
 
