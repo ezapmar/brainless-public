@@ -368,6 +368,10 @@ jobs:
       - name: Scan the tree for owner references and secrets
         run: python3 tools/export_public.py --scan-only --out .
       - name: Run offline regression tests
+        # The tests import the engine by module name; tools/ and .agents/scripts
+        # go on the path here, as in the vault's own CI, not in every test file.
+        env:
+          PYTHONPATH: tools:.agents/scripts
         run: python3 -B -m unittest discover -s tools/tests -v
 """
 
@@ -457,6 +461,8 @@ jobs:
           Get-Content $log
           brainless schedule uninstall; if ($LASTEXITCODE) { exit 1 }
       - name: Dispatcher and lock tests
+        env:
+          PYTHONPATH: tools${{ runner.os == 'Windows' && ';' || ':' }}.agents/scripts
         run: python -m unittest tools.tests.test_cli -v
 """
 

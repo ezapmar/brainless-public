@@ -81,4 +81,6 @@ jobs:
           Get-Content $log
           brainless schedule uninstall; if ($LASTEXITCODE) { exit 1 }
       - name: Dispatcher and lock tests
+        env:
+          PYTHONPATH: tools${{ runner.os == 'Windows' && ';' || ':' }}.agents/scripts
         run: python -m unittest tools.tests.test_cli -v
