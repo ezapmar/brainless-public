@@ -40,7 +40,10 @@ RENAMES = {"README.public.md": "README.md"}
 SHIP_FILES = [
     "README.public.md",
     "install.sh",
+    "install.ps1",
     "bin/brainless",
+    "bin/brainless.cmd",
+    ".gitattributes",
     "requirements-google.txt",
     "requirements-core.txt",
     "requirements-search.txt",
@@ -242,6 +245,11 @@ OWNER_ALLOW = (
     ".agents/systemd/brainless-spiky.service",
     ".agents/systemd/brainless-thinkers.service",
     "docs/local-inference.md",
+    # The public site names its author on purpose: the writing section links the
+    # owner's Medium and X pieces, and the Atom feed carries an author element.
+    "docs/index.html",
+    "docs/feed.xml",
+    "tools/build_site.py",
 )
 
 
@@ -361,7 +369,7 @@ jobs:
 """
 
 
-# The installer on a clean macOS and Linux runner, against a stub model, so a
+# The installer on a clean macOS, Linux and Windows runner, against a stub model, so a
 # broken install fails here before a stranger meets it.
 LITE_INSTALL_WORKFLOW = """name: lite-install
 on: [push, pull_request]
@@ -394,6 +402,59 @@ jobs:
           ls "$BRAINLESS_VAULT/Notlar"
           brainless tick --dry-run
           brainless queue
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Start a stub model
+        shell: pwsh
+        run: |
+          Start-Process python -ArgumentList 'tools/tests/stub_llm.py','8765' -WindowStyle Hidden
+          Start-Sleep 2
+      - name: Install with Windows PowerShell 5.1, every question on its default
+        shell: powershell
+        run: |
+          & .\\install.ps1 -Vault "$env:RUNNER_TEMP\\vault" -Repo "$env:GITHUB_WORKSPACE" -Yes -InitArgs @(
+            '--lang', 'tr', '--provider', 'openai-compatible', '--base-url', 'http://127.0.0.1:8765/v1',
+            '--model', 'stub', '--no-schedule', '--no-search', '--no-first-run')
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          "$HOME\\.local\\bin" | Out-File -Append -Encoding utf8 $env:GITHUB_PATH
+      - name: Doctor, capture, tick, through brainless.cmd
+        shell: cmd
+        env:
+          BRAINLESS_VAULT: ${{ runner.temp }}\\vault
+        run: |
+          call brainless doctor --probe || exit /b 1
+          call brainless add "ilk not" || exit /b 1
+          dir "%BRAINLESS_VAULT%\\Notlar" || exit /b 1
+          call brainless tick --dry-run || exit /b 1
+          call brainless queue || exit /b 1
+      - name: Credential Manager round trip
+        shell: cmd
+        env:
+          BRAINLESS_VAULT: ${{ runner.temp }}\\vault
+        run: |
+          echo sk-test-123| brainless config secret set ci_test_key || exit /b 1
+          call brainless config secret check ci_test_key || exit /b 1
+          call brainless config secret delete ci_test_key || exit /b 1
+      - name: Task Scheduler entry runs a windowless tick
+        shell: pwsh
+        env:
+          BRAINLESS_VAULT: ${{ runner.temp }}\\vault
+        run: |
+          brainless schedule install; if ($LASTEXITCODE) { exit 1 }
+          brainless schedule status; if ($LASTEXITCODE) { exit 1 }
+          schtasks /Run /TN brainless-lite
+          $log = Join-Path $env:BRAINLESS_VAULT 'logs\\lite-tick.log'
+          foreach ($i in 1..30) { if (Test-Path $log) { break }; Start-Sleep 2 }
+          if (-not (Test-Path $log)) { schtasks /Query /TN brainless-lite /V /FO LIST; exit 1 }
+          Get-Content $log
+          brainless schedule uninstall; if ($LASTEXITCODE) { exit 1 }
+      - name: Dispatcher and lock tests
+        run: python -m unittest tools.tests.test_cli -v
 """
 
 
@@ -411,17 +472,17 @@ def write_tree(out):
     for r, text in STUBS.items():
         dst = os.path.join(out, r)
         os.makedirs(os.path.dirname(dst), exist_ok=True)
-        with open(dst, "w") as fh:
+        with open(dst, "w", encoding="utf-8") as fh:
             fh.write(text)
-    with open(os.path.join(out, ".gitignore"), "w") as fh:
+    with open(os.path.join(out, ".gitignore"), "w", encoding="utf-8") as fh:
         fh.write(CONTENT_HOMES_IGNORE)
     wf = os.path.join(out, ".github", "workflows", "leak-scan.yml")
     os.makedirs(os.path.dirname(wf), exist_ok=True)
-    with open(wf, "w") as fh:
+    with open(wf, "w", encoding="utf-8") as fh:
         fh.write(LEAK_SCAN_WORKFLOW)
     wf = os.path.join(out, ".github", "workflows", "lite-install.yml")
     os.makedirs(os.path.dirname(wf), exist_ok=True)
-    with open(wf, "w") as fh:
+    with open(wf, "w", encoding="utf-8") as fh:
         fh.write(LITE_INSTALL_WORKFLOW)
     return n
 

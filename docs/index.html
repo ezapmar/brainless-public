@@ -1,0 +1,331 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="brainless: a personal second brain. Notes collect in one folder, link themselves, come back when relevant, then argue with you. Open source, MIT, runs on your machine.">
+<meta property="og:title" content="brainless">
+<meta property="og:description" content="A second brain, woven from your own notes. Open source, runs on your machine.">
+<meta property="og:image" content="assets/brainless-social.png">
+<link rel="icon" href="assets/favicon.ico">
+<link rel="alternate" type="application/atom+xml" title="brainless releases" href="feed.xml">
+<title>brainless</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@500;700;800&family=Hanken+Grotesk:ital,wght@0,400;0,500;0,600;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="site.css">
+</head>
+<body>
+<header class="wrap nav">
+  <a class="brand" href="#top" id="top">
+    <img src="assets/brainless-logo-64.png" alt="" width="36" height="36">
+    <span>brainless</span>
+  </a>
+  <nav class="nav-links" aria-label="Sections">
+    <a href="#loop">The loop</a>
+    <a href="#voices">Six voices</a>
+    <a href="#writing">Writing</a>
+    <a href="#install">Install</a>
+    <a href="whats-new.html">What's new</a>
+    <a href="https://github.com/ezapmar/brainless-public">GitHub</a>
+  </nav>
+</header>
+
+<section class="hero">
+  <div class="wrap">
+    <img src="assets/brainless-banner.webp" alt="brainless: a brain drawn as a kilim" width="720">
+    <span class="eyebrow">Open source · MIT · runs on your machine</span>
+    <h1>A second brain, woven from your own notes.</h1>
+    <p class="lede">Notes arrive from everywhere, collect in one folder, link themselves to each other and come back to you when they are relevant. Then they argue with you.</p>
+    <div class="cta">
+      <a class="btn btn-primary" href="#install">Install in a minute</a>
+      <a class="btn btn-quiet" href="https://github.com/ezapmar/brainless-public">Read the code</a>
+    </div>
+    <div class="install">
+      <div class="cmd">
+        <code id="cmd-hero">curl -fsSL https://raw.githubusercontent.com/ezapmar/brainless-public/main/install.sh | bash</code>
+        <button type="button" data-copy="cmd-hero">Copy</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<svg class="band" aria-hidden="true"></svg>
+
+<section id="loop">
+  <div class="wrap">
+    <div class="section-head">
+      <span class="eyebrow">The loop</span>
+      <h2>Four knots. Each one holds because of the one before it.</h2>
+      <p>Collect everything without judging it. Let the machine read it and make the connections. Argue with what you are about to decide. Write the decision down as a bet, and settle it later.</p>
+    </div>
+    <div class="loop">
+      <div class="knot">
+        <svg data-motif="eye" viewBox="0 0 15 15" aria-hidden="true"></svg>
+        <span class="motif-name">göz · the eye</span>
+        <h3>Collect</h3>
+        <p>Everything comes in through one door. A voice note, a photo of a handwritten page, a link, a PDF, a meeting transcript, a line typed on the phone. Nothing is tagged, filed or judged on the way in.</p>
+      </div>
+      <div class="knot">
+        <svg data-motif="tree" viewBox="0 0 15 15" aria-hidden="true"></svg>
+        <span class="motif-name">hayat ağacı · the tree of life</span>
+        <h3>Link</h3>
+        <p>The machine reads it so you do not have to. Every note is summarised and tied to the people, companies and ideas it names. An idea that keeps coming back gets a page of its own, and every new source improves that page.</p>
+      </div>
+      <div class="knot">
+        <svg data-motif="horn" viewBox="0 0 15 15" aria-hidden="true"></svg>
+        <span class="motif-name">koçboynuzu · the ram's horn</span>
+        <h3>Argue</h3>
+        <p>Six voices, each built from a book on thinking, test a thesis in two rounds. A moderator then writes the strongest objection, what would have to be true, and a cheap test with a date on it.</p>
+      </div>
+      <div class="knot">
+        <svg data-motif="star" viewBox="0 0 15 15" aria-hidden="true"></svg>
+        <span class="motif-name">yıldız · the star</span>
+        <h3>Decide</h3>
+        <p>A decision is written as a bet, with a prediction and a review date. When the date passes you grade it in one line, so you stop being wrong the same way twice.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<svg class="band" aria-hidden="true"></svg>
+
+<section id="voices">
+  <div class="wrap">
+    <div class="section-head">
+      <span class="eyebrow">Six voices</span>
+      <h2>The best-behaved meeting in your week.</h2>
+      <p>Each persona is built from one book on thinking. In the first round they work alone and vote. In the second they read each other, answer the strongest objection and vote again. They never speak to each other, so they cannot set each other off.</p>
+    </div>
+    <div class="voices">
+      <div class="voice">
+        <svg data-motif="eye" data-colour="madder" viewBox="0 0 15 15" aria-hidden="true"></svg>
+        <div><h3>Skeptic</h3><div class="book">Browne and Keeley, Asking the Right Questions</div><p>What is the conclusion, what are the reasons, what is left out, what else could be true.</p></div>
+      </div>
+      <div class="voice">
+        <svg data-motif="eye" data-colour="saffron" viewBox="0 0 15 15" aria-hidden="true"></svg>
+        <div><h3>Gambler</h3><div class="book">Annie Duke, Thinking in Bets</div><p>Write it as a bet. How confident, in a number. Twelve months on, it failed. Why.</p></div>
+      </div>
+      <div class="voice">
+        <svg data-motif="eye" data-colour="teal" viewBox="0 0 15 15" aria-hidden="true"></svg>
+        <div><h3>Scientist</h3><div class="book">Camuffo, Gambardella and others, A scientific approach to entrepreneurial decision-making</div><p>What must be true, what is the cheapest test, which result means stop and which means pivot.</p></div>
+      </div>
+      <div class="voice">
+        <svg data-motif="eye" data-colour="orange" viewBox="0 0 15 15" aria-hidden="true"></svg>
+        <div><h3>Postmortem</h3><div class="book">Amy Edmondson, Right Kind of Wrong</div><p>If this fails, what kind of failure is it. Was the homework done. What is the smallest version.</p></div>
+      </div>
+      <div class="voice">
+        <svg data-motif="eye" data-colour="marigold" viewBox="0 0 15 15" aria-hidden="true"></svg>
+        <div><h3>Strategist</h3><div class="book">Lafley and Martin, Playing to Win</div><p>Where to play, how to win, and with which capabilities.</p></div>
+      </div>
+      <div class="voice">
+        <svg data-motif="eye" data-colour="cream" viewBox="0 0 15 15" aria-hidden="true"></svg>
+        <div><h3>Methodologist</h3><div class="book">Quivy and Van Campenhoudt, Manuel de recherche en sciences sociales</div><p>What is the real question underneath, and what observation would prove it wrong.</p></div>
+      </div>
+    </div>
+    <p class="note">If they start agreeing with you too often, a flag goes up. Six voices that always agree with you are a fan club.</p>
+  </div>
+</section>
+
+<svg class="band" aria-hidden="true"></svg>
+
+<section id="yours">
+  <div class="wrap">
+    <div class="section-head">
+      <span class="eyebrow">Yours</span>
+      <h2>On your disk, in plain text, with whichever model you already use.</h2>
+    </div>
+    <div class="yours">
+      <div>
+        <div class="dot"></div>
+        <h3>A folder of Markdown</h3>
+        <p>No server, no account, nothing to sign up for. Your notes stay in your folder, in a format you could still open in twenty years. Obsidian if you like it, any editor if you do not.</p>
+      </div>
+      <div>
+        <div class="dot"></div>
+        <h3>Any model</h3>
+        <p>Ollama on your own machine, or Anthropic, OpenAI, Gemini, Grok, OpenRouter, or the Claude, Codex and Gemini command lines. You pick it once during setup and change it whenever you like.</p>
+      </div>
+      <div>
+        <div class="dot"></div>
+        <h3>Keys outside the folder</h3>
+        <p>API keys go to the macOS Keychain, libsecret on Linux or Credential Manager on Windows. Never into the folder, because the folder is a git repository, and a git repository is where keys go to leak.</p>
+      </div>
+      <div>
+        <div class="dot"></div>
+        <h3>A compiled layer you can regenerate</h3>
+        <p>You own the source notes. The machine owns a wiki of summaries, concept pages and digests on top, and it can rebuild that layer from scratch at any time.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<svg class="band" aria-hidden="true"></svg>
+
+<section id="writing">
+  <div class="wrap">
+    <div class="section-head">
+      <span class="eyebrow">Writing</span>
+      <h2>The story so far, in two series.</h2>
+      <p>Longer pieces on Medium about the habits brainless forced on its author. Shorter, more technical articles on X about how it is built and what it runs on.</p>
+    </div>
+    <div class="writing">
+      <div class="series">
+        <div class="series-head">
+          <span class="eyebrow">On Medium</span>
+          <a href="https://tuncaucer.medium.com/">All posts</a>
+        </div>
+        <a class="piece" href="https://tuncaucer.medium.com/zero-brain-e4d107517f99">
+          <time datetime="2026-10-03">3 Oct</time>
+          <div>
+            <h3>Zero brain</h3>
+            <p>What a second brain promises, where mine broke, and the seven things I changed when I built my own.</p>
+          </div>
+        </a>
+        <a class="piece" href="https://tuncaucer.medium.com/the-folder-that-argues-back-c50c6ad80346">
+          <time datetime="2026-10-02">2 Oct</time>
+          <div>
+            <h3>The folder that argues back</h3>
+            <p>Five months of building brainless, and what it taught me about taking notes, thinking clearly and making decisions.</p>
+          </div>
+        </a>
+      </div>
+      <div class="series">
+        <div class="series-head">
+          <span class="eyebrow">On X</span>
+          <a href="https://x.com/tuncaucer">@tuncaucer</a>
+        </div>
+        <a class="piece" href="https://x.com/tuncaucer/article/2104892356486971833">
+          <time datetime="2026-09-29">29 Sep</time>
+          <div>
+            <h3>Why brainless runs on Omarchy</h3>
+            <p>The night shift runs on a 2019 ThinkBook with its lid closed. Four reasons for the operating system underneath, with the machine's own numbers.</p>
+            <span class="kind">article</span>
+          </div>
+        </a>
+        <a class="piece" href="https://x.com/tuncaucer/article/2104620579177316771">
+          <time datetime="2026-09-28">28 Sep</time>
+          <div>
+            <h3>How do earthlings use AI?</h3>
+            <p>brainless, part 1 of 4. The problem, the goals, and a folder that started as a second brain.</p>
+            <span class="kind">article · series</span>
+          </div>
+        </a>
+        <a class="piece" href="https://x.com/tuncaucer/status/2104621209103347725">
+          <time datetime="2026-09-28">28 Sep</time>
+          <div>
+            <h3>Where six years of sociology ended up</h3>
+            <p>The announcement. Capture, compile, search, the hardware, the six voices and decisions as bets, in one long post with the people whose work it stands on.</p>
+            <span class="kind">long post</span>
+          </div>
+        </a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<svg class="band" aria-hidden="true"></svg>
+
+<section id="ways">
+  <div class="wrap">
+    <div class="section-head">
+      <span class="eyebrow">Two ways to run it</span>
+      <h2>One engine. One computer, or three.</h2>
+    </div>
+    <div class="ways">
+      <div class="way">
+        <span class="eyebrow">Lite · the default</span>
+        <h3>One computer</h3>
+        <p>What the installer sets up. A folder of notes, the model you already use and one entry in the scheduler.</p>
+        <ul>
+          <li>Notes summarised, linked and compiled into a searchable wiki</li>
+          <li>The six voices, through your chosen model</li>
+          <li>Decisions with a prediction and a review date</li>
+          <li>Slash commands in Claude Code or Gemini CLI</li>
+        </ul>
+      </div>
+      <div class="way">
+        <span class="eyebrow">Full · the reference deployment</span>
+        <h3>A phone, a laptop and a worker that never sleeps</h3>
+        <p>How the author runs it. Capture from the phone, an always-on Linux worker on the night shift, persona agents in a chat relay.</p>
+        <ul>
+          <li>Telegram capture: voice, photo, link, text</li>
+          <li>Thirty-four timers that pull, run, commit and push</li>
+          <li>Six persona agents arguing at set hours</li>
+          <li>Encrypted backups and a morning queue</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<svg class="band" aria-hidden="true"></svg>
+
+<section id="install">
+  <div class="wrap">
+    <div class="section-head">
+      <span class="eyebrow">Install</span>
+      <h2>A minute to install. Ten minutes to the first argument.</h2>
+      <p>You need git and Python 3.11 or newer. The script sets up Python and the brainless command, then hands over to a short wizard: your name and language, notes you already have, the model, a test call, and one scheduler entry.</p>
+    </div>
+    <div class="install-grid">
+      <div>
+        <div class="label">macOS and Linux</div>
+        <div class="cmd">
+          <code id="cmd-unix">curl -fsSL https://raw.githubusercontent.com/ezapmar/brainless-public/main/install.sh | bash</code>
+          <button type="button" data-copy="cmd-unix">Copy</button>
+        </div>
+      </div>
+      <div>
+        <div class="label">Windows, in PowerShell</div>
+        <div class="cmd">
+          <code id="cmd-win">irm https://raw.githubusercontent.com/ezapmar/brainless-public/main/install.ps1 | iex</code>
+          <button type="button" data-copy="cmd-win">Copy</button>
+        </div>
+        <p class="hint">If git or Python is missing: winget install Git.Git and winget install Python.Python.3.13, then open a new window.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<svg class="band" aria-hidden="true"></svg>
+
+<section id="name">
+  <div class="wrap">
+    <div class="aside">
+      <h3>The name is a joke that stuck.</h3>
+      <p>In the office I kept saying "let us use our own brain first, then we can talk about a second brain", so when the folder needed a name I typed brainless. Not a second brain, zero brain. The joke carries the design rule anyway. The system keeps the memory and the connections; the thinking stays yours.</p>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <div class="foot-top">
+      <div>
+        <div class="foot-motifs" aria-hidden="true">
+          <svg data-motif="eye" data-colour="madder" data-ground="night" viewBox="0 0 15 15"></svg>
+          <svg data-motif="tree" data-ground="night" viewBox="0 0 15 15"></svg>
+          <svg data-motif="horn" data-ground="night" viewBox="0 0 15 15"></svg>
+          <svg data-motif="star" data-ground="night" viewBox="0 0 15 15"></svg>
+          <svg data-motif="figure" data-ground="night" viewBox="0 0 15 15"></svg>
+        </div>
+        <p style="margin-top:18px">The mark is a brain drawn as a kilim. The motifs are the weaver's own, from the looms of Anatolia and the steppe: the eye, the tree of life, the ram's horn, the star, the figure with hands on hips. Notes are the motifs. Links are the threads. The mind holds because each knot is tied to the others.</p>
+      </div>
+      <div class="foot-links">
+        <a href="whats-new.html">What's new</a>
+        <a href="feed.xml">Release feed (Atom)</a>
+        <a href="https://github.com/ezapmar/brainless-public">Source on GitHub</a>
+        <a href="https://github.com/ezapmar/brainless-public/wiki">Wiki</a>
+        <a href="https://github.com/ezapmar/brainless-public/blob/main/docs/lite.md">The Lite guide</a>
+        <a href="https://github.com/ezapmar/brainless-public/blob/main/docs/design.md">Design</a>
+      </div>
+    </div>
+    <div class="foot-bottom">
+      <span>brainless · MIT licence</span>
+      <span>Made in Istanbul, by one person and a few scripts.</span>
+    </div>
+  </div>
+</footer>
+
+<script src="site.js"></script>
+</body>
+</html>

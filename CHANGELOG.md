@@ -3,6 +3,39 @@
 All notable changes to the public brainless engine. Dates are the day of the public
 push. The private vault this is exported from has its own history.
 
+## Unreleased
+
+Windows, Linux without systemd, and a public site.
+
+- **A public site.** `docs/` now serves as a GitHub Pages site: a front page on the kilim
+  brand with the loop, the six voices, the Medium and X writing and the install lines, and
+  a what's new page with every release in plain words. `tools/build_site.py` writes
+  `docs/whats-new.html` and the Atom feed `docs/feed.xml` from this changelog; run it after
+  editing this file (`--check` fails CI when they are stale).
+- **Night dialectic experiment closed.** `brainless-dialectic-night.timer` is removed:
+  after 11 nights the local 4B model never produced a usable night (22 of 132 persona
+  replies passed, best night 6/12 against a bar of 8/12). The personas collapse into one
+  voice. `--run night` and its service remain for manual runs. Result in
+  `docs/local-inference.md`.
+- **Windows install.** `irm .../install.ps1 | iex` in PowerShell does what `install.sh`
+  does: checks git and Python (it skips the Microsoft Store stub), clones, makes the
+  venv, puts `brainless` on your PATH and runs `brainless init`. It works in Windows
+  PowerShell 5.1, the one that ships with Windows.
+- **One command line for every platform.** The commands moved from the bash script into
+  `tools/cli.py`. `bin/brainless` and the new `bin/brainless.cmd` only find the vault and
+  its Python.
+- **Keys in Credential Manager** on Windows, through the system API, never on a command
+  line.
+- **A Task Scheduler task** for the background runs: at logon and every 15 minutes, with
+  catch-up after sleep, on battery too, and with no console window popping up.
+- **Linux without systemd** (WSL, containers, some distros) gets one crontab line.
+  `brainless doctor` crashed there before.
+- **No more fcntl on the lite path.** The compile reached it through the concept review,
+  so Windows failed at import. A small portable lock replaces it.
+- **Outside folders link as a directory junction** on Windows when a symlink needs admin
+  rights. Ollama installs through winget when you say yes.
+- CI installs on Windows as well, and runs the scheduled task once.
+
 ## 0.8.6 (2026-10-04)
 
 Runs that did nothing now say so.
