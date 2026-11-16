@@ -1,0 +1,149 @@
+#!/usr/bin/env python3
+"""_Agent-Context/TASKS.md <-> Google Tasks two-way sync (worker).
+
+Section -> list mapping: "## <promises>" -> <promises>, "## <waiting>" -> <waiting>,
+where both names come from the locale (tools/locale/<lang>/gtasks_sync.json);
+headings in the current language and in English are both accepted when parsing.
+Line format: - [ ] Task text | [[Meeting]] | YYYY-MM-DD
+On the Google side the title is the clean task text; meeting+date go in the notes field.
+
+Directions:
+  local new   -> add to Google (with notes)
+  local [x]   -> complete on Google
+  Google completed -> [x] locally
+  added by hand on Google -> dropped as a line into the matching section
+
+Credentials: token.json in ~/.config/brainless/google/ (BRAINLESS_GOOGLE_DIR), outside the vault.
+Dependencies: requirements-google.txt (pip install -r it into the venv).
+"""
+import os
+import re
+from datetime import datetime
+
+from google.auth.transport.requests import Request
+from google.oauth2.credentials import Credentials
+from googleapiclient.discovery import build
+
+VAULT = os.environ.get("BRAINLESS_VAULT") or os.path.expanduser("~/projects/brainless")
+from i18n import t, t_list
+
+TASKS_FILE = os.path.join(VAULT, "_Agent-Context", "TASKS.md")
+SCOPES = ["https://www.googleapis.com/auth/tasks"]
+# canonical section key -> (heading written/inserted under, Google Tasks list name)
+SECTIONS = {key: ("## " + t(f"gtasks_sync.section_{key}"), t(f"gtasks_sync.section_{key}"))
+            for key in ("promises", "waiting")}
+# any accepted heading (current language or English) -> canonical section key
+HEADING_ALIASES = {"## " + name: key for key in SECTIONS
+                   for name in t_list(f"gtasks_sync.section_{key}")}
+SOURCE_MARKERS = t_list("gtasks_sync.note_source")
+
+
+from logline import log
+import tasks_ledger
+
+
+def get_service():
+    from config import google_file
+    token = google_file("token.json")
+    creds = Credentials.from_authorized_user_file(token, SCOPES)
+    if not creds.valid:
+        if creds.expired and creds.refresh_token:
+            creds.refresh(Request())
+            with open(token, "w", encoding="utf-8") as fh:
+                fh.write(creds.to_json())
+            os.chmod(token, 0o600)  # permissions must not loosen after refresh
+        else:
+            raise RuntimeError("Google token invalid; re-auth needed on the machine")
+    return build("tasks", "v1", credentials=creds, cache_discovery=False)
+
+
+def get_list_id(service, title):
+    for item in service.tasklists().list(maxResults=100).execute().get("items", []):
+        if item["title"] == title:
+            return item["id"]
+    return service.tasklists().insert(body={"title": title}).execute()["id"]
+
+
+def parse_local(lines):
+    """-> {section_key: [{idx, done, title, meeting, date}]}"""
+    out = {k: [] for k in SECTIONS}
+    current = None
+    for i, line in enumerate(lines):
+        s = line.strip()
+        if s.startswith("## "):
+            current = HEADING_ALIASES.get(s)
+            continue
+        m = re.match(r"- \[( |x)\] (.+)", s)
+        if m and current:
+            parts = [p.strip() for p in m.group(2).split(" | ")]
+            out[current].append({
+                "idx": i,
+                "done": m.group(1) == "x",
+                "title": parts[0],
+                "meeting": parts[1].strip("[]") if len(parts) > 1 else "",
+                "date": parts[2] if len(parts) > 2 else "",
+            })
+    return out
+
+
+def main():
+    # Decide against a snapshot while Google answers, then apply the local
+    # changes by title under the ledger lock, so a digest or Spiky run that
+    # wrote in between is not overwritten.
+    lines = tasks_ledger.read(TASKS_FILE).lines
+    service = get_service()
+    close_locally, pulled = [], []
+
+    for key, (header, list_name) in SECTIONS.items():
+        local = parse_local(lines)
+        list_id = get_list_id(service, list_name)
+        remote, page = [], None
+        while True:
+            resp = service.tasks().list(
+                tasklist=list_id, showCompleted=True, showHidden=True,
+                maxResults=100, pageToken=page).execute()
+            remote += resp.get("items", [])
+            page = resp.get("nextPageToken")
+            if not page:
+                break
+        remote_by_title = {x["title"].strip(): x for x in remote}
+        local_titles = {x["title"] for x in local[key]}
+
+        for lt in local[key]:
+            rt = remote_by_title.get(lt["title"])
+            if rt is None:
+                if not lt["done"]:
+                    notes = "\n".join(x for x in [
+                        t("gtasks_sync.note_meeting", meeting=lt["meeting"]) if lt["meeting"] else "",
+                        t("gtasks_sync.note_date", date=lt["date"]) if lt["date"] else "",
+                        t("gtasks_sync.note_source")] if x)
+                    service.tasks().insert(tasklist=list_id, body={
+                        "title": lt["title"], "notes": notes}).execute()
+                    log(f"Added to Google [{list_name}]: {lt['title']}")
+            else:
+                if lt["done"] and rt["status"] == "needsAction":
+                    service.tasks().patch(tasklist=list_id, task=rt["id"],
+                                          body={"status": "completed"}).execute()
+                    log(f"Closed on Google: {lt['title']}")
+                elif not lt["done"] and rt["status"] == "completed":
+                    close_locally.append(lt["title"])
+                    log(f"Closed locally: {lt['title']}")
+
+        for title, rt in remote_by_title.items():
+            if title not in local_titles and rt["status"] == "needsAction" \
+                    and not any(m in (rt.get("notes") or "") for m in SOURCE_MARKERS):
+                pulled.append((key, title))
+                log(f"Pulled from Google [{list_name}]: {title}")
+                local_titles.add(title)
+
+    if close_locally or pulled:
+        today = datetime.now().strftime("%Y-%m-%d")
+        with tasks_ledger.edit(TASKS_FILE) as ledger:
+            for title in close_locally:
+                ledger.mark(title, done=True)
+            for key, title in pulled:
+                ledger.add(key, title, "", today)
+
+
+if __name__ == "__main__":
+    main()

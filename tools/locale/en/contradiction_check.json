@@ -1,0 +1,10 @@
+{
+  "title": "# Contradictions",
+  "intro": "New sources that disagree with a page already in the vault, found after each nightly compile by tools/contradiction_check.py. Newest first, the last {days} days. Nothing on any page was changed; what a contradiction means is your call.",
+  "none": "None in the window.",
+  "item_contradiction": "- **{day}** contradiction: [[{new}]] vs [[{old}]]",
+  "item_outdated": "- **{day}** out of date: [[{new}]] shows a claim in [[{old}]] no longer holds",
+  "new_says": "New",
+  "old_says": "Old",
+  "why": "Why"
+}

@@ -1,0 +1,19 @@
+{
+  "apply_words": ["yes", "apply", "ok"],
+  "reject_words": ["no", "reject"],
+  "skip_words": ["skip", "later"],
+  "link_title": "🔗 Link proposal",
+  "merge_title": "🪞 Duplicate proposal (merge)",
+  "evidence": "Evidence",
+  "reason": "Why",
+  "adds_link": "If you approve, these lines go into both pages' Links section:",
+  "adds_merge": "If you approve, the two are linked and added to your merge list. No file is deleted; you do the merge.",
+  "footer": "Reply to this message: yes / no / skip",
+  "applied_link": "✅ Linked: {a} ↔ {b}. Recorded in _Agent-Context/links.md",
+  "applied_merge": "✅ Added to the merge list and linked: {a} ↔ {b}",
+  "rejected": "Understood, this pair will not be asked again.",
+  "skipped": "Skipped; it may come back after 30 days.",
+  "unknown": "Not understood. Reply to this proposal: yes / no / skip",
+  "already": "This proposal is already decided: {decision}.",
+  "stopped": "🛑 Dreaming stopped: only {rate}% of {n} proposals in the last 14 days were approved (threshold 30%). To restart, delete \"stopped\" from .agents/state/dreaming.json."
+}

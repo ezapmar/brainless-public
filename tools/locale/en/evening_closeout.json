@@ -1,0 +1,17 @@
+{
+  "section_marker": "## Evening Close-out",
+  "calendar_heading": "### 📊 Decision calendar",
+  "due_heading": "**Awaiting grading (review date passed, outcome not written):**",
+  "needs_pred_heading": "**Prediction missing (decided but no forecast):**",
+  "no_review_heading": "**No review date (pending/deferred):**",
+  "heading_what_happened": "## What Happened Today",
+  "heading_carry_over": "## Carrying Over to Tomorrow",
+  "heading_open_loops": "## Open Loops",
+  "heading_thinking_loop": "## Thinking Loop",
+  "none_word": "None",
+  "seed_label": "🌱 Candidate seed",
+  "decision_label": "⚖️ Decision to crystallise",
+  "contradiction_label": "🔀 Contradiction",
+  "missing_briefing_title": "# {date} Daily Note",
+  "missing_briefing_note": "(No morning briefing was produced today; this file was opened by the evening close-out.)"
+}

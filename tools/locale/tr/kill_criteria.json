@@ -1,0 +1,16 @@
+{
+  "title": "# Kill Criteria",
+  "intro": "> Otomatik üretilir: `tools/kill_criteria.py` (saatlik health_check ile). Kaynak: her proje `notes.md` dosyasındaki `## Kill Criteria` bölümü (`- [ ] YYYY-MM-DD | koşul | sonuç`). Güncelleme: {time}. Elle düzenleme.",
+  "breached_heading": "## 🔴 İhlal edildi ({n})",
+  "breached_row": "- <span style=\"color:red\">**{project}**: {date} | {condition}{consequence} ({days} gün geçti)</span>",
+  "none_breached": "- ihlal yok",
+  "due_heading": "## 🟡 {days} gün içinde ({n})",
+  "due_row": "- **{project}**: {date} | {condition}{consequence} ({left} gün kaldı)",
+  "none_due": "- yaklaşan kriter yok",
+  "missing_heading": "## ⚪ Kill criteria yazılmamış ({n})",
+  "missing_row": "- [{cat}] {project} ({status})",
+  "none_missing": "- her projede en az bir açık kriter var",
+  "upcoming_line": "İleri tarihli açık kriter: {n}. Kapatılmış: {done}.",
+  "consequence_sep": " | ",
+  "footer": "> Kural: tarihi geçmiş ve işaretlenmemiş her satır ihlaldir; brifingde sağlık bloğunun yanında kırmızı görünür. Kriteri kapatmak için kutuyu işaretle ya da satırı yeni tarihle güncelle (Log'a not düş)."
+}

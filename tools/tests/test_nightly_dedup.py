@@ -1,0 +1,78 @@
+"""The nightly digest's task sync, tested on a throwaway ledger.
+
+The ledger reached 130 open rows because the digest matched titles character
+for character: a promise the model rephrased the next night became a new row.
+The guard is the one spiky_actions.py already had, moved to tools/task_dedup.py
+so both writers share it. These tests pin the two behaviours that matter: a
+rephrased task is dropped, a genuinely new one is not.
+"""
+import importlib
+import os
+import tempfile
+import unittest
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[2]
+
+
+class NightlyDedupTest(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.vault = Path(self.tmp.name)
+        os.environ["BRAINLESS_VAULT"] = str(self.vault)
+        (self.vault / "_Agent-Context").mkdir(parents=True)
+        (self.vault / "Thinking" / "Daily").mkdir(parents=True)
+        import nightly_processor
+        self.np = importlib.reload(nightly_processor)
+        self.ledger = self.vault / "_Agent-Context" / "TASKS.md"
+        self.ledger.write_text(
+            "# Ledger\n\n## Promises\n\n"
+            "- [ ] Kuzeyfirin organizasyonu için Defne ile butce konusunu görüş | [[2026-09-10]] | 2026-09-10\n"
+            "- [x] Nehir'e katalog örneklerini gönder | [[2026-09-11]] | 2026-09-11\n")
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def sync(self, *titles):
+        digest = "# D\n\n## Action Items\n" + "".join(f"- [ ] {t}\n" for t in titles)
+        self.np.sync_tasks(digest, "2026-09-19")
+        return self.ledger.read_text()
+
+    def test_a_rephrased_task_is_not_added_again(self):
+        text = self.sync("Defne ile Kuzeyfirin organizasyonunun butce konusunu görüşmek")
+        self.assertEqual(text.count("- [ ]"), 1)
+
+    def test_a_task_already_closed_is_not_reopened_in_other_words(self):
+        text = self.sync("Dashboard örneklerini Nehir'e gönder")
+        self.assertEqual(text.count("Nehir"), 1)
+
+    def test_a_new_task_is_added_once(self):
+        text = self.sync("Lodosbank teklif toplantısı için sunumu hazırla",
+                         "Lodosbank teklif toplantısının sunumunu hazırla")
+        self.assertEqual(text.count("Lodosbank"), 1)
+        self.assertIn("| [[2026-09-19]] | 2026-09-19", text)
+
+    def test_the_budget_line_counts_labels(self):
+        notes = ["/x/a.md", "/x/b.md", "/x/c.md"]
+        line = self.np.budget_line(notes, {"a.md": "task", "b.md": "epic"})
+        self.assertIn("1", line)
+        self.assertNotIn("\u2014", line)
+
+
+
+class SameDayDigestTest(unittest.TestCase):
+    """A laptop can digest twice in a day; the first digest must survive."""
+
+    def test_second_digest_is_appended(self):
+        import nightly_processor as np_
+        with tempfile.TemporaryDirectory() as d:
+            path = os.path.join(d, "2026-09-26.md")
+            np_.write_digest(path, "---\nlang: en\n---\n# day\nfour notes\n")
+            np_.write_digest(path, "---\nlang: en\n---\n# day\none late note\n")
+            text = Path(path).read_text()
+            self.assertIn("four notes", text)
+            self.assertIn("one late note", text)
+            self.assertEqual(text.count("lang: en"), 1)
+
+if __name__ == "__main__":
+    unittest.main()

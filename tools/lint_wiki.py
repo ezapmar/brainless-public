@@ -1,0 +1,665 @@
+#!/usr/bin/env python3
+"""
+lint_wiki.py: integrity checks + auto-fix for the wiki layer.
+
+Reports written to wiki/_lint-report.md.
+
+Checks:
+- broken [[links]] (real targets only; _commands/ examples and obvious placeholders are suppressed;
+  targets that resolve anywhere in the vault, human homes included, count as informational refs)
+- missing pages: unresolved targets aggregated by frequency (entity-page candidates, not errors)
+- orphan files (no inbound or outbound links, excluding INDEX/_commands; INDEX links do not
+  grant inbound, otherwise the auto-generated index would mask every orphan)
+- stale summaries (source mtime newer than summary)
+- missing frontmatter (lang, summary_en, compiled_at) on non-command files
+
+Fix mode:
+- --fix : backfill minimal required frontmatter on legacy wiki files (digests, summaries, articles, ideas, etc.)
+- --fix-links : remap path/prefix mistakes to the correct target (non-destructive; unresolved links are left alone)
+- --prune-links : with --fix-links, ALSO de-link unresolved targets (destructive; off by default)
+- --dry-run with --fix : preview changes without writing
+
+Usage:
+  python3 tools/lint_wiki.py                  # report only (recommended in cron/nightly)
+  python3 tools/lint_wiki.py --fix            # backfill frontmatter on legacy files
+  python3 tools/lint_wiki.py --fix --dry-run  # preview what --fix would do
+"""
+import argparse
+import re
+from collections import Counter
+from datetime import datetime
+from pathlib import Path
+from fsutil import atomic_write
+import frontmatter
+from owner_profile import LANG, COMPANY_AREA
+
+# Company name as it appears in wikilinks/paths, derived from the profile so the linter
+# stays deployment-neutral (e.g. company_area "Work/Acme Co" -> tokens acme co, acme-co, acme).
+_C = COMPANY_AREA.strip("/").split("/")[-1].lower()
+_COMPANY_TOKENS = tuple({_C, _C.replace(" ", "-"), _C.split()[0]}) if _C else ()
+
+from paths import vault_root
+VAULT = Path(vault_root())
+WIKI = VAULT / ".wiki"
+
+LINK_RE = re.compile(r"\[\[([^\]\|#]+)(?:#[^\]\|]+)?(?:\|[^\]]+)?\]\]")
+FM_RE = re.compile(r"^---\n(.*?)\n---\n", re.S)
+
+
+def parse_fm(text: str) -> dict:
+    return frontmatter.parse(text)
+
+
+# --- Link noise suppression & classification helpers ---
+
+PLACEHOLDER_PATTERNS = [
+    r"^Wikilink$", r"^Note Name$", r"^Note$", r"^Project( [A-Z])?$", r"^Belief( Note)?$",
+    r"^Decision( Note| \u2014 .+)?$", r"^[AB]$", r"^Target( Note)?$", r"^Candidate( Note)?$",
+    r"^Source( [AB])?$", r"^Intermediate( \d+)?$", r"^this note$", r"^New Idea Title$",
+    r"^Belief Name$", r"^Daily \d{4}-\d{2}-\d{2}$",  # illustrative dates in command docs
+    r"^Briefing \d{4}", r"^YYYY-MM-DD$",
+]
+
+PLACEHOLDER_RE = re.compile("|".join(PLACEHOLDER_PATTERNS), re.IGNORECASE)
+
+
+
+def is_likely_placeholder(target: str) -> bool:
+    t = target.strip()
+    if PLACEHOLDER_RE.match(t):
+        return True
+    if len(t) < 3:
+        return True
+    if "..." in t:
+        return True  # illustrative paths like [[wiki/...]] leaked from prompt text
+    # very generic single words that only appear in prompt templates
+    generic = {"links", "link", "topic-name", "note", "file", "path"}
+    if t.lower() in generic:
+        return True
+    return False
+
+
+def is_external_reference(target: str) -> bool:
+    """Targets that intentionally point outside the generated wiki (the human homes: Work, Personal, etc.)."""
+    t = target.strip().lower()
+    if t.startswith(("work/", "personal/", "library/", "thinking/", "inbox/",
+                     "archive/", "_agent-context/", "tools/")) or (_COMPANY_TOKENS and t.startswith(_COMPANY_TOKENS)):
+        return True
+    if any(x in t for x in (*_COMPANY_TOKENS, "belief", "decision")):
+        return True
+    # Also resolve against actual human-owned belief/decision/area files by stem
+    return False
+
+
+_VAULT_STEMS: set | None = None
+
+def _vault_stem_index() -> set:
+    """Lazy stem index over every .md in the vault outside dot-dirs and backups.
+
+    Obsidian resolves [[Bare Title]] against the whole vault by basename, so a
+    target with a matching stem anywhere in the human homes is NOT broken.
+    """
+    global _VAULT_STEMS
+    if _VAULT_STEMS is None:
+        _VAULT_STEMS = set()
+        for p in VAULT.rglob("*.md"):
+            rel = p.relative_to(VAULT).parts
+            if any(part.startswith(".") for part in rel[:-1]) or rel[0] == "_Backup":
+                continue
+            _VAULT_STEMS.add(p.stem.lower())
+            # 2026-09-04: every project hub is <Folder>/notes.md and carries
+            # `aliases: ["<Folder>"]`, so [[<Folder>]] resolves in Obsidian.
+            # Count the folder name as a stem too, otherwise every digest link
+            # to a project reads as broken (188 false positives).
+            if p.name == "notes.md":
+                _VAULT_STEMS.add(p.parent.name.lower())
+    return _VAULT_STEMS
+
+
+def resolve_against_raw(target: str) -> bool:
+    """Check if a bare title matches any note in the human-owned tree (whole vault, Obsidian-style)."""
+    stem = Path(target).stem.lower().strip()
+    return stem in _vault_stem_index()
+
+
+def extract_summary_en(body: str, path: Path) -> str:
+    """Crude but safe extraction of a one-paragraph English summary from legacy content."""
+    # For digests, prefer the Executive Summary section
+    if "digests/" in str(path):
+        m = re.search(r"## Executive Summary.*?\n(.*?)(?:\n##|\Z)", body, re.S | re.I)
+        if m:
+            para = m.group(1).strip().split("\n\n")[0].strip()
+            if para:
+                return " ".join(para.split())[:280]
+
+    # General: first non-empty paragraph after the first heading
+    lines = [ln.strip() for ln in body.splitlines() if ln.strip()]
+    paras = []
+    current = []
+    for line in lines:
+        if line.startswith("#") and current:
+            break
+        if line.startswith("#"):
+            continue
+        if not line:
+            if current:
+                paras.append(" ".join(current))
+                current = []
+            continue
+        current.append(line)
+    if current:
+        paras.append(" ".join(current))
+
+    for p in paras:
+        if len(p) > 40:
+            return p[:280]
+
+    return "Legacy content backfilled by lint --fix. Review and improve this summary."
+
+
+def ensure_frontmatter(path: Path, dry_run: bool = False) -> list[str]:
+    """Ensure required frontmatter keys exist. Returns list of keys that were (or would be) added."""
+    try:
+        text = path.read_text(encoding="utf-8", errors="ignore")
+    except Exception:
+        return []
+
+    fm = parse_fm(text)
+    required = ["lang", "summary_en", "compiled_at"]
+    missing = [k for k in required if k not in fm]
+    if not missing:
+        return []
+
+    rel = str(path.relative_to(VAULT))
+    now = datetime.now().isoformat(timespec="seconds")
+
+    additions: dict[str, str] = {}
+
+    if "lang" in missing:
+        if "digests/" in rel or "/ideas/" in rel or "/articles/" in rel or "/moc/" in rel:
+            additions["lang"] = "en"
+        elif "summaries/" in rel or "/concepts/" in rel:
+            # Summaries and concepts are written in the owner's output language (PROFILE.md).
+            additions["lang"] = LANG
+        else:
+            additions["lang"] = "en"
+
+    if "summary_en" in missing:
+        body = text
+        # strip existing frontmatter if present for extraction
+        if FM_RE.match(text):
+            parts = FM_RE.split(text, maxsplit=1)
+            body = parts[-1] if parts else text
+        additions["summary_en"] = extract_summary_en(body, path)
+
+    if "compiled_at" in missing:
+        additions["compiled_at"] = now
+
+    if not additions:
+        return []
+
+    if dry_run:
+        return list(additions.keys())
+
+    # Build new frontmatter block
+    # Preserve any existing keys, then append the new ones (simple but effective)
+    existing_lines = []
+    if FM_RE.match(text):
+        m = FM_RE.match(text)
+        for line in m.group(1).splitlines():
+            if ":" in line:
+                k = line.split(":", 1)[0].strip()
+                if k not in additions:  # keep original value
+                    existing_lines.append(line.strip())
+    for k, v in additions.items():
+        existing_lines.append(f"{k}: {v}")
+
+    new_fm = "---\n" + "\n".join(existing_lines) + "\n---\n"
+
+    # Remove old frontmatter if present and prepend the new one
+    body_without_fm = FM_RE.sub("", text, count=1).lstrip("\n")
+    new_text = new_fm + "\n" + body_without_fm if body_without_fm else new_fm
+
+    try:
+        atomic_write(path, new_text)
+        return list(additions.keys())
+    except Exception as e:
+        print(f"[fix error] {path.relative_to(VAULT)}: {e}")
+        return []
+
+
+ARCHIVE = WIKI / "_archive"
+
+
+# Generated reports in .wiki/ name pages; they are not pages themselves.
+REPORTS = {"_lint-report.md", "_link-suggestions.md"}
+
+
+def all_wiki_files():
+    """Every wiki page except the lint report and the archive.
+
+    An archived page (tools/wiki_prune.py) is out of the graph on purpose: it
+    must not count as an orphan and must not grant an inbound edge to anything.
+    Topic indexes (.wiki/_index/) are out for the same reason INDEX.md never
+    grants an inbound edge: they link to everything, and would hide every orphan.
+    """
+    return sorted(p for p in WIKI.rglob("*.md")
+                  if p.name not in REPORTS and ARCHIVE not in p.parents
+                  and "_index" not in p.relative_to(WIKI).parts)
+
+
+def _resolve(target, by_relpath, by_stem):
+    cands = [
+        target, target + ".md", target.lower(),
+        f".wiki/{target}.md", f".wiki/{target}",
+        f"wiki/{target}.md", f"wiki/{target}",
+        str(Path(target).with_suffix(".md")),
+    ]
+    for c in cands:
+        if c in by_relpath:
+            return by_relpath[c]
+    stem_hits = by_stem.get(Path(target).stem.lower(), [])
+    return stem_hits[0] if stem_hits else None
+
+
+def link_graph(files):
+    """Resolve every [[wikilink]] between the given wiki pages.
+
+    One definition of "linked" for the whole engine: the lint report, the
+    orphan list and tools/wiki_prune.py all read this, so a page cannot be an
+    orphan to one tool and connected to another. INDEX.md and _commands/ are
+    skipped as link sources: the index links everything and the command
+    prompts carry example links, and neither grants a page an inbound edge.
+
+    Returns a dict: inbound and outbound counts per page, the resolved edges
+    as (source, target) pairs, the unresolved links split into real breaks and
+    references outside the wiki, the placeholder count, and the two lookup
+    tables the link fixer needs.
+    """
+    by_stem, by_relpath = {}, {}
+    inbound = {p: 0 for p in files}
+    outbound = {p: 0 for p in files}
+    for p in files:
+        rel = str(p.relative_to(VAULT))
+        by_stem.setdefault(p.stem.lower(), []).append(p)
+        by_relpath[rel] = p
+        by_relpath[rel.replace(".md", "")] = p
+        by_relpath[rel.replace(".md", "").lower()] = p
+
+    edges, real_broken, external_refs = [], [], []
+    placeholder_count = 0
+    for p in files:
+        if "_commands" in str(p) or p.name == "INDEX.md":
+            continue
+        text = p.read_text(errors="ignore", encoding="utf-8")
+        for m in LINK_RE.finditer(text):
+            target = m.group(1).strip()
+            outbound[p] += 1
+            if is_likely_placeholder(target):
+                placeholder_count += 1
+                continue
+            hit = _resolve(target, by_relpath, by_stem)
+            if hit:
+                inbound[hit] += 1
+                edges.append((p, hit))
+            elif is_external_reference(target) or resolve_against_raw(target):
+                external_refs.append((p, target))
+            else:
+                real_broken.append((p, target))
+    return {"inbound": inbound, "outbound": outbound, "edges": edges,
+            "broken": real_broken, "external": external_refs,
+            "placeholders": placeholder_count,
+            "by_stem": by_stem, "by_relpath": by_relpath}
+
+
+def orphan_pages(files, graph):
+    """Pages with no link in and none out. The index and the command prompts
+    are not pages in this sense."""
+    return [p for p in files
+            if graph["inbound"][p] == 0 and graph["outbound"][p] == 0
+            and "INDEX" not in p.name and "_commands" not in str(p)]
+
+
+# Captures target + optional #heading + optional |alias, so we can rewrite a link
+# while preserving its display alias.
+FIX_LINK_RE = re.compile(r"\[\[([^\]\|#]+)(#[^\]\|]+)?(\|[^\]]+)?\]\]")
+
+
+def fold_name(name: str) -> str:
+    """'Köprü Çayı', 'kopru-cayi' and 'Kopru Cayi' fold to one key."""
+    import unicodedata
+    s = name.replace("ı", "i").replace("İ", "i")
+    s = "".join(c for c in unicodedata.normalize("NFKD", s) if not unicodedata.combining(c))
+    return re.sub(r"[^a-z0-9]+", " ", s.lower()).strip()
+
+
+def name_index(files) -> dict:
+    """Folded name -> the one page that answers to it: file name, H1 title or a
+    frontmatter alias. A name two pages claim is left out; a guess there would
+    point a link at the wrong page.
+
+    One contest is settled instead of dropped: a person named by both their
+    entity dossier and the summary of their own About People card. The dossier
+    answers the question and the summary is its evidence, so the dossier wins.
+    Without this, every person whose card is summarised loses their name."""
+    from wiki_dedupe import aliases_of, title_of     # imports this module, so not at the top
+    claims: dict[str, set] = {}
+    for p in files:
+        text = p.read_text(errors="replace", encoding="utf-8")
+        for name in {p.stem, title_of(p, text), *aliases_of(parse_fm(text))}:
+            key = fold_name(str(name))
+            if key:
+                claims.setdefault(key, set()).add(p)
+    out = {}
+    for k, pages in claims.items():
+        if len(pages) == 1:
+            out[k] = next(iter(pages))
+            continue
+        entities = [p for p in pages if p.parent.name == "entities"]
+        rest = [p for p in pages if p.parent.name == "summaries"]
+        if len(entities) == 1 and len(entities) + len(rest) == len(pages):
+            out[k] = entities[0]
+    return out
+
+
+# A name must end where the page name's next word begins, so "Can" reaches
+# "Can Çelikkol" and never "Canan Holding". Whitespace and the underscore that
+# separates a summary stem's path parts, and nothing else: with the hyphen in
+# this set, the first word of every kebab-case slug claimed its page, and
+# "Bahce" (the payroll module) resolved to the concept page
+# "bahce-tabanli-sulama-kanali", which is a different thing.
+_BOUNDARY = re.compile(r"[\s_]")
+
+
+def prefix_index(files) -> dict:
+    """Folded name -> the one page whose own name merely starts with it.
+
+    Two shapes of link need this, and both are the wiki's own doing: a person
+    linked by first name only, and a summary cited by the name its source would
+    have had before the slug was cut to 100 characters (67 summaries are). A
+    name that starts two page names is left out: unique or nothing."""
+    claims: dict[str, set] = {}
+    for p in files:
+        name = p.stem
+        for cut in range(1, len(name)):
+            if _BOUNDARY.match(name[cut]):
+                key = fold_name(name[:cut])
+                if key:
+                    claims.setdefault(key, set()).add(p)
+    return {k: next(iter(v)) for k, v in claims.items() if len(v) == 1}
+
+
+def fix_links_in_file(path: Path, broken_targets: set, remap, dry_run: bool = False,
+                      prune: bool = False) -> dict:
+    """Repair the broken links in one file.
+
+    Only targets in `broken_targets` (the linter's own real-broken set for this
+    file) are touched. A target that `remap` can resolve becomes a working
+    `[[stem]]` link, and keeps its wording as the display text when the page's
+    file name reads differently. Unresolved targets are LEFT ALONE by default: an unresolved
+    wikilink is a missing-page signal (and harmless in Obsidian), not an error.
+    Only with `prune` are they de-linked to plain display text.
+    """
+    text = path.read_text(errors="ignore", encoding="utf-8")
+    counts = {"remapped": 0, "delinked": 0}
+
+    def repl(m):
+        target = m.group(1).strip()
+        if target not in broken_targets:
+            return m.group(0)
+        alias = m.group(3)[1:].strip() if m.group(3) else None
+        hit = remap(target)
+        if hit is not None:
+            counts["remapped"] += 1
+            if not alias and Path(target).name.lower() != hit.stem.lower():
+                alias = target               # reached by title or alias: the sentence reads as before
+            return f"[[{hit.stem}|{alias}]]" if alias else f"[[{hit.stem}]]"
+        if not prune:
+            return m.group(0)
+        counts["delinked"] += 1
+        return alias or Path(target.split("#")[0]).name
+
+    new_text = FIX_LINK_RE.sub(repl, text)
+    if new_text != text and not dry_run:
+        atomic_write(path, new_text)
+    return counts
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--fix", action="store_true",
+                    help="Backfill missing required frontmatter (lang, summary_en, compiled_at) on wiki files")
+    ap.add_argument("--dry-run", action="store_true",
+                    help="With --fix: show what would be changed but do not write files")
+    ap.add_argument("--fix-links", action="store_true",
+                    help="Repair real broken [[links]] in .wiki/: remap path/prefix mistakes to the "
+                         "correct target; unresolved targets are left as-is (missing-page signals)")
+    ap.add_argument("--prune-links", action="store_true",
+                    help="With --fix-links: de-link (keep text, drop [[ ]]) targets that resolve "
+                         "nowhere. Destructive; erases the missing-page signal. Off by default.")
+    ap.add_argument("--no-llm", action="store_true", help="(deprecated) kept for compatibility")
+    args = ap.parse_args()
+
+    files = all_wiki_files()
+    graph = link_graph(files)
+    real_broken, external_refs = graph["broken"], graph["external"]
+    placeholder_count = graph["placeholders"]
+    by_stem, by_relpath = graph["by_stem"], graph["by_relpath"]
+
+    # --- Optional: repair broken links (remap + de-link) ---
+    links_remapped = 0
+    links_delinked = 0
+    if args.fix_links:
+        def resolve(target):
+            return _resolve(target, by_relpath, by_stem)
+
+        names = name_index(files)
+        prefixes = prefix_index(files)
+
+        def remap(target, source=None):
+            variants = []
+            low = target.lower()
+            for pre in ("wiki/", "raw/", ".wiki/"):
+                if low.startswith(pre):
+                    variants.append(target[len(pre):])
+            if "Resources/Books/" in target:
+                variants.append(target.replace("Resources/Books/", "Library/Books/"))
+            variants.append(Path(target).name)   # basename-only
+            for v in variants:
+                hit = resolve(v)
+                if hit is not None:
+                    return hit
+            # A page that exists under another spelling, its title or an alias.
+            # Obsidian does not follow an alias on its own. A page that links to
+            # its own alias is left alone.
+            hit = names.get(fold_name(target)) or prefixes.get(fold_name(target))
+            return hit if hit is not None and hit != source else None
+
+        broken_by_file: dict[Path, set] = {}
+        for p, target in real_broken:
+            broken_by_file.setdefault(p, set()).add(target)
+        for p, targets in broken_by_file.items():
+            c = fix_links_in_file(p, targets, lambda t, p=p: remap(t, p), dry_run=args.dry_run,
+                                  prune=args.prune_links)
+            links_remapped += c["remapped"]
+            links_delinked += c["delinked"]
+
+    orphans = orphan_pages(files, graph)
+
+    # stale summaries (based on frontmatter source pointer)
+    stale = []
+    summaries_dir = WIKI / "summaries"
+    if summaries_dir.exists():
+        for s in summaries_dir.glob("*.md"):
+            fm = parse_fm(s.read_text(errors="ignore", encoding="utf-8"))
+            src = fm.get("source", "")
+            if not src:
+                continue
+            src_path = VAULT / src
+            if src_path.exists() and src_path.stat().st_mtime > s.stat().st_mtime + 1:
+                stale.append((s, src_path))
+
+    # --- Frontmatter issues + optional fix ---
+    fm_issues: list[tuple[Path, list[str]]] = []
+    fixed: list[tuple[Path, list[str]]] = []
+
+    for p in files:
+        if "_commands" in str(p) or p.name == "INDEX.md":
+            continue
+        fm = parse_fm(p.read_text(errors="ignore", encoding="utf-8"))
+        # A hand-written pointer page (type: pointer, e.g. Home.md) is never
+        # compiled, so a compile stamp on it would be a date that means nothing
+        # and --fix would invent a new one every time it ran.
+        required = ("lang", "summary_en") if fm.get("type") == "pointer" \
+            else ("lang", "summary_en", "compiled_at")
+        missing = [k for k in required if k not in fm]
+        if missing:
+            fm_issues.append((p, missing))
+            if args.fix:
+                added = ensure_frontmatter(p, dry_run=args.dry_run)
+                if added:
+                    fixed.append((p, added))
+
+    # --- Write improved report ---
+    ts = datetime.now().isoformat(timespec="seconds")
+    lines = [
+        "# Wiki Lint Report\n",
+        f"_Generated {ts}_\n",
+        "## Summary\n",
+        f"- files scanned: {len(files)}",
+        f"- broken links (real): {len(real_broken)}   (wiki/_commands/ link scanning skipped, those files only contain prompt examples)",
+        *([f"- broken links fixed: {links_remapped} remapped, {links_delinked} de-linked"
+           + (" (dry-run, no files written)" if args.dry_run else "")] if args.fix_links else []),
+        f"- external / raw references (informational): {len(external_refs)}",
+        f"- orphan files: {len(orphans)}",
+        f"- stale summaries: {len(stale)}",
+        f"- frontmatter issues: {len(fm_issues)}",
+    ]
+    if args.fix:
+        lines.append(f"- frontmatter fixes applied (or would apply): {len(fixed)}")
+    lines.append("")
+
+    def section(title, items, fmt, limit=150):
+        lines.append(f"## {title} ({len(items)})\n")
+        for it in items[:limit]:
+            lines.append(fmt(it))
+        if len(items) > limit:
+            lines.append(f"_... +{len(items) - limit} more_")
+        lines.append("")
+
+    if real_broken:
+        section("Real broken links (actionable)", real_broken,
+                lambda x: f"- `{x[0].relative_to(VAULT)}` → `[[{x[1]}]]`")
+    else:
+        lines.append("## Real broken links (actionable)\nNone found after suppressing template noise.\n")
+
+    # Missing pages: unresolved targets grouped by demand. These are entity-page
+    # candidates (concepts the wiki keeps naming but nobody has written), not errors.
+    missing_counter = Counter(t for _, t in real_broken)
+    if missing_counter:
+        lines.append(f"## Missing pages (entity candidates, by demand) ({len(missing_counter)})\n")
+        for target, n in missing_counter.most_common():
+            lines.append(f"- `[[{target}]]` wanted {n}x")
+        lines.append("")
+
+    if external_refs:
+        section("External / raw / Kolay references (usually intentional)", external_refs,
+                lambda x: f"- `{x[0].relative_to(VAULT)}` → `[[{x[1]}]]` (outside wiki)")
+
+    section("Orphan files (no links in or out)", orphans,
+            lambda p: f"- `{p.relative_to(VAULT)}`")
+
+    section("Stale summaries (source newer than wiki copy)", stale,
+            lambda x: f"- `{x[0].relative_to(VAULT)}` (source `{x[1].relative_to(VAULT)}`)")
+
+    if fm_issues:
+        section("Missing frontmatter (lang, summary_en, compiled_at)", fm_issues,
+                lambda x: f"- `{x[0].relative_to(VAULT)}` missing: {', '.join(x[1])}")
+
+    if args.fix and fixed:
+        lines.append("## Frontmatter fixes " + ("(dry-run, no files written)" if args.dry_run else "(applied)") + f" ({len(fixed)})\n")
+        for p, keys in fixed[:100]:
+            lines.append(f"- `{p.relative_to(VAULT)}` ← added {', '.join(keys)}")
+        if len(fixed) > 100:
+            lines.append(f"_... +{len(fixed)-100} more_")
+        lines.append("")
+
+    # Actionable recommendations (concise)
+    lines.append("## Recommended actions\n")
+    recs = []
+    if real_broken:
+        recs.append("1. Create entity pages for the most-wanted missing pages above (highest demand first); "
+                    "remap or alias genuine path mistakes. De-linking is opt-in via --prune-links.")
+    if fm_issues and not args.fix:
+        recs.append("2. Run `python3 tools/lint_wiki.py --fix` to backfill frontmatter on legacy files (safe for summaries/digests/articles).")
+    if fixed and args.dry_run:
+        recs.append("2. Re-run without --dry-run to apply the frontmatter changes shown above.")
+    if stale:
+        recs.append("3. Re-run `python3 tools/compile_resources.py` (or the affected phase) for stale summaries.")
+    if not recs:
+        recs.append("No high-priority hygiene issues detected.")
+    for r in recs:
+        lines.append(r)
+    lines.append("")
+
+    # Pages that are the model talking about itself (tools/output_guard.py).
+    # With --fix, a compiled page gets a sources_hash that matches nothing, so the
+    # next compile rebuilds it; a digest or a filed query cannot be rebuilt, so it is listed.
+    import output_guard
+    junk = []
+    for p in files:
+        if "_commands" in p.parts or "_index" in p.parts:
+            continue
+        found = output_guard.problems(p.read_text(errors="replace", encoding="utf-8"))
+        if found:
+            junk.append((p, found[0]))
+    requeued = []
+    if args.fix and not args.dry_run:
+        for p, _ in junk:
+            if p.relative_to(WIKI).parts[0] in ("summaries", "entities", "projects"):
+                # A hash that matches no source set: removing it would fall back
+                # to file dates, which a fresh write makes look current.
+                text = p.read_text(encoding="utf-8")
+                if re.search(r"^sources_hash:", text, re.M):
+                    new = re.sub(r"^sources_hash:.*$", "sources_hash: 000000", text, count=1, flags=re.M)
+                else:
+                    new = re.sub(r"\A---\n", "---\nsources_hash: 000000\n", text, count=1)
+                if new != text:
+                    atomic_write(p, new)
+                    requeued.append(p)
+    lines += ["## Model output instead of content", ""]
+    if junk:
+        lines += [f"- `{p.relative_to(WIKI)}`: {why}" + (" (queued for recompile)" if p in requeued else "")
+                  for p, why in junk]
+        lines += ["", "Compiled pages are rebuilt after `lint_wiki.py --fix`; digests and filed queries "
+                      "need a hand edit.", ""]
+    else:
+        lines += ["None.", ""]
+
+    # Graph health and merge proposals: rates and candidates, never actions.
+    metrics, dupes = {}, []
+    try:
+        import wiki_metrics
+        import wiki_dedupe
+        metrics = wiki_metrics.compute()
+        lines += wiki_metrics.markdown(metrics)
+        dupes = wiki_dedupe.proposals()
+        lines += wiki_dedupe.markdown(dupes)
+    except Exception as e:  # the report must still be written
+        lines += [f"_graph health / dedupe skipped: {e}_", ""]
+
+    out = WIKI / "_lint-report.md"
+    atomic_write(out, "\n".join(lines))
+    print(f"[ok] {out.relative_to(VAULT)}")
+    print(f"real_broken={len(real_broken)} placeholders_suppressed={placeholder_count} "
+          f"external={len(external_refs)} orphans={len(orphans)} stale={len(stale)} "
+          f"fm_issues={len(fm_issues)} fixed={len(fixed)}")
+    if metrics:
+        print(f"orphan_rate={metrics['orphan_rate']} avg_degree={metrics['avg_degree']} "
+              f"main_share={metrics['main_share']} components={metrics['components']} dupes={len(dupes)}")
+    print(f"RUNLOG broken={len(real_broken)} orphans={len(orphans)} fixed={len(fixed)} dupes={len(dupes)} "
+          f"junk={len(junk)}")
+
+
+if __name__ == "__main__":
+    main()

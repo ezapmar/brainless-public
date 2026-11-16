@@ -1,0 +1,62 @@
+# brainless public engine repo
+
+# Secrets and credentials
+*.key
+*.pem
+*.p12
+*service_account*
+*_token.json
+*.credentials.json
+.env
+# Per-install settings (brainless.toml.example is the template)
+brainless.toml
+
+# Privacy: personal identity, health and official documents anywhere in the tree
+**/Official Docs/
+**/* - Health/
+**/*Passport*
+**/*Pasaport*
+**/Security Incidents/
+**/_local/
+
+# Machine noise
+.DS_Store
+venv/
+**/.venv/
+__pycache__/
+*.pyc
+.obsidian/workspace*.json
+
+# --- never absorb vault content ---
+Work/*
+Personal/*
+Library/*
+Inbox/*
+raw/*
+Archive/*
+Daily Briefings/*
+Thinking/**/*.md
+.wiki/summaries/*
+.wiki/articles/*
+.wiki/concepts/*
+.wiki/ideas/*
+.wiki/digests/*
+.wiki/projects/*
+.wiki/moc/*
+.wiki/entities/*
+.wiki/relationships/*
+.wiki/INDEX.md
+# Everything else the compiler writes (indexes, lint report, archive, logs):
+# generated, and the index pages name your own documents.
+.wiki/*.md
+.wiki/_*/
+!.wiki/_commands/
+_Agent-Context/*.md
+!_Agent-Context/AGENT-RULES.md
+!_Agent-Context/TRUNK-BASED-DEVELOPMENT.md
+!_Agent-Context/LLM-SYSTEM.md
+!_Agent-Context/PROFILE.md
+!_Agent-Context/LEARNINGS.md
+!**/.gitkeep
+logs/*
+.agents/state/*

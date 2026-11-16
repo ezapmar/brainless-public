@@ -1,0 +1,32 @@
+{
+  "summary_heading": "## Summary",
+  "status_heading": "## Status",
+  "links_heading": "## Links",
+  "open_threads_heading": "## Open Threads",
+  "decisions_heading": "## Decisions",
+  "cross_effects_heading": "## Cross-effects (if any)",
+  "entity_summary_heading": "## Summary",
+  "entity_timeline_heading": "## Timeline",
+  "entity_open_items_heading": "## Open Items",
+  "entity_relations_heading": "## Relationships",
+  "entity_sources_heading": "## Sources",
+  "concept_explanation_heading": "## Explanation",
+  "concept_position_heading": "## Current Position",
+  "concept_contested_heading": "## Contested",
+  "concept_superseded_heading": "## Superseded",
+  "concept_open_heading": "## Open Questions",
+  "concept_related_heading": "## Related",
+  "concept_ping_intro": "The compiler proposes {n} new concept(s):",
+  "concept_ping_personal": "{n} personal proposal(s), details in the vault only.",
+  "concept_ping_howto": "To accept one, change its status from proposed to active in _Agent-Context/concepts.md.",
+  "private_name_parts": [
+    "passport",
+    "schengen"
+  ],
+  "overview_title": "The vault's current thesis",
+  "overview_generated": "Compiled from the concept pages by tools/compile_resources.py. Do not edit by hand; every claim rests on a concept page.",
+  "overview_claims_heading": "## What we currently hold",
+  "overview_contested_heading": "## Contested",
+  "overview_open_heading": "## Open, what needs settling",
+  "overview_pointer": "the vault's current thesis, compiled from the concept pages. What we hold, where it conflicts and what needs settling, on one page."
+}

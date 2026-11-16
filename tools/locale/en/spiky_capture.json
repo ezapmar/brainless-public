@@ -1,0 +1,5 @@
+{
+  "default_title": "Spiky Report",
+  "default_name": "Report",
+  "note_header": "# {title}\n\nDate: {when}\nSource: Spiky report (email ingest, worker)\n\n---\n\n"
+}

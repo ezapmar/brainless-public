@@ -1,0 +1,7 @@
+{
+  "illegible_marker": "[okunmuyor]",
+  "slug_fallback": "not",
+  "handwritten_footer": "Kaynak: El yazısı notu (Inbox), {stamp}",
+  "notify_rebase_cleaned": "Yarim kalan rebase temizlendi, elle senkron gerekiyor",
+  "notify_pull_conflict": "Pull cakismasi: elle senkron gerekiyor"
+}

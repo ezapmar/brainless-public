@@ -1,0 +1,341 @@
+#!/usr/bin/env python3
+import os
+import re
+import glob
+import json
+import subprocess
+from datetime import datetime
+import shutil
+import sys
+
+# Configuration
+from paths import folder, vault_root
+import frontmatter
+import tasks_ledger
+VAULT_ROOT = vault_root()
+CAPTURE_DIR = os.path.join(VAULT_ROOT, folder("daily"))
+ARCHIVE_DIR = os.path.join(VAULT_ROOT, 'Archive/Daily-Captures')
+DIGESTS_DIR = os.path.join(VAULT_ROOT, '.wiki/digests')
+PROJECTS_WORK_DIR = os.path.join(VAULT_ROOT, 'Work')
+PROJECTS_PERSONAL_DIR = os.path.join(VAULT_ROOT, 'Personal')
+from llm import run_prompt
+from owner_profile import OWNER, lang_name, CROSS_LINK_RULE
+from i18n import t, t_list
+
+
+# Digest budget. Every capture used to enter the prompt whole, so one heavy day
+# blew the context, and every note, however small, got the same narrative
+# treatment. note_classify.py's label now sets the size: a task is one sitting
+# of work and needs no story, only its action items; a story gets three lines;
+# an epic is read in full, because weekly_research.py builds on it on Sunday.
+PER_FILE_CAP = 4000
+EPIC_FILE_CAP = 8000
+TOTAL_CAP = 24000          # the same ceiling weekly_reconcile.py uses
+BUDGET = {
+    "task": "do NOT narrate it under Daily Notes; extract its action items only",
+    "story": "at most 3 lines under Daily Notes",
+    "epic": "full treatment: enrich, connect, cross-link",
+}
+
+
+def get_daily_notes():
+    patterns = ['*.md', '*.txt', '*.log']
+    files = []
+    for p in patterns:
+        files.extend(glob.glob(os.path.join(CAPTURE_DIR, p)))
+    return files
+
+def read_projects():
+    projects = []
+    for base, label in [(PROJECTS_WORK_DIR, 'work'), (PROJECTS_PERSONAL_DIR, 'personal')]:
+        if os.path.exists(base):
+            for name in os.listdir(base):
+                proj = os.path.join(base, name)
+                # Only real projects (folders with a notes.md), not area/doc homes.
+                if os.path.isdir(proj) and os.path.exists(os.path.join(proj, 'notes.md')):
+                    projects.append(f"[[{name}]] ({label})")
+    return projects
+
+def write_digest(path, summary):
+    """Write the day's digest; a second digest on the same day is appended.
+
+    The worker digests once a night, but a laptop can digest twice (a tick
+    after a late note, a manual run), and the second write used to replace
+    the first while its captures were already archived: that day's digest was
+    lost (lite install test, 2026-09-26). The later part keeps its own heading
+    and drops its frontmatter, so the file still has one.
+    """
+    if not os.path.exists(path):
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(summary)
+        return
+    body = frontmatter.strip(summary).lstrip("\n")
+    stamp = datetime.now().strftime("%H:%M")
+    with open(path, "a", encoding="utf-8") as f:
+        f.write(f"\n\n---\n\n<!-- later digest, {stamp} -->\n{body}")
+
+
+def process_notes(files, labels=None):
+    labels = labels or {}
+    raw_content = ""
+    for f in files:
+        label = labels.get(os.path.basename(f), "story")
+        cap = EPIC_FILE_CAP if label == "epic" else PER_FILE_CAP
+        try:
+            with open(f, 'r', encoding="utf-8") as file:
+                raw_content += f"\n--- Source: {os.path.basename(f)} [{label}] ---\n"
+                raw_content += file.read()[:cap]
+                raw_content += "\n"
+        except Exception as e:
+            print(f"Error reading {f}: {e}")
+    raw_content = raw_content[:TOTAL_CAP]
+
+    projects = read_projects()
+    date_str = datetime.now().strftime("%Y-%m-%d")
+
+    prompt = f"""
+You are the processor for the 'brainless' Second Brain system.
+Today's Date: {date_str}
+
+RAW NOTES CAPTURED TODAY:
+{raw_content}
+
+TASKS:
+1. Enrich the notes: Clean up typos, expand shorthand, and organize logically.
+2. Research connections: Link to existing projects if mentioned. Known projects: {', '.join(projects)}.
+3. Output a structured daily digest in English.
+4. Cross-link personal↔work effects explicitly. {CROSS_LINK_RULE}
+
+WEIGHT BUDGET. Each source header carries a tag set by a classifier, not by you.
+The budget is not optional; a digest that narrates every errand is the failure
+this system exists to avoid.
+- [task]: {BUDGET['task']}.
+- [story]: {BUDGET['story']}.
+- [epic]: {BUDGET['epic']}.
+
+OUTPUT STRUCTURE:
+---
+lang: en
+compiled_at: {date_str}
+source: {folder('daily')}/
+---
+# {date_str} - Daily Digest
+## Executive Summary (3 sentences)
+## Daily Notes (cleaned and enriched)
+## Connections (linked projects and ideas, link to .wiki/articles/ and .wiki/projects/)
+## Personal↔Work Cross-effects (if any)
+## Action Items (extractions for TASKS.md)
+(Only {OWNER}'s OWN next actions, one per line as "- [ ] ...", imperative, max 12 words each, {lang_name()}. No tags, no wikilinks, no tasks that belong to other people. Skip vague items.)
+
+Output ONLY the markdown content. No preamble.
+"""
+
+    # Phase 0 T3: through tools/llm.py (tool-deny list, llm_status breadcrumb,
+    # provider switch). The digest prompt is text only, so no tools are needed.
+    try:
+        result = run_prompt(prompt, timeout=600, lane="nightly")
+    except Exception as e:
+        print(f"Exception: {e}")
+        return None
+    if not result:
+        print("Error calling the LLM (see .agents/state/llm_status)")
+        return None
+    return result.strip()
+
+
+TASKS_FILE = os.path.join(VAULT_ROOT, '_Agent-Context/TASKS.md')
+TASKS_SECTION = t("nightly_processor.tasks_section")
+# Existing ledgers may carry the heading in another language; accept all of them.
+TASKS_SECTIONS = t_list("nightly_processor.tasks_section")
+
+
+def _clean_task(text, limit=160):
+    """Single-line, pipe-free, tag-free title so gtasks_sync/task_reminder parse it
+    and Google Tasks gets a readable title. Mirrors spiky_actions._clean_field."""
+    text = re.sub(r"\s#(?!\d+\b)[\w/-]+", "", text)    # drop #tags; "#4802366" is a ticket, not a tag
+    text = re.sub(r"\(from \d{4}-\d{2}-\d{2}\)", "", text)
+    text = re.sub(r"[\r\n\t]+", " ", text)
+    text = text.replace("|", "/").replace("[[", "(").replace("]]", ")")
+    return re.sub(r"\s{2,}", " ", text).strip().rstrip(".")[:limit]
+
+
+def sync_tasks(summary, date_str):
+    """Append the digest's action items to _Agent-Context/TASKS.md under the
+    promises section in the ledger format `- [ ] text | [[source]] | date`, so
+    gtasks_sync (Google Tasks) and task_reminder (Telegram) see them. The
+    ledger module holds the lock and the near-duplicate guard."""
+    if "## Action Items" not in summary:
+        return
+    task_section = summary.split("## Action Items", 1)[1]
+    raw = [re.sub(r"^- \[ \]\s*", "", line.strip()) for line in task_section.splitlines()
+           if line.strip().startswith("- [ ]")]
+    titles = [t for t in (_clean_task(r) for r in raw) if t]
+    if not titles:
+        return
+    added, dropped = [], []
+    with tasks_ledger.edit(TASKS_FILE) as ledger:
+        for title in titles:
+            (added if ledger.add("promises", title, date_str, date_str) else dropped).append(title)
+    if dropped:
+        print(f"Tasks: {len(dropped)} near-duplicate(s) dropped: "
+              + "; ".join(d[:50] for d in dropped[:5]))
+    if not added:
+        print("Tasks: nothing new (all already in ledger)")
+        return
+    print(f"Synced {len(added)} tasks to _Agent-Context/TASKS.md")
+
+
+NOTE_TAGS = os.path.join(VAULT_ROOT, '.agents/state/note_tags.jsonl')
+
+
+def weight_block(date_str):
+    """A deterministic '#type/...' line per note classified for this date.
+
+    The digest itself is one LLM blob, so asking the model to tag each entry
+    would be unreliable and unverifiable. These tags come straight from
+    note_classify.py's state file instead, which is also what weekly_research.py
+    reads, so what the digest shows and what triggers research cannot drift.
+    Returns "" when nothing was classified, so the digest is unchanged.
+    """
+    latest = {}
+    try:
+        with open(NOTE_TAGS, errors="replace") as fh:
+            lines = fh.readlines()
+    except OSError:
+        return ""
+    for line in lines:
+        try:
+            rec = json.loads(line)
+        except ValueError:
+            continue
+        if rec.get("date") == date_str:
+            latest[rec.get("path")] = rec  # append-only file: the last line wins
+    if not latest:
+        return ""
+    out = ["", "## " + t("nightly_processor.weight_heading"), ""]
+    for path, rec in sorted(latest.items()):
+        out.append(f"- `{path}` #type/{rec.get('label', 'task')} "
+                   f"(score {rec.get('score')}, {rec.get('method')})")
+    if any(r.get("label") == "epic" for r in latest.values()):
+        out.append("")
+        out.append(t("nightly_processor.weight_epic_note"))
+    return "\n".join(out) + "\n"
+
+
+def classify_today(notes):
+    """Label the day's captures before the digest reads them.
+
+    note_classify.py runs on its own timer at 06:40 and tags a note with the
+    note's own date, so at 23:00 tonight's captures are still unlabelled and
+    the weight block could only report them the next morning. Running it here
+    first means the labels exist when the prompt is built. Stage A is
+    deterministic and instant; stage B calls a model only for epic candidates,
+    and the morning run then finds these paths in state and skips them.
+    """
+    try:
+        subprocess.run(
+            [sys.executable, os.path.join(VAULT_ROOT, 'tools/note_classify.py'), '--days', '1'],
+            cwd=VAULT_ROOT, check=False, timeout=900,
+        )
+    except Exception as e:
+        print(f"note_classify skipped: {e}")
+    wanted = {os.path.relpath(f, VAULT_ROOT): os.path.basename(f) for f in notes}
+    labels = {}
+    try:
+        with open(NOTE_TAGS, errors="replace") as fh:
+            for line in fh:
+                try:
+                    rec = json.loads(line)
+                except ValueError:
+                    continue
+                name = wanted.get(rec.get("path"))
+                if name:
+                    labels[name] = rec.get("label", "task")  # append-only: last line wins
+    except OSError:
+        pass
+    return labels
+
+
+def budget_line(notes, labels):
+    counts = {"task": 0, "story": 0, "epic": 0}
+    for f in notes:
+        counts[labels.get(os.path.basename(f), "story")] += 1
+    return t("nightly_processor.budget_line", tasks=counts["task"], stories=counts["story"],
+             epics=counts["epic"], per_file=PER_FILE_CAP, total=TOTAL_CAP)
+
+
+def main():
+    if not os.path.exists(CAPTURE_DIR):
+        os.makedirs(CAPTURE_DIR)
+
+    notes = get_daily_notes()
+    if not notes:
+        # Heartbeat line: health_check.py watches this log's mtime to know
+        # the job is alive even on days with nothing to process.
+        print(f"{datetime.now()}: No capture files.")
+        # Counted, so a capture path that died shows up as days of zeros
+        # (tools/run_log.py, health_check dry-capture row).
+        print("RUNLOG captures=0 digest=0")
+        return
+
+    print(f"{datetime.now()}: Processing {len(notes)} files...")
+    labels = classify_today(notes)
+    summary = process_notes(notes, labels)
+    # A digest that is the model talking about its tools is not a digest
+    # (tools/output_guard.py): treat it as no digest, keep the captures.
+    try:
+        import output_guard
+        if summary:
+            clean = output_guard.strip_preamble(summary)
+            if clean != summary:
+                print("Digest: dropped the model's preamble before the frontmatter")
+                summary = clean
+        if summary and output_guard.is_bad(summary):
+            print(f"Digest refused: {'; '.join(output_guard.problems(summary))}")
+            summary = None
+    except ImportError:
+        pass
+
+    if summary:
+        date_str = datetime.now().strftime("%Y-%m-%d")
+        summary = summary.rstrip() + "\n" + weight_block(date_str) + "\n" + budget_line(notes, labels) + "\n"
+        date_filename = date_str + ".md"
+        os.makedirs(DIGESTS_DIR, exist_ok=True)
+        output_path = os.path.join(DIGESTS_DIR, date_filename)
+
+        try:
+            write_digest(output_path, summary)
+            print(f"Summary saved to {output_path}")
+
+            # Sync tasks to central file
+            sync_tasks(summary, date_str)
+
+            date_archive_dir = os.path.join(ARCHIVE_DIR, datetime.now().strftime("%Y-%m-%d"))
+            os.makedirs(date_archive_dir, exist_ok=True)
+            for f in notes:
+                shutil.move(f, date_archive_dir)
+            print(f"Archived {len(notes)} files.")
+
+            # The wiki compile, index and retrieval check run in their own unit
+            # (tools/nightly_compile.py, brainless-compile.timer): here they ran
+            # only on nights with captures and a good digest, so a quiet day
+            # left edits in the human homes uncompiled.
+            print(f"RUNLOG captures={len(notes)} digest=1")
+        except Exception as e:
+            print(f"Error: {e}")
+            print(f"RUNLOG captures={len(notes)} digest=0 status=fail")
+            sys.exit(1)
+    else:
+        print("Failed to generate summary.")
+        print(f"RUNLOG captures={len(notes)} digest=0 status=fail")
+        if shutil.which("osascript"):  # macOS-only notification
+            import subprocess as _sp
+            _sp.run(["osascript", "-e",
+                     'display notification "Nightly processor: Claude returned no summary" with title "brainless"'],
+                    check=False)
+        # A digest that did not happen is a failed run, not a quiet one: exit 1
+        # so OnFailure reaches #ops. The captures stay in place for tomorrow.
+        sys.exit(1)
+
+if __name__ == "__main__":
+    main()

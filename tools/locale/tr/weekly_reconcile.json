@@ -1,0 +1,10 @@
+{
+  "heading_stale": "## Bayat veya Yanlış Görünen",
+  "heading_missing": "## Eksik Yeni Gelişmeler",
+  "heading_proposed": "## Önerilen Güncellemeler",
+  "no_drift": "Drift yok, CONTEXT güncel.",
+  "no_drift_marker": "Drift yok",
+  "report_title": "# CONTEXT Drift Raporu",
+  "report_intro": "> Oluşturulma: {date}. Rapor salt öneridir; CONTEXT.md'yi {owner} onayıyla güncelleyin.",
+  "notify_text": "Haftalık CONTEXT mutabakatı hazır: drift bulundu"
+}

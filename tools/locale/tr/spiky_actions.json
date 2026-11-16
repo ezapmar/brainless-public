@@ -1,0 +1,5 @@
+{
+  "tasks_header": "# Görev Defteri\n\nTek görev defteri. Toplantı sözleri Spiky raporlarından (spiky_actions.py), günlük capture aksiyonları nightly digest'ten (nightly_processor.py) otomatik düşer; ikisi de {worker}'de.\nKapatmak için checkbox'ı işaretle veya Google Tasks'ta tamamla; 30 dk içinde iki yön senkronlanır.",
+  "section_promises": "## Sözlerim",
+  "section_waiting": "## Bekliyorum"
+}

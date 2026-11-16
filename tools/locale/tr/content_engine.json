@@ -1,0 +1,8 @@
+{
+  "draft_word": "Taslak",
+  "drafts_filename": "{stamp} haftalik taslaklar.md",
+  "file_title": "# Haftalık İçerik Taslakları ({stamp})",
+  "file_source_line": "Kaynak: content_engine.py ({worker}). Yayın kararı ve düzenleme {owner} tarafında.",
+  "telegram_header": "✍️ Haftalık içerik taslakları hazır:",
+  "telegram_vault_line": "Vault: Inbox/Content Drafts/{filename}"
+}

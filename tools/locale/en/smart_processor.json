@@ -1,0 +1,7 @@
+{
+  "illegible_marker": "[illegible]",
+  "slug_fallback": "note",
+  "handwritten_footer": "Source: Handwritten note (Inbox), {stamp}",
+  "notify_rebase_cleaned": "Half-finished rebase cleaned up, manual sync needed",
+  "notify_pull_conflict": "Pull conflict: manual sync needed"
+}

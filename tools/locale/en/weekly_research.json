@@ -1,0 +1,17 @@
+{
+  "no_epic": "No epic in the window. Research skipped, no tokens spent.",
+  "chosen": "Epic chosen: {title} (language: {language})",
+  "repeat_skip": "Already researched: '{title}' on {date}. Not researched again; the recurrence is reported.",
+  "pass_failed": "Pass '{pass_name}' returned nothing; continuing with what is in hand.",
+  "web_skipped": "--no-web: the salvo pass was skipped, no sources were read.",
+  "dropped": "{n} finding lines had no source label and were dropped before synthesis.",
+  "filed": "Report filed: {path}",
+  "trigger_heading": "## Tetikleyen epic",
+  "trigger_body": "Note: `{path}` | score {score}\nSignals: {signals}",
+  "no_findings": "## Bulgular\n\nNo sources were read in this run (no web access), so there is no evidence. Absence of evidence is not evidence.",
+  "unverified_heading": "## Doğrulanmamış (sentezde kullanılmadı)",
+  "deferred_heading": "## Ertelenen epic'ler",
+  "candidates_heading": "## Aday kaynaklar ({added} new, approval required)",
+  "stale_heading": "## Verim vermeyen kaynaklar (demote candidates)",
+  "recurrence_body": "## Tekrar eden epic\n\n**{title}**\n\nThis topic has now surfaced {times} times. It was researched on {first_date}: `{report}`.\n\nNo new research was run, by design (the repeat block). The recurrence itself is the finding: a topic that keeps coming back without closing is not waiting for more evidence, it is waiting for a decision.\n\nTriggering note: `{path}`\n\n## Öneri\n\nRe-read the earlier report and either take the decision or write down what is blocking it."
+}

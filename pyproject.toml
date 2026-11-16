@@ -1,0 +1,26 @@
+# Project metadata and tool configuration for the brainless engine.
+# Dependencies stay in requirements-*.txt (core, search, google); this file is
+# read by ruff and by nothing else yet. The engine is run as scripts
+# (python3 tools/<name>.py), not installed as a package.
+[project]
+name = "brainless"
+dynamic = ["version"]
+description = "A personal knowledge engine: raw notes in, compiled wiki out."
+requires-python = ">=3.11"
+readme = "README.md"
+license = { file = "LICENSE" }
+
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+extend-exclude = [".smart-env", "_Backup", "Archive"]
+
+[tool.ruff.lint]
+# Correctness first: pyflakes (F), pycodestyle errors (E), bugbear (B).
+# Style rules can come later; E501 is off because long prose comments are
+# the house style in this code.
+select = ["E", "F", "W", "B"]
+ignore = ["E501", "E402", "B007", "B905", "E731"]
+
+[tool.ruff.lint.per-file-ignores]
+"tools/tests/*" = ["B018"]
