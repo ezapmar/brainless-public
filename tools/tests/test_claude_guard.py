@@ -91,6 +91,17 @@ class HumanAreas(unittest.TestCase):
     def test_raw_corpus_is_strictly_denied(self):
         self.assertEqual(write(ROOT / "raw/clipping.md", "hi")[0], "deny")
         self.assertEqual(edit(ROOT / "raw/Medium Posts/post.md", "a", "b")[0], "deny")
+        for cmd in (
+            "echo hi > raw/clipping.md",
+            "cat x >> raw/clipping.md",
+            "printf x | tee raw/clipping.md",
+            "mv a.md raw/a.md",
+            "cp a.md raw/a.md",
+            "sed -i '' 's/a/b/' raw/a.md",
+        ):
+            self.assertEqual(bash(cmd)[0], "deny", cmd)
+        for cmd in ("ls -la raw/", "grep foo raw/a.md", "cat raw/a.md"):
+            self.assertIsNone(bash(cmd)[0], cmd)
 
 
 class Secrets(unittest.TestCase):

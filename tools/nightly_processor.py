@@ -328,11 +328,8 @@ def main():
     else:
         print("Failed to generate summary.")
         print(f"RUNLOG captures={len(notes)} digest=0 status=fail")
-        if shutil.which("osascript"):  # macOS-only notification
-            import subprocess as _sp
-            _sp.run(["osascript", "-e",
-                     'display notification "Nightly processor: Claude returned no summary" with title "brainless"'],
-                    check=False)
+        import mac_notify
+        mac_notify.notify("Nightly processor: Claude returned no summary", "brainless")
         # A digest that did not happen is a failed run, not a quiet one: exit 1
         # so OnFailure reaches #ops. The captures stay in place for tomorrow.
         sys.exit(1)

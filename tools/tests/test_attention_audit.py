@@ -35,18 +35,21 @@ class AttentionAuditTest(unittest.TestCase):
             (root / "_Agent-Context").mkdir()
             (root / "_Agent-Context" / "PROJECTS-ACTIVE.md").write_text(SAMPLE_PROJECTS, encoding="utf-8")
 
+            # Activity on Pricing Review + an unstated Work/Side Quest folder, none on Garden Shed.
             (root / "Thinking" / "Daily").mkdir(parents=True)
             (root / "Thinking" / "Daily" / "2026-11-23.md").write_text(
                 "Reviewed Pricing Review numbers today.\n", encoding="utf-8"
             )
             (root / "Work" / "Side Quest").mkdir(parents=True)
             (root / "Work" / "Side Quest" / "draft.md").write_text("Working on side quest.\n", encoding="utf-8")
-            # Protected home must never surface in ATTENTION.md.
+            # Protected home must never surface in ATTENTION.md, even via symlink.
             (root / "Personal" / "Official Docs").mkdir(parents=True)
-            (root / "Personal" / "Official Docs" / "passport.md").write_text("Private.\n", encoding="utf-8")
+            secret_doc = root / "Personal" / "Official Docs" / "passport.md"
+            secret_doc.write_text("Private.\n", encoding="utf-8")
+            (root / "Work" / "Side Quest" / "linked-secret.md").symlink_to(secret_doc)
 
             now = datetime.now()
-            _, summary = aa.run_audit(root, days=7, dry_run=False, now=now)
+            report, summary = aa.run_audit(root, days=7, dry_run=False, now=now)
 
             self.assertEqual(summary["stated"], 2)
             self.assertEqual(summary["active"], 1)

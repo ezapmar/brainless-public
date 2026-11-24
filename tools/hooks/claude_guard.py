@@ -47,6 +47,12 @@ DESTRUCTIVE_GIT = re.compile(
     r"checkout\s+(?:--\s+)?\.(?:\s|$)|restore\s+\.)")
 RM_CMD = re.compile(r"(?:^|[;&|(]\s*|\bxargs\s+|\bsudo\s+)rm\s+([^;&|)]*)")
 FIND_DELETE = re.compile(r"\bfind\b[^;&|]*\s-delete\b")
+RAW_BASH_WRITE = re.compile(
+    r"(?:>>?\s*['\"]?(?:[^;&|'\"]*/)?raw(?:/|\b)|"
+    r"\b(?:tee|truncate|mv|cp|ln|touch|chmod|chown)\b[^;&|]*[\s'\"/]raw(?:/|\b)|"
+    r"\bdd\b[^;&|]*\bof=['\"]?(?:[^;&|'\"]*/)?raw(?:/|\b)|"
+    r"\bsed\b[^;&|]*\s-i[^;&|]*[\s'\"/]raw(?:/|\b))"
+)
 
 
 # ─── output ──────────────────────────────────────────────────────
@@ -140,7 +146,7 @@ def check_write(tool: str, ti: dict):
                         "(AGENT-RULES, Briefing Convention).")
     if r.startswith(IMMUTABLE_AREAS):
         return "deny", (f"{r} is in raw/, which is a read-only source corpus. "
-                        f"Never edit or overwrite raw sources (CLAUDE.md, ownership).")
+                        f"Never edit or overwrite raw sources (CLAUDE.md, Sahiplik).")
     if r.startswith(HUMAN_AREAS) and not r.startswith(drafts_dirs()):
         return "ask", (f"{r} is in a human area. The owner approves every write there "
                        f"(CLAUDE.md, Sahiplik).")
@@ -161,6 +167,8 @@ def check_bash(ti: dict):
     label = secret_in(cmd)
     if label:
         return "deny", f"This command contains what looks like a {label}. Read it from its file instead."
+    if RAW_BASH_WRITE.search(cmd):
+        return "deny", "raw/ is a read-only source corpus. Shell writes, moves, or redirects into raw/ are denied."
     if DESTRUCTIVE_GIT.search(cmd) or FIND_DELETE.search(cmd):
         return "ask", "This command deletes or rewrites history. Deletions need the owner's yes."
     for m in RM_CMD.finditer(cmd):

@@ -167,7 +167,7 @@ def main():
     # imaplib was left out of PEP 476: without an ssl_context the certificate is NOT
     # verified (CERT_NONE). An active MITM on the office network could steal the app
     # password. Verify it.
-    M = imaplib.IMAP4_SSL("imap.gmail.com", ssl_context=ssl.create_default_context())
+    M = imaplib.IMAP4_SSL("imap.gmail.com", ssl_context=ssl.create_default_context(), timeout=30)
     M.login(addr, pw)
     folder = "INBOX"
     if args.backfill:

@@ -604,7 +604,7 @@ def main():
         lines.append("")
 
     if external_refs:
-        section("External / raw / Kolay references (usually intentional)", external_refs,
+        section("External / raw / company references (usually intentional)", external_refs,
                 lambda x: f"- `{x[0].relative_to(VAULT)}` → `[[{x[1]}]]` (outside wiki)")
 
     section("Orphan files (no links in or out)", orphans,

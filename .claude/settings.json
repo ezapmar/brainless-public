@@ -3,7 +3,8 @@
     "deny": [
       "Edit(raw/**)",
       "Write(raw/**)",
-      "Bash(curl:*)"
+      "Bash(curl:*)",
+      "Bash(wget:*)"
     ]
   },
   "hooks": {

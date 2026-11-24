@@ -133,12 +133,9 @@ REPORT FORMAT (markdown, use exactly these headings):
     emit(report=1)
 
     no_drift = any(m in result for m in t_list("weekly_reconcile.no_drift_marker"))
-    if not no_drift and shutil.which("osascript"):  # macOS-only notification
-        subprocess.run(
-            ["osascript", "-e",
-             f'display notification "{t("weekly_reconcile.notify_text")}" with title "brainless"'],
-            check=False,
-        )
+    if not no_drift:
+        import mac_notify
+        mac_notify.notify(t("weekly_reconcile.notify_text"), "brainless")
     return 0
 
 

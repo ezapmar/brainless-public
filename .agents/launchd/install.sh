@@ -65,8 +65,14 @@ plist capture '<key>StartInterval</key><integer>120</integer><key>RunAtLoad</key
 plist hourly  '<key>StartInterval</key><integer>3600</integer><key>RunAtLoad</key><true/>' "$(job cron_wrapper.sh)"
 plist night   '<key>StartCalendarInterval</key><dict><key>Hour</key><integer>23</integer><key>Minute</key><integer>0</integer></dict>' "$(job night.sh)"
 if [ -f "$MODEL" ]; then
+  MMPROJ_ARGS=""
+  if [ -f "$MMPROJ" ]; then
+    MMPROJ_ARGS="<string>--mmproj</string><string>$MMPROJ</string>"
+  else
+    echo "vision projector not found at $MMPROJ: llm job will run text-only until it exists"
+  fi
   plist llm '<key>KeepAlive</key><true/><key>RunAtLoad</key><true/>' \
-    "<string>$LLAMA</string><string>-m</string><string>$MODEL</string><string>--mmproj</string><string>$MMPROJ</string><string>--alias</string><string>gemma-4-12b</string><string>--host</string><string>127.0.0.1</string><string>--port</string><string>8080</string><string>-c</string><string>32768</string><string>-np</string><string>1</string><string>--reasoning</string><string>off</string>"
+    "<string>$LLAMA</string><string>-m</string><string>$MODEL</string>${MMPROJ_ARGS}<string>--alias</string><string>gemma-4-12b</string><string>--host</string><string>127.0.0.1</string><string>--port</string><string>8080</string><string>-c</string><string>32768</string><string>-np</string><string>1</string><string>--reasoning</string><string>off</string>"
 else
   echo "model not found at $MODEL: llm job skipped, local lanes will fail until it exists"
 fi

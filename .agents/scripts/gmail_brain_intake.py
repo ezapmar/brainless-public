@@ -57,6 +57,17 @@ OUT_DIR = VAULT / "Inbox" / "Mail"
 REVIEW_FILE = VAULT / "_Agent-Context" / "GMAIL-REVIEW.md"
 DEFAULT_LABEL = os.environ.get("BRAINLESS_GMAIL_LABEL", "Brain")
 DEFAULT_LIMIT = 5
+IMAP_TIMEOUT = 30
+MAX_RAW_BYTES = 10 * 1024 * 1024
+MAX_BODY_CHARS = 100_000
+
+
+def quote_imap_mailbox(label: str) -> str:
+    """Validate and safely quote an IMAP mailbox/label name."""
+    if not label or any(ch in label for ch in ("\r", "\n", "\x00")):
+        raise ValueError("Invalid IMAP label name")
+    escaped = label.replace("\\", "\\\\").replace('"', '\\"')
+    return f'"{escaped}"'
 
 
 def _read_secret(path: Path) -> str | None:
@@ -183,6 +194,8 @@ def parse_message(raw_bytes: bytes) -> dict:
         body = html_to_text("\n\n".join(html_parts))
     body = re.sub(r"\r\n?", "\n", body)
     body = re.sub(r"\n{3,}", "\n\n", body).strip()
+    if len(body) > MAX_BODY_CHARS:
+        body = body[:MAX_BODY_CHARS].rstrip() + "\n\n[truncated at 100000 characters]"
 
     review_reasons: list[str] = []
     if attachments:
@@ -292,10 +305,9 @@ def append_review_items(items: list[dict], review_path: Path = REVIEW_FILE,
     new_lines = [f"\n\n## {checked}"]
     for it in items:
         reasons = "; ".join(it["review_reasons"])
-        subj = it["subject"].replace("\u2014", "-").replace("\u2013", "-")
-        new_lines.append(
-            f"- [ ] [[{it['note_rel']}]] ({subj}) from `{it['sender']}`: {reasons}"
-        )
+        # Omit raw sender addresses from _Agent-Context/ so privacy_scan never
+        # sees external contact e-mails outside Inbox/Mail/.
+        new_lines.append(f"- [ ] [[{it['note_rel']}]]: {reasons}")
     review_path.parent.mkdir(parents=True, exist_ok=True)
     atomic_write(review_path, existing + "\n".join(new_lines) + "\n")
 
@@ -363,10 +375,11 @@ def ingest_messages(raw_messages: list[bytes], label: str = DEFAULT_LABEL,
 def fetch_label_messages(addr: str, pw: str, label: str, limit: int) -> tuple[bool, list[bytes]]:
     """Connect read-only to Gmail IMAP and fetch recent messages in `label`.
     Returns (label_exists, raw_messages_newest_first)."""
-    M = imaplib.IMAP4_SSL("imap.gmail.com", ssl_context=ssl.create_default_context())
+    quoted_label = quote_imap_mailbox(label)
+    M = imaplib.IMAP4_SSL("imap.gmail.com", ssl_context=ssl.create_default_context(), timeout=IMAP_TIMEOUT)
     try:
         M.login(addr, pw)
-        typ, _ = M.select(f'"{label}"', readonly=True)
+        typ, _ = M.select(quoted_label, readonly=True)
         if typ != "OK":
             return False, []
         typ, data = M.uid("search", None, "ALL")
@@ -378,7 +391,15 @@ def fetch_label_messages(addr: str, pw: str, label: str, limit: int) -> tuple[bo
         window = uids[:max(limit * 5, 25)] if limit > 0 else uids
         messages: list[bytes] = []
         for uid in window:
-            typ, msgdata = M.uid("fetch", str(uid), "(RFC822)")
+            size = 0
+            styp, sdata = M.uid("fetch", str(uid), "(RFC822.SIZE)")
+            if styp == "OK" and sdata and sdata[0]:
+                raw_meta = sdata[0].decode(errors="ignore") if isinstance(sdata[0], bytes) else str(sdata[0])
+                sm = re.search(r"RFC822\.SIZE\s+(\d+)", raw_meta)
+                if sm:
+                    size = int(sm.group(1))
+            fetch_part = "(BODY.PEEK[HEADER])" if size > MAX_RAW_BYTES else "(RFC822)"
+            typ, msgdata = M.uid("fetch", str(uid), fetch_part)
             if typ == "OK" and msgdata and msgdata[0] and isinstance(msgdata[0], tuple):
                 messages.append(msgdata[0][1])
         return True, messages

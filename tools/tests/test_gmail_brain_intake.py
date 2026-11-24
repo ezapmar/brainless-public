@@ -98,6 +98,7 @@ class GmailBrainIntakeTest(unittest.TestCase):
             self.assertTrue(review_path.exists())
             review_text = review_path.read_text(encoding="utf-8")
             self.assertIn("agreement-v3.pdf", review_text)
+            self.assertNotIn("partner@example.com", review_text)
             note_text = next(out_dir.glob("*.md")).read_text(encoding="utf-8")
             self.assertIn("Please review the signed PDF attached.", note_text)
             self.assertIn("needs_review: true", note_text)
@@ -126,6 +127,19 @@ class GmailBrainIntakeTest(unittest.TestCase):
              mock.patch.object(gbi, "fetch_label_messages", return_value=(False, [])):
             rc = gbi.main(["--label", "Brain"])
             self.assertEqual(rc, 0)
+
+    def test_imap_label_quoting_rejects_crlf_and_escapes_quotes(self):
+        self.assertEqual(gbi.quote_imap_mailbox("Brain"), '"Brain"')
+        self.assertEqual(gbi.quote_imap_mailbox('My "Brain"\\Box'), '"My \\"Brain\\"\\\\Box"')
+        for bad in ("", "Brain\r\nLOGOUT", "Brain\nNOOP", "Brain\x00"):
+            with self.assertRaises(ValueError):
+                gbi.quote_imap_mailbox(bad)
+
+    def test_oversized_body_is_truncated(self):
+        huge = _make_plain("<huge@example.com>", "Huge Mail", "A" * (gbi.MAX_BODY_CHARS + 500))
+        rec = gbi.parse_message(huge)
+        self.assertIn("[truncated at 100000 characters]", rec["body"])
+        self.assertLessEqual(len(rec["body"]), gbi.MAX_BODY_CHARS + 64)
 
 
 if __name__ == "__main__":

@@ -60,7 +60,7 @@ fi
 [ -f .agents/state/no_push ] && exit 0
 
 for attempt in 1 2 3; do
-  git push origin master --quiet && exit 0
+  git push origin HEAD --quiet && exit 0
   sleep $((attempt * 30))
 done
 echo "$(date '+%F %T') push failed after 3 attempts; commits stay local until tomorrow"

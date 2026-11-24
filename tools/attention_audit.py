@@ -114,6 +114,7 @@ def parse_stated_priorities(text: str) -> list[dict]:
 def _iter_recent_markdown(root: Path, cutoff_ts: float, vault: Path) -> list[Path]:
     if not root.exists():
         return []
+    vault_resolved = vault.resolve()
     hits: list[Path] = []
     for p in root.rglob("*.md"):
         if any(part.startswith(".") for part in p.relative_to(root).parts):
@@ -122,7 +123,14 @@ def _iter_recent_markdown(root: Path, cutoff_ts: float, vault: Path) -> list[Pat
         if is_protected_path(rel):
             continue
         try:
-            if p.stat().st_mtime >= cutoff_ts:
+            resolved = p.resolve()
+            resolved_rel = resolved.relative_to(vault_resolved).as_posix()
+        except (OSError, ValueError):
+            continue
+        if is_protected_path(resolved_rel):
+            continue
+        try:
+            if resolved.stat().st_mtime >= cutoff_ts:
                 hits.append(p)
         except OSError:
             continue
