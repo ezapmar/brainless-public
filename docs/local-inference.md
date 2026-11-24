@@ -3,11 +3,17 @@
 > **In the loop:** [Keep it yours](../README.md#keep-it-yours). Keeping the model calls on your own hardware.
 
 The batch brain talks to a model through one door, `tools/llm.py`. By default that door
-leads to the `claude` CLI in the cloud. This guide is about the other door: running a
-model on the always-on worker itself, through the Goose CLI, so that some of the vault's
-prompts never leave the machine.
+leads to the `claude` CLI in the cloud. This guide is about the other door: a model
+running on the always-on worker itself, either as a local `llama-server` on loopback or
+through the Goose CLI, so that some of the vault's prompts never leave the machine.
 
-Two reasons to want it, and they pull in different directions:
+Routing has one source of truth since 2026-11-21: `brainless.toml` at the vault root,
+read by `tools/config.py`. `env.sh` no longer exports any lane variable, because two
+lists drift and the drift is silent until a prompt is already on its way to the cloud.
+An environment variable still overrides the file for a one-off run, and the same file
+also holds the fail-closed `local_only` list described below.
+
+Two reasons to want local inference, and they pull in different directions:
 
 - **Privacy.** A voice note about a doctor's appointment, a meeting transcript, a
   folder classification decision. Content that is nobody else's business, going through
@@ -16,14 +22,28 @@ Two reasons to want it, and they pull in different directions:
   with no wifi. A lane with a local fallback keeps producing, badly, instead of stopping.
 
 Privacy wants the local model as the **primary** for a lane. Resilience wants it as the
-**fallback** for a lane that normally runs in the cloud. Both are configured the same
-way and the difference is which side you put it on.
+**fallback** for a lane that normally runs in the cloud. Both are one key in
+`brainless.toml`, and the difference is which side you put it on.
 
 ---
 
 ## The provider
 
-`BRAINLESS_LLM_PROVIDER=goose` runs prompts through `goose run`. Goose is an agent
+A `llama-server` process on loopback is the default local provider. It serves an
+OpenAI-compatible API, which is why the provider name is `openai-compatible`:
+
+```toml
+# brainless.toml
+[llm]
+base_url = "http://127.0.0.1:8080/v1"
+model = "gemma-4-12b"
+```
+
+Point `tools/llm.py` at something else with the `openai-compatible` key, or with
+`BRAINLESS_LLM_BASE_URL` for one run. Nothing in a caller names a provider, so swapping
+the backend is one file.
+
+Goose is the second option. `goose` runs prompts through `goose run`. It is an agent
 harness, not a model. It bundles llama.cpp and its own model store, so a downloaded GGUF
 runs with no ollama daemon and no second service to supervise:
 
@@ -33,12 +53,15 @@ goose local-models download 'unsloth/Qwen3-4B-Instruct-2507-GGUF:Q4_K_M'
 goose local-models list
 ```
 
-The provider name for a downloaded model is `local`:
+The model name for a downloaded model is the provider name `local`:
 
-```bash
-export BRAINLESS_GOOSE_PROVIDER=local
-export BRAINLESS_GOOSE_MODEL='unsloth/Qwen3-4B-Instruct-2507-GGUF:Q4_K_M'
+```toml
+# brainless.toml: only when the goose provider is the one serving the model
+[llm.lanes.note-classify]
+provider = "goose"
+model = "unsloth/Qwen3-4B-Instruct-2507-GGUF:Q4_K_M"
 ```
+
 
 **Security.** Goose ships extensions, and the "developer" extension can run shell
 commands. Untrusted text flows through these prompts all day, so every call from
@@ -56,22 +79,46 @@ to `claude-cli` instead, and the log line says so.
 One global provider was too blunt an instrument. A four billion parameter model quantised
 to four bits answers "is this note a task, a story or an epic" about as well as anything
 needs to. It does not write a Turkish weekly synthesis anyone wants to read. So every
-call site in the vault names its lane, and each lane is routed separately:
+call site in the vault names its lane, and each lane is routed separately in
+`brainless.toml`:
+
+```toml
+[llm.lanes.note-classify]
+provider = "openai-compatible"
+
+[llm.lanes.spiky-actions]
+provider = "openai-compatible"
+model = "gemma-4-12b"
+```
+
+The section is the lane name, so `compile-aliases` is `[llm.lanes.compile-aliases]`. The
+same three keys work for every lane: `provider`, `model` and `fallback`.
 
 ```bash
-python3 tools/llm.py --lanes          # every lane and where it currently goes
+python3 tools/llm.py --lanes          # every lane, its provider, its source, LOCAL-ONLY
 python3 tools/llm.py --probe note-classify   # one throwaway call, timed
 ```
 
-Route a single lane to the worker's model:
+`--lanes` prints where each setting came from (`env`, `brainless.toml` or `default`), so a
+lane that is not where you expected is visible without reading the code.
 
-```bash
-export BRAINLESS_LLM_PROVIDER_NOTE_CLASSIFY=goose
+### `local_only`: the fail-closed list
+
+A provider key tells a lane where to go. It does not stop the lane being sent somewhere
+else by a stray environment variable or a typo. `local_only` does:
+
+```toml
+[llm]
+local_only = ["note-classify", "capture-note", "spiky-actions"]
 ```
 
-The variable is the lane name upper-cased with dashes turned into underscores. The same
-pattern works for `BRAINLESS_CLAUDE_MODEL_<LANE>` and `BRAINLESS_GOOSE_MODEL_<LANE>`, so
-a lane can also keep a cheaper or larger model than the rest of the pipeline.
+A lane named there may only run on a local provider. If its provider resolves to a cloud
+one, `tools/llm.py` refuses the call, logs the reason to `.agents/state/llm_log`, and
+returns nothing: no fallback can carry the text out either. `tools/health_check.py`
+turns its routing row red when a listed lane stops resolving locally, which is how the
+refusal gets noticed before a night of quiet failures. This is the lane-level half of
+the privacy boundary; `cloud_exclude` in `_Agent-Context/PROFILE.md` is the source-level
+half, and `tools/cloud_gate.py` owns both rules.
 
 Lanes are marked `short` or `long` in the `LANES` table in `tools/llm.py`. Short means a
 bounded prompt and a structured answer: the local candidates. Long means thousands of
@@ -81,8 +128,12 @@ tokens of prose, usually Turkish, where a small model produces fluent nonsense.
 
 ## Fallback, and why it only goes one way
 
-```bash
-export BRAINLESS_LLM_FALLBACK=goose     # cloud lanes degrade to the worker
+```toml
+[llm]
+fallback = "openai-compatible"          # cloud lanes degrade to the worker
+
+[llm.lanes.compile]
+fallback = ""                           # no fallback for this one
 ```
 
 With that set, a lane whose primary provider fails (timeout, auth error, outage) is
@@ -90,15 +141,9 @@ retried once on the local model. This is the resilience half.
 
 The reverse is refused. A lane pinned to a local provider was pinned there for privacy,
 and a local timeout is not consent to send the same text to a cloud provider instead.
-`llm.py` drops such a fallback and logs it. If you really mean it,
-`BRAINLESS_LLM_ALLOW_CLOUD_FALLBACK=1` says so explicitly, per machine, and it is
-deliberately not the default.
-
-Per-lane overrides work here too, including switching the fallback off:
-
-```bash
-export BRAINLESS_LLM_FALLBACK_COMPILE=none
-```
+`llm.py` drops such a fallback and logs it, and a lane in `local_only` never gets one at
+all. If you really mean it, `BRAINLESS_LLM_ALLOW_CLOUD_FALLBACK=1` says so explicitly,
+per machine, and it is deliberately not the default.
 
 Local calls are slow, so their timeout is multiplied by `BRAINLESS_LOCAL_TIMEOUT_FACTOR`
 (default 3). Every caller tuned its timeout against a cloud model; this saves changing
@@ -108,8 +153,11 @@ twenty of them.
 
 ## What the worker can actually do
 
-Measured on the old always-on Linux box, on 2026-09-19. This is the part to read before
-planning anything ambitious:
+Measured on omarchy, the small always-on box that ran the engine until 2026-11-15, on
+2026-09-19. The engine now runs on one Mac, but these numbers are still the honest
+description of what a CPU-only box can do with a small model, and they are why the long
+prose lanes stay in the cloud. This is the part to read before planning anything
+ambitious:
 
 | | |
 |---|---|
@@ -181,32 +229,41 @@ fails later, at inference time, where the error will make no sense.
 
 ---
 
-## What is configured on the worker today
+## Where routing is configured today
 
-`~/.config/environment.d/10-brainless-llm.conf`, read by the systemd user manager, so
-every `brainless-*.service` inherits it. As of 2026-09-19 it sets the local backend
-(`goose` + `local` + the 0.6B model), a timeout factor of 4, and a **fallback** on three
-lanes only:
+`brainless.toml` at the vault root, committed with the vault, read by `tools/config.py`
+before anything reads the environment. As of 2026-11-21 it names the local provider
+(`openai-compatible` on `127.0.0.1:8080`, Gemma 4 12B) and pins eight lanes in
+`local_only`:
 
-```
-BRAINLESS_LLM_FALLBACK_CAPTURE_NOTE=goose
-BRAINLESS_LLM_FALLBACK_NOTE_CLASSIFY=goose
-BRAINLESS_LLM_FALLBACK_SPIKY_ACTIONS=goose
-```
+| Lane | Why it is local |
+|---|---|
+| `note-classify` | One word out of three, after a deterministic first pass. |
+| `dreaming-judge` | A short triage answer, one sentence of JSON. |
+| `compile-aliases` | Three to five alternative names per page, JSON out. |
+| `compile-local` | The compile work for a cloud-excluded source (see PROFILE.md). |
+| `capture-note` | A voice note filed into the vault; the most personal content there is. |
+| `capture-photo` | A photograph of a document, read by a local vision model. |
+| `spiky-actions` | Meeting action items, short JSON list out. |
+| `ask` | An owner question answered from the vault, read-only. |
 
-Those three are the lanes where a missing answer hurts most: a Telegram capture keeps
-its raw update in a local journal until a note is written, but the owner is waiting for
-the receipt in `#inbox`, and a meeting action nobody extracted never comes back. A
-degraded answer beats a dropped one there. There is deliberately **no global fallback**:
-a nightly digest or a weekly synthesis written by a small model is worse than a missing
-one, because it reads fluent and lands in the wiki. Those lanes should fail visibly and
-turn the health check red.
+Every one of them is a short, structured call. The long Turkish prose lanes (`compile`,
+`nightly`, `closeout`, `reconcile`, `research-*`) stay on `claude-cli`: this file exists
+to record that the local model was measured on them and was not good enough, not to
+pretend otherwise.
 
-`note-classify` is pinned local as a **primary** since 2026-09-19:
-`BRAINLESS_LLM_PROVIDER_NOTE_CLASSIFY=goose` with the 4B model. It carries no fallback
-line, because a local lane never escalates to cloud, and a failed call there is
-harmless: the deterministic label simply stands, and the gate cannot promote what it
-already refused.
+There is deliberately **no global fallback**. A nightly digest or a weekly synthesis
+written by a small model is worse than a missing one, because it reads fluent and lands
+in the wiki. Those lanes should fail visibly and turn the health check red. The fallbacks
+that do exist are set per lane, and only where a missing answer hurts more than a
+degraded one: a Telegram capture keeps its raw update in a local journal until a note is
+written, but the owner is waiting for the receipt in `#inbox`, and a meeting action
+nobody extracted never comes back.
+
+A lane is pinned local as a **primary** with its own `[llm.lanes.<lane>]` block and its
+name in `local_only`. It needs no fallback key, because a local lane never escalates to
+cloud, and a failed call there is harmless: the deterministic result simply stands, and
+the gate cannot promote what it already refused.
 
 ### How that decision was made
 
@@ -237,7 +294,10 @@ The remaining honest gap: the sample contained no naturally occurring epic, beca
 this vault had not run the classifier yet. Watch `.agents/state/llm_log` and the first
 real epic the gate produces before trusting the lane completely.
 
-After editing that file, `systemctl --user daemon-reexec` makes the manager re-read it.
+Editing `brainless.toml` needs no restart: `tools/llm.py` reads the file on every run, so
+`python3 tools/llm.py --lanes` shows the new routing immediately. A value in the
+environment still wins over the file for that process, which is useful for a probe and
+dangerous in a job; `--lanes` prints the source of each setting for exactly that reason.
 
 ## Rollout order
 
@@ -254,8 +314,9 @@ lanes that would visibly degrade where they are.
    agreement check on real reports first, the same way `note-classify` was moved.
 3. `capture-note`. Voice notes, the most personal content in the vault, but the output
    is a whole note file, so check the quality before trusting it.
-4. Everything else stays on `claude-cli`, with `BRAINLESS_LLM_FALLBACK=goose` for
-   resilience.
+4. Everything else stays on `claude-cli`. A lane that needs resilience gets a per-lane
+   `fallback` key in `brainless.toml`; there is no global fallback, and there should not
+   be.
 
 Verify each step with `--probe <lane>` and by reading `.agents/state/llm_log`, which
 keeps the last 300 calls with their lane, provider, outcome and wall time. The single
@@ -297,7 +358,9 @@ problem. The answer, lane by lane:
 
 The worker is idle between 01:00 and 06:00: no voice notes, so no whisper, and no
 timer that talks to a person. `brainless-dialectic-night.timer` uses that window to run
-`tools/dialectic.py --run night` at 02:00 with one variable changed:
+`tools/dialectic.py --run night` at 02:00 with one variable changed (the unit below is
+the historical omarchy drop-in; the same variable works as an environment override
+today):
 
 ```
 Environment=BRAINLESS_LLM_PROVIDER_DIALECTIC_PERSONA=goose

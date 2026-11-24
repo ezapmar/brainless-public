@@ -133,7 +133,7 @@ Output ONLY the markdown content. No preamble.
     # Phase 0 T3: through tools/llm.py (tool-deny list, llm_status breadcrumb,
     # provider switch). The digest prompt is text only, so no tools are needed.
     try:
-        result = run_prompt(prompt, timeout=600, lane="nightly")
+        result = run_prompt(prompt, timeout=600, lane="nightly", sources=files)
     except Exception as e:
         print(f"Exception: {e}")
         return None

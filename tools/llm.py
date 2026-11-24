@@ -102,6 +102,11 @@ numbers "in,out,cache_write,cache_read" per million tokens). claude-cli calls
 record the cost the CLI itself reports (`--output-format json`), marked "plan"
 when the CLI is signed in with a subscription and "api" when ANTHROPIC_API_KEY
 is in the environment, so the ledger says what was actually billed where.
+Calls to an OpenAI-style endpoint are ledgered too. One on this machine is
+marked "local" with usd null, its token counts when the server reports them,
+`secs` (wall time) and, when it failed, `fail` (the reason). Without those rows
+the local lanes left no trace at all: no way to see how often a lane ran, how
+slow it was or how often it came back empty.
 
 Budget. BRAINLESS_API_BUDGET_USD caps what the anthropic provider may spend per
 billing period (0 or unset: no cap). The period starts on
@@ -119,6 +124,16 @@ loads from the vault (CLAUDE.md and friends), so anthropic calls send the file
 named by BRAINLESS_SYSTEM_PROMPT_FILE (default _Agent-Context/LLM-SYSTEM.md,
 relative to the vault) as the system prompt when it exists: house rules only,
 a few lines, no personal data.
+
+Egress ledger. Every call that could leave the machine writes a line to
+.agents/state/egress.jsonl immediately before the provider call, so the record
+survives a crash or a hang mid-request: time, lane, provider, model, whether the
+provider is local, input characters, redaction counts, and whether the call
+asked for the web. The output length and wall time follow on a second line with
+the same id, because they are not known at send time. No prompt text and no
+source path is ever written; tools/privacy_report.py turns the counts into a
+weekly view of what left the machine and what stayed. The ledger is gitignored,
+and `sent: false` marks a call the gate refused, which is not egress.
 
 Ops: `python3 tools/llm.py --lanes` prints every lane with the provider it
 currently resolves to, `--probe <lane>` sends one throwaway prompt through
@@ -143,6 +158,7 @@ from resolve_bin import resolve, resolve_claude
 
 from paths import vault_root
 import config  # noqa: F401  brainless.toml sets env defaults before anything reads env
+from redact import redact_for_cloud
 VAULT = vault_root()
 STATUS_FILE = os.path.join(VAULT, ".agents", "state", "llm_status")
 # One line per call, kept short. STATUS_FILE holds only the latest outcome for
@@ -151,6 +167,12 @@ LOG_FILE = os.path.join(VAULT, ".agents", "state", "llm_log")
 LOG_KEEP = 300
 # One JSON line per priced call; the budget reads it back. Grows ~100 lines a day.
 COST_FILE = os.path.join(VAULT, ".agents", "state", "llm_costs.jsonl")
+# One JSON line per call that carries its sources: what left the machine, for
+# which lane, built from which files (hashed, never written down). This is the
+# file tools/health_check.py reads to answer "did anything from a cloud-excluded
+# folder go out in the last 24 hours?". Kept apart from COST_FILE so a budget
+# reader never has to parse it and a privacy reader never has to price it.
+EGRESS_FILE = os.path.join(VAULT, ".agents", "state", "egress.jsonl")
 # The budget state for the health check and the worker mirror, rewritten on
 # every API-billed call.
 BUDGET_FILE = os.path.join(VAULT, ".agents", "state", "llm_budget.json")
@@ -217,6 +239,7 @@ LANES = {
     "spiky-actions":       "medium action items from a meeting report, 9k cap, JSON out",
     "meeting-brief":       "long   pre-meeting brief from vault context",
     "compile":             "long   source document to wiki summary",
+    "compile-local":       "long   the same work for a cloud-excluded source, local model only",
     "smart-summary":       "long   summary or reading card of a converted book or report",
     "compile-aliases":     "short  3 to 5 alternative names per wiki page, JSON out",
     "compile-concept":     "long   concept page updated in place from new summaries, or summary-to-concept assignment (JSON)",
@@ -227,6 +250,7 @@ LANES = {
     "reconcile":           "long   weekly reconcile of projects against dailies",
     "dreaming-judge":      "short  link, duplicate or none for two wiki pages, one sentence, JSON out",
     "contradiction-judge": "medium a new summary against its three nearest pages, conflicts as JSON",
+    "contradiction-screen": "medium the same prompt on a local model first; a clean page skips the judge",
     "content":             "long   content engine draft",
     "writing-ideas":       "long   long-form pitch generation for the writing channel",
     "thinker-digest":      "long   digest of a thinker's corpus",
@@ -264,6 +288,38 @@ def resolve_provider(lane: str | None = None) -> str:
     return _lane_env("BRAINLESS_LLM_PROVIDER", lane) or "claude-cli"
 
 
+def local_only_lanes() -> set[str]:
+    """Lanes that may only run on a local provider (brainless.toml llm.local_only,
+    or BRAINLESS_LLM_LOCAL_ONLY as a comma list). Fail-closed: run_prompt refuses
+    such a lane when its provider resolves to a cloud one."""
+    raw = os.environ.get("BRAINLESS_LLM_LOCAL_ONLY", "")
+    return {x.strip() for x in raw.split(",") if x.strip()}
+
+
+def provider_source(lane: str | None) -> str:
+    """Where a lane's provider setting comes from: env, brainless.toml or default."""
+    if lane:
+        key = "BRAINLESS_LLM_PROVIDER_" + lane.upper().replace("-", "_")
+        if os.environ.get(key, "").strip():
+            return config.source(key)
+    if os.environ.get("BRAINLESS_LLM_PROVIDER", "").strip():
+        return config.source("BRAINLESS_LLM_PROVIDER")
+    return "default"
+
+
+def local_only_violation(lane: str | None, provider: str, web: bool = False) -> str | None:
+    """Why this call must be refused, or None. A local-only lane on a cloud
+    provider (or asking for the web, which only claude-cli serves) is refused."""
+    if not lane or lane not in local_only_lanes():
+        return None
+    if web:
+        return f"local-only lane {lane} asked for the web; refused"
+    if not _is_local(provider):
+        return (f"local-only lane {lane} resolved to cloud provider {provider} "
+                f"(source: {provider_source(lane)}); refused, nothing sent")
+    return None
+
+
 def _resolve_fallback(lane: str | None, primary: str) -> str | None:
     """The provider to try when the primary fails, or None.
 
@@ -276,10 +332,116 @@ def _resolve_fallback(lane: str | None, primary: str) -> str | None:
         return None
     if fb == primary:
         return None
+    if lane in local_only_lanes() and not _is_local(fb):
+        return None  # no override: the lane is local-only by configuration
     if _is_local(primary) and not _is_local(fb):
         if os.environ.get("BRAINLESS_LLM_ALLOW_CLOUD_FALLBACK", "").strip() != "1":
             return None
     return fb
+
+
+def source_violation(provider: str, sources, lane: str | None = None) -> str | None:
+    """Why a prompt built from these sources may not go to this provider.
+
+    P0.4. A source under a `cloud_exclude` folder in PROFILE.md, or a note whose
+    frontmatter says `privacy: personal` or `privacy: secret`, may not reach a
+    cloud provider at all. Callers that expect this pass the paths they built
+    the prompt from; a caller that compiles such a source on purpose picks a
+    local lane first (compile_resources.py does, lane "compile-local").
+
+    Redaction is not enough here. It masks an e-mail and a phone number, but a
+    school, an address, a family relationship or a diagnosis is not a pattern,
+    and a summary of those is still the private thing itself. The only safe
+    answer is not to send it.
+    """
+    if not sources or _is_local(provider):
+        return None
+    from cloud_gate import block_reason, rel_of
+    for rel in sources:
+        reason = block_reason(rel)
+        if reason:
+            return (f"{reason}: {rel_of(rel)} may not reach cloud provider {provider} "
+                    f"(lane {lane or '-'}); refused, nothing sent")
+    return None
+
+
+def _model_of(provider: str, lane: str | None) -> str:
+    """The model name an egress line should carry, best effort."""
+    if provider == "claude-cli":
+        return _model_env("BRAINLESS_CLAUDE_MODEL", lane, "") or "cli-default"
+    if provider == "anthropic":
+        return _model_env("BRAINLESS_LLM_MODEL", lane, "") or ANTHROPIC_DEFAULT_MODEL
+    if provider == "openai-compatible" or provider in PRESETS:
+        return (_model_env("BRAINLESS_GOOSE_MODEL", lane, "")
+                or _model_env("BRAINLESS_LLM_MODEL", lane, "") or "")
+    return ""
+
+
+def _egress_write(row: dict) -> None:
+    """Append one JSON line to .agents/state/egress.jsonl. Best effort.
+
+    Never fails a call: a ledger that breaks the pipeline would be turned off.
+    The row carries no prompt text and no source path, only counts and names.
+    """
+    try:
+        os.makedirs(os.path.dirname(EGRESS_FILE), exist_ok=True)
+        with open(EGRESS_FILE, "a", encoding="utf-8") as fh:
+            fh.write(json.dumps(row, ensure_ascii=False) + "\n")
+    except OSError:
+        pass
+
+
+def _egress_start(lane: str | None, provider: str, prompt: str, redactions: dict | None,
+                  *, web: bool = False, sent: bool = True, blocked: bool = False,
+                  refused: str = "") -> dict:
+    """Record a send the moment before it happens, and return the row.
+
+    Written BEFORE the provider call on purpose: if the call hangs, crashes or
+    the machine dies mid-request, the fact that this prompt left the machine is
+    still on disk. The output length is not known yet, so the row carries
+    `out: null` and `_egress_end` appends the completion line that closes it.
+
+    Fields: time, lane, provider, model, local, in characters, out characters,
+    redaction counts, web. `sent` is False for a refused call (nothing left the
+    machine), and `blocked` marks a call the source gate stopped, which is what
+    the health check watches for.
+    """
+    row = {
+        "ts": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "id": str(time.time_ns()),
+        "phase": "start",
+        "lane": lane or "-", "provider": provider, "model": _model_of(provider, lane),
+        "local": _is_local(provider),
+        "in": len(prompt or ""), "out": None,
+        "redactions": redactions or {}, "web": bool(web), "sent": sent,
+    }
+    if blocked:
+        row["blocked"] = True
+    if refused:
+        # Only the reason class, never the whole message: the message names the
+        # source path, and the ledger holds no path at all. The full sentence is
+        # in llm_log and on stderr, where a human reads it on this machine.
+        row["refused"] = refused.split(":", 1)[0].strip().replace(" ", "_")[:40]
+    _egress_write(row)
+    return row
+
+
+def _egress_end(row: dict, out: str | None, secs: float | None = None) -> None:
+    """Close a send row with the output length and wall time.
+
+    A second line rather than a rewrite of the first: rewriting the file would
+    drop a line another process appended in between (the capture job writes to
+    this ledger every two minutes). Both lines carry the same `id`.
+    """
+    end = {
+        "ts": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "id": row["id"], "phase": "end", "lane": row["lane"],
+        "provider": row["provider"], "local": row["local"],
+        "out": len(out or ""), "ok": out is not None,
+    }
+    if secs is not None:
+        end["secs"] = round(secs, 1)
+    _egress_write(end)
 
 
 def _clean(text: str) -> str:
@@ -440,10 +602,11 @@ def _price(model: str) -> tuple | None:
 
 
 def _tokens(usage: dict | None) -> dict:
-    """Token counts in one shape from either API usage block or the CLI's."""
+    """Token counts in one shape from an Anthropic usage block, the CLI's, or an
+    OpenAI-style one (prompt_tokens / completion_tokens)."""
     u = usage or {}
-    return {"in": int(u.get("input_tokens") or 0),
-            "out": int(u.get("output_tokens") or 0),
+    return {"in": int(u.get("input_tokens") or u.get("prompt_tokens") or 0),
+            "out": int(u.get("output_tokens") or u.get("completion_tokens") or 0),
             "cw": int(u.get("cache_creation_input_tokens") or 0),
             "cr": int(u.get("cache_read_input_tokens") or 0)}
 
@@ -459,12 +622,18 @@ def cost_usd(model: str, usage: dict | None) -> float | None:
 
 
 def _ledger(provider: str, model: str, usage: dict | None, usd: float | None,
-            billed: str) -> None:
-    """Append one priced call. billed: api (a key paid), plan (a subscription
-    paid), local (nothing paid). Best-effort, never fails the call."""
+            billed: str, *, secs: float | None = None, fail: str | None = None) -> None:
+    """Append one call. billed: api (a key paid), plan (a subscription paid),
+    local (nothing paid). A local row also carries how long the call took and,
+    when it failed, why: the local lanes cost nothing, so time and failures are
+    the only numbers they have. Best-effort, never fails the call."""
     row = {"ts": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
            "lane": _CURRENT_LANE or "-", "provider": provider, "model": model,
            **_tokens(usage), "usd": usd, "billed": billed}
+    if secs is not None:
+        row["secs"] = round(secs, 1)
+    if fail:
+        row["fail"] = fail
     try:
         os.makedirs(os.path.dirname(COST_FILE), exist_ok=True)
         with open(COST_FILE, "a", encoding="utf-8") as fh:
@@ -764,25 +933,35 @@ def _run_openai_compatible(prompt: str, timeout: int, provider: str = "openai-co
     if key:
         headers["Authorization"] = f"Bearer {key}"
     req = urllib.request.Request(f"{base}/chat/completions", data=body, headers=headers)
+    billed = "local" if _is_local(provider) else "api"
+    start = time.monotonic()
+
+    def failed(outcome: str, detail: str) -> None:
+        _record(outcome, detail)
+        _ledger(provider, model, None, None, billed,
+                secs=time.monotonic() - start, fail=detail)
+
     try:
         with urllib.request.urlopen(req, timeout=timeout) as resp:
             data = json.load(resp)
     except urllib.error.HTTPError as e:
-        outcome = "auth" if e.code in (401, 403) else "error"
-        _record(outcome, f"{provider} HTTP {e.code}")
+        failed("auth" if e.code in (401, 403) else "error", f"{provider} HTTP {e.code}")
         return None
     except Exception as e:  # network, timeout, JSON
-        _record("error", f"{provider} {type(e).__name__}")
+        failed("error", f"{provider} {type(e).__name__}")
         return None
     try:
         out = _clean((data["choices"][0]["message"]["content"] or "").strip())
     except (KeyError, IndexError, TypeError):
-        _record("error", f"{provider}: unexpected response shape")
+        failed("error", f"{provider}: unexpected response shape")
         return None
     if not out:
-        _record("error", f"{provider} empty output")
+        failed("error", f"{provider} empty output")
         return None
     _record("ok", f"{provider} {model}")
+    usage = data.get("usage") if isinstance(data, dict) else None
+    _ledger(provider, model, usage if isinstance(usage, dict) else None, None, billed,
+            secs=time.monotonic() - start)
     return out
 
 
@@ -927,6 +1106,23 @@ def _local_timeout(timeout: int) -> int:
     return max(timeout, int(timeout * max(factor, 1.0)))
 
 
+def _for_provider(provider: str, prompt: str, lane: str | None) -> tuple[str, dict]:
+    """The prompt as this provider may see it, and what was masked.
+
+    A cloud provider gets personal data and secrets masked (tools/redact.py); a
+    local one gets the text as is. BRAINLESS_LLM_REDACT=0 turns the mask off,
+    for a one-off debug run only. The count goes to the egress ledger, so a
+    night with a spike in masked e-mails is visible instead of assumed.
+    """
+    if _is_local(provider) or os.environ.get("BRAINLESS_LLM_REDACT", "1").strip() == "0":
+        return prompt, {}
+    masked, counts = redact_for_cloud(prompt)
+    if counts:
+        detail = " ".join(f"{k}={v}" for k, v in sorted(counts.items()))
+        _log(f"{lane or '-'}\tredact\t{provider} {detail}")
+    return masked, counts
+
+
 def _dispatch(provider: str, prompt: str, timeout: int, allowed_tools,
               web: bool, model: str | None, lane: str | None, images=None) -> str | None:
     if _is_local(provider):
@@ -951,7 +1147,7 @@ def _dispatch(provider: str, prompt: str, timeout: int, allowed_tools,
 
 def run_prompt(prompt: str, timeout: int = 300, allowed_tools=None,
                web: bool = False, model: str | None = None,
-               lane: str | None = None, images=None) -> str | None:
+               lane: str | None = None, images=None, sources=None) -> str | None:
     """allowed_tools: opt-in tool grants for claude-cli (e.g. ["Read"] so the
     model can open an image). The other providers ignore it.
 
@@ -972,12 +1168,31 @@ def run_prompt(prompt: str, timeout: int = 300, allowed_tools=None,
     lane: the name of this call site, from LANES. It selects the per-lane
     provider, model and fallback. Callers should always pass one; a call with no
     lane simply follows the global settings.
+
+    sources: vault paths this prompt was built from, when it was built from
+    notes at all. A source under a cloud_exclude folder in PROFILE.md, or one
+    marked privacy: personal or secret, refuses a cloud provider and the call
+    returns None with a line in the log (P0.4). Pass the paths even when you
+    expect the lane to be local: that is what makes the refusal fire when a
+    setting drifts. The ledger records the call without the paths: only counts,
+    names and the local flag, never the prompt or the files behind it.
     """
     global _CURRENT_LANE
     _CURRENT_LANE = lane
     primary, why = budget_reroute(lane, resolve_provider(lane))
     if why:
         _log(f"{lane or '-'}\troute\t{why}")
+    lane_refusal = local_only_violation(lane, primary, web)
+    source_refusal = source_violation(primary, sources, lane)
+    refused = lane_refusal or source_refusal
+    if refused:
+        _log(f"{lane or '-'}\troute\t{refused}")
+        _record("error", refused)
+        print(f"[llm] {refused}", file=sys.stderr)
+        _egress_start(lane, primary, prompt, {}, web=web, sent=False,
+                      blocked=bool(source_refusal), refused=refused)
+        _CURRENT_LANE = None
+        return None
     if web and primary != "claude-cli":
         _log(f"{lane or '-'}\troute\tweb call forced to claude-cli from {primary}")
         primary = "claude-cli"
@@ -989,7 +1204,10 @@ def run_prompt(prompt: str, timeout: int = 300, allowed_tools=None,
         return None
     try:
         started = time.time()
-        out = _dispatch(primary, prompt, timeout, allowed_tools, web, model, lane, images)
+        sent, redactions = _for_provider(primary, prompt, lane)
+        row = _egress_start(lane, primary, prompt, redactions, web=web)
+        out = _dispatch(primary, sent, timeout, allowed_tools, web, model, lane, images)
+        _egress_end(row, out, time.time() - started)
         _log(f"{lane or '-'}\ttiming\t{primary} {int(time.time() - started)}s "
              f"in={len(prompt)}c out={len(out or '')}c")
         if out is not None:
@@ -999,7 +1217,10 @@ def run_prompt(prompt: str, timeout: int = 300, allowed_tools=None,
             return None
         _log(f"{lane or '-'}\troute\t{primary} failed, falling back to {fallback}")
         started = time.time()
-        out = _dispatch(fallback, prompt, timeout, allowed_tools, web, model, lane, images)
+        sent, redactions = _for_provider(fallback, prompt, lane)
+        row = _egress_start(lane, fallback, prompt, redactions, web=web)
+        out = _dispatch(fallback, sent, timeout, allowed_tools, web, model, lane, images)
+        _egress_end(row, out, time.time() - started)
         _log(f"{lane or '-'}\ttiming\t{fallback} {int(time.time() - started)}s "
              f"in={len(prompt)}c out={len(out or '')}c")
         return out
@@ -1036,16 +1257,26 @@ def _cli() -> int:
     args = sys.argv[1:]
     if args and args[0] == "--lanes":
         width = max(len(k) for k in LANES)
+        cfg = config.config_path()
+        print(f"config: {cfg}" + ("" if os.path.isfile(cfg) else " (absent)"))
         print(f"global provider: {os.environ.get('BRAINLESS_LLM_PROVIDER', 'claude-cli')}")
         print(f"global fallback: {os.environ.get('BRAINLESS_LLM_FALLBACK', '(none)')}")
         print(_budget_line())
         print()
+        local_only = local_only_lanes()
         for lane, shape in LANES.items():
             provider, why = budget_reroute(lane, resolve_provider(lane))
             fallback = _resolve_fallback(lane, provider)
             tail = f" -> {fallback}" if fallback else ""
             mark = " (budget)" if why else ""
-            print(f"{lane:<{width}}  {provider}{mark}{tail:<18}  {shape}")
+            route = f"{provider}{mark}{tail}"
+            tag = ""
+            if lane in local_only:
+                tag = "LOCAL-ONLY" if _is_local(provider) else "LOCAL-ONLY REFUSED"
+            print(f"{lane:<{width}}  {route:<28}  {provider_source(lane):<14}  {tag:<18}  {shape}")
+        unknown = sorted(local_only - set(LANES))
+        if unknown:
+            print(f"\nlocal_only names unknown lanes: {', '.join(unknown)}")
         return 0
     if args and args[0] == "--usage":
         days = None
@@ -1098,8 +1329,11 @@ def usage_report(days: int | None = None) -> str:
     rows = read_ledger(since)
     per: dict = {}
     for r in rows:
-        lane = per.setdefault(str(r.get("lane") or "-"), {"calls": 0, "api": 0.0, "plan": 0.0, "local": 0})
+        lane = per.setdefault(str(r.get("lane") or "-"),
+                              {"calls": 0, "api": 0.0, "plan": 0.0, "local": 0, "secs": 0.0, "fails": 0})
         lane["calls"] += 1
+        lane["secs"] += float(r.get("secs") or 0)
+        lane["fails"] += 1 if r.get("fail") else 0
         billed, usd = r.get("billed"), float(r.get("usd") or 0)
         if billed == "api":
             lane["api"] += usd
@@ -1108,11 +1342,13 @@ def usage_report(days: int | None = None) -> str:
         else:
             lane["local"] += 1
     width = max([len(k) for k in per] + [4])
-    lines = [f"since {since.strftime('%Y-%m-%d')}: {len(rows)} priced calls", _budget_line(), "",
-             f"{'lane':<{width}}  calls   api USD  plan USD"]
+    lines = [f"since {since.strftime('%Y-%m-%d')}: {len(rows)} calls", _budget_line(), "",
+             f"{'lane':<{width}}  calls   api USD  plan USD  local  avg s  fails"]
     for name in sorted(per, key=lambda k: -(per[k]["api"] + per[k]["plan"])):
         v = per[name]
-        lines.append(f"{name:<{width}}  {v['calls']:>5}  {v['api']:>8.2f}  {v['plan']:>8.2f}")
+        avg = f"{v['secs'] / v['local']:>5.1f}" if v["local"] else f"{'-':>5}"
+        lines.append(f"{name:<{width}}  {v['calls']:>5}  {v['api']:>8.2f}  {v['plan']:>8.2f}"
+                     f"  {v['local']:>5}  {avg}  {v['fails']:>5}")
     tot_api = sum(v["api"] for v in per.values())
     tot_plan = sum(v["plan"] for v in per.values())
     lines.append(f"{'total':<{width}}  {len(rows):>5}  {tot_api:>8.2f}  {tot_plan:>8.2f}")

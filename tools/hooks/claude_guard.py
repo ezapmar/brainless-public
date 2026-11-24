@@ -30,6 +30,7 @@ from pathlib import Path
 VAULT = Path(os.environ.get("BRAINLESS_VAULT") or Path(__file__).resolve().parents[2])
 
 DASHES = (chr(0x2014), chr(0x2013))
+IMMUTABLE_AREAS = ("raw/",)
 HUMAN_AREAS = ("Work/", "Personal/", "Library/", "Thinking/", "Inbox/", "raw/",
                "Writings/")
 # Labels from leak_patterns.LEAK_PATTERNS that mean a real secret. The others
@@ -137,6 +138,9 @@ def check_write(tool: str, ti: dict):
     if tool == "Write" and BRIEFING_NAME.search(os.path.basename(path)) and not BRIEFING_HOME.match(r):
         return "deny", ("Briefings live only at Daily Briefings/daily-briefing-YYYY-MM-DD.md "
                         "(AGENT-RULES, Briefing Convention).")
+    if r.startswith(IMMUTABLE_AREAS):
+        return "deny", (f"{r} is in raw/, which is a read-only source corpus. "
+                        f"Never edit or overwrite raw sources (CLAUDE.md, ownership).")
     if r.startswith(HUMAN_AREAS) and not r.startswith(drafts_dirs()):
         return "ask", (f"{r} is in a human area. The owner approves every write there "
                        f"(CLAUDE.md, Sahiplik).")

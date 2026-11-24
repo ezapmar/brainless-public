@@ -25,15 +25,11 @@ mkdir -p logs
 GPY="$HOME/.local/venvs/brainless/bin/python"
 [ -x "$GPY" ] && export BRAINLESS_SEARCH_PY="$GPY"
 
-# Local model (Gemma 4 12B on llama-server, the "llm" launchd job). Lanes listed
-# here run on it; every other lane stays on the Claude CLI subscription. A local
-# lane never falls back to Claude (tools/llm.py refuses it unless told), so a
-# stopped server means the job fails and retries, not that text leaves the Mac.
-export BRAINLESS_LLM_BASE_URL="http://127.0.0.1:8080/v1"
-export BRAINLESS_LLM_MODEL="gemma-4-12b"
-for lane in NOTE_CLASSIFY DREAMING_JUDGE COMPILE_ALIASES CAPTURE_NOTE CAPTURE_PHOTO SPIKY_ACTIONS ASK; do
-  export "BRAINLESS_LLM_PROVIDER_${lane}=openai-compatible"
-done
+# Local model routing (Gemma 4 12B on llama-server, the "llm" launchd job) lives
+# in brainless.toml at the vault root, not here: tools/llm.py reads it whether or
+# not this file was sourced, and refuses a local-only lane that resolves to the
+# cloud. Do not add BRAINLESS_LLM_* lane exports here; env overrides the file and
+# the two lists would drift apart. The contradiction-screen note is there too.
 
 # run <job-label> <command...>: one line in the run log, output in logs/<label>.log
 run() {

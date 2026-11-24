@@ -91,9 +91,49 @@ class Dreaming(unittest.TestCase):
     def test_run_proposes_links_and_duplicates_and_remembers_none(self):
         c = self.run_()
         self.assertEqual((c["proposed"], c["none"]), (2, 1))
-        self.assertEqual(len(self.box.sent), 2)
+        self.assertEqual(len(self.box.sent), 1)          # one message for the run
+        body = next(iter(self.box.sent.values()))["body"]
+        self.assertIn("1. ", body)
+        self.assertIn("2. ", body)
         again = self.run_()
         self.assertEqual(again["judged"], 0)  # nothing new to ask
+
+    def test_reply_words_claim_the_numbers_before_them(self):
+        pr = self.d.parse_reply
+        self.assertEqual(pr("evet", [1, 2, 3]), {1: "apply", 2: "apply", 3: "apply"})
+        self.assertEqual(pr("1 3 evet, 2 hayır", [1, 2, 3]), {1: "apply", 3: "apply", 2: "reject"})
+        self.assertEqual(pr("1 evet, gerisi hayır", [1, 2, 3]), {1: "apply", 2: "reject", 3: "reject"})
+        self.assertEqual(pr("2 atla", [1, 2, 3]), {2: "skip"})
+        self.assertEqual(pr("9 evet", [1, 2]), {})            # a number that is not on the message
+        self.assertEqual(pr("1 3", [1, 2, 3]), {})            # numbers without a word decide nothing
+        self.assertEqual(pr("bakarım", [1, 2]), {})
+
+    def test_one_reply_picks_from_the_weekly_message(self):
+        self.run_()
+        dup, link = self.proposal("article"), self.proposal("meeting")
+        self.assertEqual((dup["no"], link["no"], dup["event"]), (1, 2, link["event"]))
+        self.assertTrue(self.d.handle(msg("2 evet", link["event"]), "cid-dreaming", OWNER, box=self.box))
+        self.assertEqual((self.proposal("meeting")["status"], self.proposal("article")["status"]),
+                         ("approved", "pending"))
+        reply = self.box.sent["dreaming:reply:tg900"]["body"]
+        self.assertIn("2", reply.splitlines()[0])
+        self.assertIn("1", reply.splitlines()[-1])           # the one left open is named
+        self.assertTrue(self.d.handle(msg("hayır", link["event"], n=901), "cid-dreaming", OWNER, box=self.box))
+        self.assertEqual(self.proposal("article")["status"], "rejected")
+        self.assertEqual(self.proposal("meeting")["status"], "approved")   # an answered one is not touched
+
+    def test_a_proposal_sent_on_its_own_still_takes_a_plain_yes(self):
+        self.run_()
+        import json
+        state = json.loads(self.d.STATE.read_text())
+        for i, p in enumerate(state["proposals"].values()):
+            p.pop("no")
+            p["event"] = f"old{i}"                         # the pre-batch shape: one message each
+        self.d.STATE.write_text(json.dumps(state))
+        self.assertTrue(self.d.handle(msg("evet", self.proposal("meeting")["event"]), "cid-dreaming", OWNER,
+                                      box=self.box))
+        self.assertEqual((self.proposal("meeting")["status"], self.proposal("article")["status"]),
+                         ("approved", "pending"))
 
     def test_dry_run_asks_nothing(self):
         self.run_(dry=True)

@@ -88,6 +88,7 @@ class ProviderTest(unittest.TestCase):
                         mock.patch.object(llm, "STATUS_FILE", str(state / "llm_status")),
                         mock.patch.object(llm, "LOG_FILE", str(state / "llm_log")),
                         mock.patch.object(llm, "COST_FILE", str(state / "llm_costs.jsonl")),
+                        mock.patch.object(llm, "EGRESS_FILE", str(state / "egress.jsonl")),
                         mock.patch.object(llm, "BUDGET_FILE", str(state / "llm_budget.json")),
                         mock.patch.object(llm, "_KEYS", {}),
                         mock.patch.object(llm, "_SYSTEM_PROMPT", {}),
@@ -149,6 +150,40 @@ class TestPresets(ProviderTest):
                  BRAINLESS_LLM_MODEL="m")
         Stub.script = [chat(f"a {EM} b {EN} c")]
         self.assertEqual(llm.run_prompt("hi"), "a - b - c")
+
+
+class TestLocalLedger(ProviderTest):
+    def local(self):
+        self.env(BRAINLESS_LLM_PROVIDER="openai-compatible", BRAINLESS_LLM_BASE_URL=self.url,
+                 BRAINLESS_LLM_MODEL="gemma-test")
+
+    def test_local_call_is_ledgered_with_time_and_tokens(self):
+        self.local()
+        Stub.script = [(200, {"choices": [{"message": {"content": "ok"}}],
+                              "usage": {"prompt_tokens": 12, "completion_tokens": 3}})]
+        self.assertEqual(llm.run_prompt("hi", lane="ask"), "ok")
+        row, = self.ledger()
+        self.assertEqual((row["lane"], row["billed"], row["usd"], row["model"]),
+                         ("ask", "local", None, "gemma-test"))
+        self.assertEqual((row["in"], row["out"]), (12, 3))
+        self.assertIn("secs", row)
+        self.assertNotIn("fail", row)
+
+    def test_failed_local_call_is_ledgered_with_the_reason(self):
+        self.local()
+        Stub.script = [chat("")]
+        self.assertIsNone(llm.run_prompt("hi", lane="ask"))
+        row, = self.ledger()
+        self.assertEqual(row["billed"], "local")
+        self.assertIn("empty output", row["fail"])
+
+    def test_usage_report_shows_local_calls_and_failures(self):
+        self.local()
+        Stub.script = [chat("ok"), chat("")]
+        llm.run_prompt("hi", lane="ask")
+        llm.run_prompt("hi", lane="ask")
+        line = next(ln for ln in llm.usage_report(days=1).splitlines() if ln.startswith("ask"))
+        self.assertEqual(line.split()[1:], ["2", "0.00", "0.00", "2", "0.0", "1"])
 
 
 class TestModels(ProviderTest):

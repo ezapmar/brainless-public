@@ -24,7 +24,7 @@ Row format: `slug | Title | aliases | status | sensitivity | scope`.
 ## Concepts
 nakit | Nakit | cash | active |  | cash discipline
 takim | Takım Etkinliği | teams | proposed |  | real teams vs working groups
-bahce | Bahçe Düzeni |  | proposed | personal | garden layout
+okul | Okul Geçişi |  | proposed | personal | school move
 """
 
 
@@ -68,20 +68,20 @@ class ConceptReview(unittest.TestCase):
         self.assertIn("2 source(s)", team)          # the _raw twin is not a second source
         self.assertIn("Discipline.md", team)
         personal = next(b for b in bodies if "Takım" not in b)
-        self.assertNotIn("Bahçe", personal)
+        self.assertNotIn("Okul", personal)
         self.assertIn("line 8", personal)
 
     def test_yes_activates_no_retires(self):
         self.cr.announce(box=self.box, catalogue=self.catalogue)
         ev = self.announced()
         self.assertTrue(self.cr.handle(msg("evet", ev["takim"]["event"], n=901), "cid-dreaming", OWNER, box=self.box))
-        self.assertTrue(self.cr.handle(msg("no", ev["bahce"]["event"], n=902), "cid-dreaming", OWNER, box=self.box))
+        self.assertTrue(self.cr.handle(msg("no", ev["okul"]["event"], n=902), "cid-dreaming", OWNER, box=self.box))
         self.assertEqual(self.status("takim"), "active")
-        self.assertEqual(self.status("bahce"), "retired")
+        self.assertEqual(self.status("okul"), "retired")
         self.assertIn("cash discipline", self.registry.read_text())   # other rows untouched
         replies = [v["body"] for k, v in self.box.sent.items() if k.startswith("concept:reply:")]
         self.assertTrue(any("Active: Takım" in r for r in replies))
-        self.assertFalse(any("Bahçe" in r for r in replies))
+        self.assertFalse(any("Okul" in r for r in replies))
         # A later answer to a decided proposal changes nothing.
         self.cr.handle(msg("hayır", ev["takim"]["event"], n=903), "cid-dreaming", OWNER, box=self.box)
         self.assertEqual(self.status("takim"), "active")
@@ -116,8 +116,8 @@ class TerminalReview(ConceptReview):
         n = self.cr.review(ask=lambda q: next(answers), out=shown.append, catalogue=self.catalogue)
         self.assertEqual(n, 1)
         self.assertEqual(self.status("takim"), "active")
-        self.assertEqual(self.status("bahce"), "proposed")
-        self.assertFalse(any("Bahçe" in s for s in shown))     # personal: still no title
+        self.assertEqual(self.status("okul"), "proposed")
+        self.assertFalse(any("Okul" in s for s in shown))     # personal: still no title
         self.assertFalse(any("reply" in s.lower() for s in shown[:1]))
 
     def test_decide_words(self):
@@ -125,8 +125,8 @@ class TerminalReview(ConceptReview):
         self.assertEqual(self.status("takim"), "retired")
         self.assertIn("already", self.cr.decide("takim", "yes"))
         self.assertIn("No proposal", self.cr.decide("nope", "yes"))
-        self.cr.decide("bahce", "banana")
-        self.assertEqual(self.status("bahce"), "proposed")
+        self.cr.decide("okul", "banana")
+        self.assertEqual(self.status("okul"), "proposed")
 
     def test_announce_without_buzz_changes_nothing(self):
         home = Path(self.tmp.name) / "home"

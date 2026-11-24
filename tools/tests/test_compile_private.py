@@ -7,7 +7,13 @@ is the unwrap that repaired 155 double-frontmatter summaries; known_ideas stops
 one idea from getting a fresh page every night; iter_sources must not yield a
 linked folder twice. No model runs here.
 
-Run: python3 -B -m unittest discover -s tools/tests -v
+P0.4 adds the cloud gate: a source under a cloud_exclude folder, or one marked
+privacy: personal or secret, must not reach a cloud provider. The tests below are
+written from the leaking side, because the failure is silent: a prompt that
+carries the note anyway still returns a good answer.
+
+Run: python3 tools/run_tests.py test_compile_private
+     python3 tools/run_tests.py            (the whole suite, no PYTHONPATH)
 """
 import atexit
 import os
@@ -15,6 +21,7 @@ import shutil
 import tempfile
 import unicodedata
 import unittest
+from datetime import datetime, timedelta
 from pathlib import Path
 from unittest.mock import patch
 
@@ -28,11 +35,15 @@ _OLD_VAULT = os.environ.get("BRAINLESS_VAULT")
 os.environ["BRAINLESS_VAULT"] = _IMPORT_VAULT
 try:
     import compile_resources as compiler
+    import cloud_gate
+    import llm
 finally:
     if _OLD_VAULT is None:
         os.environ.pop("BRAINLESS_VAULT", None)
     else:
         os.environ["BRAINLESS_VAULT"] = _OLD_VAULT
+
+from test_llm_lanes import Env  # noqa: E402  (needs tools/tests on sys.path)
 
 EM, EN = chr(0x2014), chr(0x2013)
 FENCE = "`" * 3
@@ -96,8 +107,8 @@ class CleanAlias(unittest.TestCase):
             self.assertEqual(compiler.clean_alias(a), a)
 
     def test_personal_data_is_refused(self):
-        for a in ("04.07.1999", "born 1999-07-04", "12345", "+90 532 123 45 67",
-                  "£500", "$ 40", "5 TL", "500tl", "20 GBP", "ISO 27001 04/07/1999"):
+        for a in ("16.03.2021", "born 2021-03-16", "12345", "+90 532 123 45 67",
+                  "£500", "$ 40", "5 TL", "500tl", "20 GBP", "ISO 27001 16/03/2021"):
             self.assertIsNone(compiler.clean_alias(a), a)
 
     def test_shape_rules(self):
@@ -111,9 +122,9 @@ class CleanAlias(unittest.TestCase):
             self.assertIsNone(compiler.clean_alias(a), repr(a))
 
     def test_a_spelled_out_date_is_refused(self):
-        self.assertIsNone(compiler.clean_alias("4 July 1999"))
-        self.assertIsNone(compiler.clean_alias("4 Temmuz 1999"))
-        self.assertIsNone(compiler.clean_alias("July 4, 1999"))
+        self.assertIsNone(compiler.clean_alias("16 March 2021"))
+        self.assertIsNone(compiler.clean_alias("16 Mart 2021"))
+        self.assertIsNone(compiler.clean_alias("March 16, 2021"))
         self.assertEqual(compiler.clean_alias("Mart ayı planı"), "Mart ayı planı")
 
     def test_a_number_after_a_lower_case_standards_prefix_is_still_data(self):
@@ -235,6 +246,279 @@ class IterSources(PrivacyFixture):
         roots = [self.root / "vault/Library", self.root / "vault/Library/Sub", self.root / "vault/Missing"]
         got = [p.relative_to(self.root).as_posix() for p in compiler.iter_sources(roots)]
         self.assertEqual(sorted(got), ["vault/Library/Sub/c.md", "vault/Library/top.md"])
+
+
+class Rooted(unittest.TestCase):
+    """A throwaway vault root, so cloud_gate's path matching is exercised for real.
+
+    cloud_gate resolves a path against its own VAULT constant, which was captured
+    at import. Patching it here keeps the tests off the owner's actual tree while
+    still going through rel_of / matching_root rather than a stub.
+    """
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.root = Path(self.tmp.name)
+        for name, value in (("VAULT", self.root), ("CLOUD_EXCLUDE", ()), ("_cache", {})):
+            patcher = patch.object(cloud_gate, name, value)
+            patcher.start()
+            self.addCleanup(patcher.stop)
+
+    def write(self, rel, text="# x\n"):
+        p = self.root / rel
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(text, encoding="utf-8")
+        return p
+
+
+class CloudExcludeLane(Rooted):
+    def test_a_cloud_excluded_source_picks_the_local_lane(self):
+        with patch.object(cloud_gate, "CLOUD_EXCLUDE", ("Personal/Move Abroad",)):
+            local = self.write("Personal/Move Abroad/school.md")
+            safe = self.write("Library/Books/a.md")
+            self.assertEqual(compiler._compile_lane(local), "compile-local")
+            self.assertEqual(compiler._compile_lane(safe), "compile")
+            self.assertTrue(compiler._requires_local(local))
+            self.assertFalse(compiler._requires_local(safe))
+
+    def test_the_folder_rule_is_not_a_hard_skip(self):
+        # Decision (b): the folder is compiled, just locally. Folding it into
+        # _is_private would silently produce the "no summary at all" option,
+        # which is a different decision than the one that was taken.
+        with patch.object(cloud_gate, "CLOUD_EXCLUDE", ("Personal/Pets",)):
+            pets = self.write("Personal/Pets/vet.md")
+            self.assertFalse(compiler._is_private(pets))
+            got = list(compiler.iter_sources([self.root / "Personal"]))
+            self.assertEqual(got, [pets])
+
+    def test_a_nfd_folder_name_still_matches(self):
+        with patch.object(cloud_gate, "CLOUD_EXCLUDE", (nfc("Personal/Şeker"),)):
+            path = self.write(nfd("Personal/Şeker/note.md"))
+            self.assertTrue(compiler._requires_local(path))
+
+
+class CloudGateRefusal(Rooted):
+    """llm.py is the second half of the guarantee: the compiler picks a lane,
+    the gate refuses the call if the lane is wrong anyway."""
+
+    def setUp(self):
+        super().setUp()
+        self.calls = []
+        patcher = patch.object(
+            llm, "_dispatch",
+            side_effect=lambda provider, *a, **k: self.calls.append(provider) or None)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def test_cloud_excluded_source_never_reaches_a_cloud_prompt(self):
+        with patch.object(cloud_gate, "CLOUD_EXCLUDE", ("Personal/Move Abroad",)):
+            src = self.write("Personal/Move Abroad/school.md")
+            with Env(BRAINLESS_LLM_PROVIDER_COMPILE="claude-cli", BRAINLESS_LLM_LOCAL_ONLY=None):
+                self.assertIsNone(llm.run_prompt("prompt", lane="compile", sources=[src]))
+        self.assertEqual(self.calls, [], "the dispatcher must not be called at all")
+
+    def test_a_safe_source_still_reaches_the_cloud(self):
+        src = self.write("Library/Books/a.md")
+        with Env(BRAINLESS_LLM_PROVIDER_COMPILE="claude-cli", BRAINLESS_LLM_LOCAL_ONLY=None):
+            llm.run_prompt("prompt", lane="compile", sources=[src])
+        self.assertEqual(self.calls, ["claude-cli"])
+
+    def test_an_excluded_source_is_allowed_on_the_local_lane(self):
+        with patch.object(cloud_gate, "CLOUD_EXCLUDE", ("Personal/Pets",)):
+            src = self.write("Personal/Pets/vet.md")
+            with Env(BRAINLESS_LLM_PROVIDER_COMPILE_LOCAL="openai-compatible",
+                     BRAINLESS_LLM_BASE_URL="http://127.0.0.1:8080/v1",
+                     BRAINLESS_LLM_LOCAL_ONLY=None):
+                llm.run_prompt("prompt", lane="compile-local", sources=[src])
+        self.assertEqual(self.calls, ["openai-compatible"])
+
+    def test_a_refusal_is_written_to_the_egress_ledger_as_unsent(self):
+        import json
+        egress = Path(tempfile.mkdtemp(prefix="brainless-egress-")) / "egress.jsonl"
+        self.addCleanup(shutil.rmtree, str(egress.parent), True)
+        with patch.object(llm, "EGRESS_FILE", str(egress)), \
+                patch.object(cloud_gate, "CLOUD_EXCLUDE", ("Personal/Pets",)):
+            src = self.write("Personal/Pets/vet.md")
+            with Env(BRAINLESS_LLM_PROVIDER_COMPILE="claude-cli", BRAINLESS_LLM_LOCAL_ONLY=None):
+                llm.run_prompt("prompt", lane="compile", sources=[src])
+        row = json.loads(egress.read_text(encoding="utf-8").strip())
+        self.assertFalse(row["sent"])
+        self.assertTrue(row["blocked"])
+        self.assertEqual(row["refused"], "cloud_exclude")
+        self.assertNotIn("Personal/Pets", egress.read_text(encoding="utf-8"),
+                         "the ledger holds no source path")
+
+
+class PrivacyFrontmatter(Rooted):
+    def test_secret_is_never_compiled(self):
+        secret = self.write("Work/Plan.md", "---\nprivacy: secret\n---\n# Plan\nSECRET\n")
+        self.assertTrue(compiler._is_private(secret))
+        self.assertEqual(list(compiler.iter_sources([self.root / "Work"])), [],
+                         "a secret note must not reach the summary phase at all")
+
+    def test_personal_is_compiled_locally_not_skipped(self):
+        card = self.write("Work/People/Ada.md", "---\nprivacy: personal\n---\n# Ada\n")
+        self.assertFalse(compiler._is_private(card))
+        self.assertTrue(compiler._requires_local(card))
+        self.assertEqual(compiler._compile_lane(card), "compile-local")
+
+    def test_personal_is_refused_in_the_cloud(self):
+        card = self.write("Work/People/Ada.md", "---\nprivacy: personal\n---\n# Ada\n")
+        calls = []
+        with patch.object(llm, "_dispatch",
+                          side_effect=lambda provider, *a, **k: calls.append(provider) or None), \
+                Env(BRAINLESS_LLM_PROVIDER_COMPILE="claude-cli", BRAINLESS_LLM_LOCAL_ONLY=None):
+            self.assertIsNone(llm.run_prompt("prompt", lane="compile", sources=[card]))
+        self.assertEqual(calls, [])
+
+    def test_internal_and_public_are_not_blocked(self):
+        for level in ("internal", "public"):
+            note = self.write(f"Work/{level}.md", f"---\nprivacy: {level}\n---\n# {level}\n")
+            self.assertIsNone(cloud_gate.block_reason(note), level)
+            self.assertEqual(compiler._compile_lane(note), "compile")
+
+    def test_a_trailing_comment_does_not_change_the_level(self):
+        note = self.write("Work/n.md", "---\nprivacy: internal (no customer names)\n---\n# n\n")
+        self.assertIsNone(cloud_gate.block_reason(note))
+        self.assertEqual(cloud_gate.level_of("internal (no customer names)"), "internal")
+
+    def test_an_unreadable_value_blocks_instead_of_unlocking(self):
+        # A typo in a security field must fail closed. One real note already
+        # carries a sentence here, written before the field had four values.
+        note = self.write("Work/t.md", "---\nprivacy: Tier A only (Finance Data rule)\n---\n# t\n")
+        self.assertEqual(cloud_gate.block_reason(note), "privacy:unrecognised")
+        self.assertTrue(compiler._requires_local(note))
+        self.assertFalse(compiler._is_private(note), "unreadable is local, not dropped")
+
+
+class LinkMeta(Rooted):
+    """A cross-link must survive the exclusion, and the content must not.
+
+    The concept page is the case that matters: it is the one page built by
+    folding several sources together, so its prompt is where a private note would
+    ride along with a public one.
+    """
+
+    def members(self):
+        safe = self.write("Library/Books/a.md", "# A\nSAFE BODY\n")
+        excluded = self.write("Personal/Move Abroad/School.md", "# School\nPRIVATE BODY\n")
+        return [
+            {"stem": "personal_move_abroad_school",
+             "source": "Personal/Move Abroad/School.md", "path": excluded},
+            {"stem": "library_books_a", "source": "Library/Books/a.md", "path": safe},
+        ]
+
+    def test_a_mixed_concept_moves_whole_to_the_local_lane(self):
+        # Not just the blocked body: the page on disk and the prior article are
+        # derivatives of the same sources, so the entire call stays on the Mac.
+        with patch.object(cloud_gate, "CLOUD_EXCLUDE", ("Personal/Move Abroad",)):
+            lane, sources = compiler._concept_inputs(self.members())
+        self.assertEqual(lane, "compile-local")
+        self.assertEqual(sources, ["Personal/Move Abroad/School.md", "Library/Books/a.md"],
+                         "the local lane keeps every source, so no link is lost")
+
+    def test_a_concept_with_no_blocked_member_stays_on_its_lane(self):
+        only_safe = self.members()[1:]
+        lane, sources = compiler._concept_inputs(only_safe)
+        self.assertIsNone(lane)
+        self.assertEqual(sources, ["Library/Books/a.md"])
+
+    def test_the_overview_keeps_a_meta_line_for_withheld_pages(self):
+        concept = self.write("Work/concepts/moving.md",
+                             "---\ntype: concept\nsensitivity: personal\n---\n# Moving\nPRIVATE BODY\n")
+        counts, _ = compiler.C.split_frontmatter(compiler.C.read_page(concept))
+        self.assertTrue(compiler._concept_page_personal(concept))
+        prompt = compiler._overview_prompt([], withheld=2)
+        self.assertIn("2 concept page(s) are withheld", prompt)
+        self.assertNotIn("PRIVATE BODY", prompt,
+                         "the count is the meta, the body never leaves the Mac")
+        self.assertTrue(counts, "fixture sanity: the page really has frontmatter")
+
+    def test_an_owner_marked_page_counts_as_personal(self):
+        page = self.write("Work/concepts/x.md",
+                          "---\ntype: concept\nprivacy: personal\n---\n# X\n")
+        self.assertTrue(compiler._concept_page_personal(page))
+
+
+class CloudExcludeHealth(unittest.TestCase):
+    def setUp(self):
+        import health_check
+        self.health = health_check
+        patcher = patch.object(health_check, "CLOUD_EXCLUDE", ["Personal/Pets"])
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def row(self, *, provider="claude-cli", blocked=True, sent=True, hours_ago=1,
+            phase="start"):
+        stamp = (datetime.now() - timedelta(hours=hours_ago)).strftime("%Y-%m-%d %H:%M:%S")
+        row = {"ts": stamp, "id": "1", "phase": phase, "lane": "compile",
+               "provider": provider, "sent": sent}
+        if blocked:
+            row["blocked"] = True
+        return row
+
+    def findings(self, ledger):
+        return self.health.cloud_exclude_findings(
+            exists=lambda rel: True, ledger=ledger,
+            is_local=lambda provider: provider != "claude-cli")
+
+    def test_a_renamed_folder_is_red(self):
+        status, detail = self.health.cloud_exclude_findings(
+            exists=lambda rel: False, ledger=[],
+            is_local=lambda provider: True)
+        self.assertEqual(status, "RED")
+        self.assertIn("Personal/Pets", detail)
+
+    def test_a_cloud_line_marked_blocked_is_red(self):
+        self.assertEqual(self.findings([self.row()])[0], "RED")
+
+    def test_a_local_line_marked_blocked_is_fine(self):
+        self.assertEqual(self.findings([self.row(provider="openai-compatible")])[0], "OK")
+
+    def test_a_refused_call_is_warned_not_red(self):
+        status, _ = self.findings([self.row(sent=False)])
+        self.assertEqual(status, "WARN")
+
+    def test_an_old_line_is_ignored(self):
+        self.assertEqual(self.findings([self.row(hours_ago=30)])[0], "OK")
+
+    def test_a_completion_line_is_not_a_send(self):
+        self.assertEqual(self.findings([self.row(phase="end")])[0], "OK")
+
+    def test_no_list_warns(self):
+        with patch.object(self.health, "CLOUD_EXCLUDE", []):
+            status, _ = self.findings([])
+        self.assertEqual(status, "WARN")
+
+
+class StampMark(Rooted):
+    """A page written from a blocked source carries `sensitivity: personal`.
+
+    That flag is what keeps the later phases (aliases, overview) on the local
+    lane too; without it a project mirror of a private folder would send its own
+    gist to the cloud one phase later.
+    """
+
+    def setUp(self):
+        super().setUp()
+        for name in ("VAULT", "WIKI"):
+            patcher = patch.object(compiler, name,
+                                   self.root if name == "VAULT" else self.root / ".wiki")
+            patcher.start()
+            self.addCleanup(patcher.stop)
+        self.dst = self.root / ".wiki" / "summaries" / "x.md"
+
+    def test_a_blocked_source_marks_the_page(self):
+        src = self.write("Personal/Pets/vet.md", "# src\n")
+        with patch.object(cloud_gate, "CLOUD_EXCLUDE", ("Personal/Pets",)):
+            self.assertTrue(compiler.write_compiled(self.dst, "# Vet\n\nText.\n", [src]))
+        self.assertIn("sensitivity: personal", self.dst.read_text(encoding="utf-8"))
+
+    def test_a_clean_source_does_not_steal_the_field(self):
+        src = self.write("Library/Books/a.md", "# src\n")
+        self.assertTrue(compiler.write_compiled(self.dst, "# A\n\nText.\n", [src]))
+        self.assertNotIn("sensitivity", self.dst.read_text(encoding="utf-8"))
 
 
 if __name__ == "__main__":

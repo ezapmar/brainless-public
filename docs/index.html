@@ -104,15 +104,15 @@
       </div>
       <div class="voice">
         <svg data-motif="eye" data-colour="saffron" viewBox="0 0 15 15" aria-hidden="true"></svg>
-        <div><h3>hourly</h3><div class="book">every hour</div><p>Cheap work that should not wait for the night: tasks, mail, a brief before the next meeting, and the morning set once a day after seven.</p></div>
+        <div><h3>hourly</h3><div class="book">every hour</div><p>Cheap work that should not wait for the night: tasks, mail (including a Gmail "Brain" label), a brief before the next meeting, and the model-free morning briefing after seven.</p></div>
       </div>
       <div class="voice">
         <svg data-motif="eye" data-colour="teal" viewBox="0 0 15 15" aria-hidden="true"></svg>
-        <div><h3>night</h3><div class="book">23:00, or on wake if the lid was shut</div><p>One ordered chain: ingest, digest, compile, index, links, lint, the Sunday weeklies, the health check, then the day's single commit and push.</p></div>
+        <div><h3>night</h3><div class="book">23:00, or on wake if the lid was shut</div><p>One ordered chain: ingest, digest, compile, index, links, lint (with dead-ends), attention audit, the Sunday weeklies (dreaming, kill review, weekly archive), the health check, then the day's single commit and push.</p></div>
       </div>
       <div class="voice">
         <svg data-motif="eye" data-colour="orange" viewBox="0 0 15 15" aria-hidden="true"></svg>
-        <div><h3>llm</h3><div class="book">always on, 127.0.0.1:8080</div><p>Gemma 4 12B on llama-server. The short, private jobs run here and never fall back to the cloud. If it is down, the job waits; the text stays home.</p></div>
+        <div><h3>llm</h3><div class="book">always on, 127.0.0.1:8080</div><p>Gemma 4 12B on llama-server. Eight private lanes, including local compilation for cloud-excluded folders, are pinned fail-closed in <code>brainless.toml</code>. If it is down, the job waits; the text stays home.</p></div>
       </div>
     </div>
     <p class="note">Everything the system says to you goes through one durable outbox: queued before it is sent, retried, sent at most once.</p>
@@ -231,14 +231,14 @@
         <p>An always-on Linux laptop behind a VPN, thirty-four timers, a self-hosted chat relay, six persona agents arguing at set hours, and an installer for three operating systems.</p>
       </div>
       <div class="way">
-        <span class="eyebrow">0.10 · now</span>
-        <h3>One Mac and a bot</h3>
-        <p>The setup had become the hobby, so it was cut back to what gets used every day.</p>
+        <span class="eyebrow">0.11 · now</span>
+        <h3>One Mac, one bot, fail-closed privacy</h3>
+        <p>The setup had become the hobby, so it was cut back to what gets used every day, then hardened so private notes stay on the machine.</p>
         <ul>
-          <li>Telegram capture and replies: voice, photo, link, text, ?questions</li>
-          <li>Four launchd jobs, one committer, one push a night</li>
-          <li>A local model for the private lanes</li>
-          <li>Five slash commands in Claude Code</li>
+          <li>Telegram capture and replies, plus idempotent Gmail "Brain" intake</li>
+          <li>Four launchd jobs, model-free morning briefing, weekly encrypted archive</li>
+          <li>Three-layer privacy: redaction, local-only compile, and an egress ledger</li>
+          <li>Seven slash commands (including /reply and /trace) plus scout and librarian agents</li>
         </ul>
       </div>
     </div>

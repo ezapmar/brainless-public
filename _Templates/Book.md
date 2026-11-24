@@ -5,6 +5,8 @@ author:
 status: reading
 rating: 
 tags: [resource/book]
+privacy: internal
+retention: 
 ---
 
 # {{title}}

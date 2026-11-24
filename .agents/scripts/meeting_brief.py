@@ -149,7 +149,9 @@ def make_brief(event, spiky, tasks):
 
 # GENERAL CONTEXT:
 {context}"""
-    return run_prompt(prompt, timeout=180, lane="meeting-brief")
+    return run_prompt(prompt, timeout=180, lane="meeting-brief",
+                      sources=[os.path.join(SPIKY_DIR, f) for _, f, _ in spiky]
+                      + [TASKS_FILE, CONTEXT_FILE])
 
 
 def main():

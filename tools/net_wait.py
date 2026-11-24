@@ -19,14 +19,30 @@ import time
 # (gaierror) is caught too. A refused/unreachable host returns fast, so a fully
 # down network does not sit on the timeout.
 _PROBES = (("1.1.1.1", 443), ("8.8.8.8", 443), ("api.telegram.org", 443))
+# Names the jobs behind this gate actually call. Any one resolving is enough.
+_NAMES = ("api.telegram.org", "imap.gmail.com", "www.googleapis.com")
+
+
+def dns_up():
+    """True if the resolver answers for any of the names the jobs need."""
+    for name in _NAMES:
+        try:
+            socket.getaddrinfo(name, 443)
+            return True
+        except OSError:
+            continue
+    return False
 
 
 def network_up(timeout=3.0):
-    """True if any probe accepts a TCP connection within `timeout` seconds."""
+    """True if a probe accepts a TCP connection within `timeout` seconds AND
+    names resolve. Routing comes back before the resolver after a wake: on
+    19/11/2026 the IP probe passed, the gate opened, and three of four hourly
+    runs died in getaddrinfo (spiky_capture, gtasks_sync, crm_capture)."""
     for host, port in _PROBES:
         try:
             with socket.create_connection((host, port), timeout=timeout):
-                return True
+                return dns_up()
         except OSError:
             continue
     return False

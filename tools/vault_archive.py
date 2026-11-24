@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""vault_archive.py: a monthly encrypted copy of the vault that sync cannot reach.
+"""vault_archive.py: a weekly encrypted copy of the vault that sync cannot reach.
 
 Sync is not backup. Two machines and GitHub all follow each other, so an
 automation that quietly rewrites two hundred pages, or a bad history rewrite,
@@ -18,7 +18,7 @@ disk death; it is noticing, three weeks later, that something went wrong.
   status   last archive and last verified restore.
 
 Usage:
-  python3 tools/vault_archive.py create [--if-older-days 30]
+  python3 tools/vault_archive.py create [--if-older-days 6]
   python3 tools/vault_archive.py verify --identity ~/Downloads/brainless-backup.key [archive]
   python3 tools/vault_archive.py status
 

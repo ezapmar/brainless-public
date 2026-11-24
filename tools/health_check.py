@@ -17,6 +17,7 @@ from datetime import datetime, timedelta
 from paths import vault_root
 VAULT = vault_root()
 from owner_profile import PROTECTED_HOMES as profile_protected_homes
+from owner_profile import CLOUD_EXCLUDE as profile_cloud_exclude
 from i18n import t
 import mac_notify
 HEALTH_FILE = os.path.join(VAULT, "_Agent-Context", "HEALTH.md")
@@ -24,6 +25,11 @@ RED_FLAG_SECONDS = 2 * 24 * 3600
 PILE_INBOX_RED = 10  # tools/wiki_prune.py INBOX_STALE_RED, the belief's own criterion
 
 CHECKS = []  # (label, status, detail) with status in {OK, WARN, RED}
+# Labels of rows that report on the owner's projects, not on the engine. They
+# get their own line and stay out of the overall status: 17 overdue kill
+# criteria kept the whole report RED for weeks (11/2026), so RED stopped
+# meaning "a job is broken" and a real engine failure had nowhere to show.
+PROJECT_ROWS = set()
 
 
 def add(label, status, detail):
@@ -47,6 +53,10 @@ def ago(seconds):
 # .gitignore, this check and tools/tests/test_gitignore_guards.py all need the same
 # one and a second copy drifts silently.
 PROTECTED_HOMES = list(profile_protected_homes)
+# Folders whose content must never reach a cloud provider (P0.4). Same source of
+# truth as the compiler and the model gate: PROFILE.md.
+CLOUD_EXCLUDE = list(profile_cloud_exclude)
+EGRESS_FILE = os.path.join(VAULT, ".agents", "state", "egress.jsonl")
 
 
 def check_notify():
@@ -218,8 +228,9 @@ def check_crm():
 
 
 def check_morning_briefing():
-    """The morning briefing is a Claude scheduled task that only fires while the
-    desktop app is open, so it fails silently. On weekdays after 08:30 the
+    """The morning briefing is written by tools/morning_briefing.py in the
+    morning set (until 19/11/2026 a Claude scheduled task that only fired while
+    the desktop app was open, and failed silently). On weekdays after 08:30 the
     day's file must exist under Daily Briefings/ and carry the health block;
     a missing morning half is WARN, never RED (the evening close-out still
     opens the file). Weekends and early hours are reported as not due."""
@@ -251,6 +262,7 @@ def check_kill_criteria():
     still open. This call also refreshes _Agent-Context/KILL-CRITERIA.md, which
     the briefing copies next to the health block."""
     label = t("health_check.kill_criteria")
+    PROJECT_ROWS.add(label)
     try:
         import kill_criteria
         res = kill_criteria.write()
@@ -362,8 +374,17 @@ DRY_CAPTURE = {("nightly_processor", "captures"): 3, ("spiky_capture", "reports"
                ("nightly_compile", "wiki_changed"): 7}
 
 
-def run_findings(roll, now=None):
-    """(status, text) findings from a run-log rollup (tools/run_log.py)."""
+def job_exists(job):
+    """A job is named after its script (run_log.job_name). No script, no job:
+    it was retired, and its last rows sit in the window for two more weeks."""
+    return any(os.path.exists(os.path.join(VAULT, d, job + ext))
+               for d in ("tools", ".agents/scripts") for ext in (".py", ".sh"))
+
+
+def run_findings(roll, now=None, exists=None):
+    """(status, text) findings from a run-log rollup (tools/run_log.py).
+    `exists(job)` says whether the job still has a script; a retired job is
+    never reported as silent."""
     now = now or datetime.now()
     by_job = {}
     for e in roll:
@@ -385,8 +406,12 @@ def run_findings(roll, now=None):
             per_day = sum(e["runs"] for e in days) / max(span, 1)
             gap_days = max(1.0, 1 / per_day) if per_day else span
             quiet = (now - datetime.strptime(f"{last['day']} {last['last']}", "%Y-%m-%d %H:%M")).total_seconds() / 86400
-            if quiet > 2.5 * gap_days:
+            if quiet > 2.5 * gap_days and (exists is None or exists(job)):
                 out.append(("WARN", t("health_check.runs_quiet", job=job, days=f"{quiet:.1f}")))
+        if last["counts"].get("screen_missed"):
+            out.append(("WARN", t("health_check.runs_screen_missed", job=job, n=last["counts"]["screen_missed"])))
+        if last["counts"].get("contradictions_skipped"):
+            out.append(("WARN", t("health_check.runs_contradictions_skipped", job=job)))
         # Retrieval regression: hit@5 on the golden questions fell 15+ points
         # below its best in the window (tools/retrieval_eval.py).
         scores = [e["counts"]["hit5"] for e in days if isinstance(e["counts"].get("hit5"), int)]
@@ -420,7 +445,7 @@ def check_runs():
     except OSError:
         roll = []
     jobs = len({e["job"] for e in roll})
-    findings = list(run_findings(roll))
+    findings = list(run_findings(roll, exists=job_exists))
     if not jobs:
         return  # no run log yet
     if findings:
@@ -431,7 +456,7 @@ def check_runs():
 
 
 def check_backup():
-    """The monthly encrypted archive (tools/vault_archive.py) and its restore
+    """The weekly encrypted archive (tools/vault_archive.py) and its restore
     test. Sync copies damage everywhere; only an archive that sync cannot reach,
     and that has been restored once, protects against a bad automation run."""
     path = os.path.join(VAULT, ".agents", "state", "backup.json")
@@ -447,7 +472,9 @@ def check_backup():
     now = datetime.now()
     made = (now - datetime.fromisoformat(s["created"])).days
     ver = (now - datetime.fromisoformat(s["verified"])).days if s.get("verified") else None
-    status = "RED" if made > 60 else "WARN" if made > 35 or ver is None or ver > 120 else "OK"
+    # Weekly archive (night.sh, Sunday): one missed week is yellow, three are
+    # red. The restore test is done by hand with the offline key, once a quarter.
+    status = "RED" if made > 21 else "WARN" if made > 9 or ver is None or ver > 90 else "OK"
     add(label, status, t("health_check.backup_detail", made=made,
                          verified=t("health_check.backup_never") if ver is None else ver))
 
@@ -506,9 +533,152 @@ def check_privacy_guards():
     add(label, "OK", t("health_check.privacy_ok", count=len(PROTECTED_HOMES)))
 
 
+def routing_findings():
+    """(status, detail) for model routing drift. Pure enough to test: reads env
+    through llm, which has applied brainless.toml at import."""
+    import llm
+    cfg = os.path.join(VAULT, "brainless.toml")
+    if not os.path.isfile(cfg):
+        return "RED", t("health_check.routing_no_config")
+    lanes = llm.local_only_lanes()
+    if not lanes:
+        return "RED", t("health_check.routing_empty")
+    unknown = sorted(lanes - set(llm.LANES))
+    if unknown:
+        return "RED", t("health_check.routing_unknown", lanes=", ".join(unknown))
+    cloud = sorted(l for l in lanes if not llm._is_local(llm.resolve_provider(l)))
+    if cloud:
+        return "RED", t("health_check.routing_drift", lanes=", ".join(cloud))
+    return "OK", t("health_check.routing_ok", count=len(lanes))
+
+
+def check_routing():
+    """Every local-only lane still resolves to a local provider. A lane that
+    drifts to the cloud is refused by llm.py, so this row is how the refusal
+    gets noticed before a night of failed jobs."""
+    try:
+        status, detail = routing_findings()
+    except Exception as e:  # a broken import must show, not hide the row
+        status, detail = "RED", f"{type(e).__name__}: {e}"
+    add(t("health_check.routing"), status, detail)
+
+
+def privacy_findings(rep, baseline, gate):
+    """(status, detail) for personal data in .wiki/. Pure, for the tests.
+
+    0 files is OK. At or under the recorded baseline is WARN: known debt,
+    cleared by redacting at ingest (P0.2), not by hand. Over the baseline is
+    RED: a new leak, which the nightly gate holds back but which still means a
+    source is writing personal data into the compiled layer."""
+    held = (gate or {}).get("held") or {}
+    tail = t("health_check.wiki_privacy_held", n=len(held), date=gate.get("date", "?")) if held else ""
+    n = rep["files"]
+    kinds = ", ".join(f"{k} {v}" for k, v in rep["kinds"].items())
+    if n == 0:
+        return ("WARN" if held else "OK"), t("health_check.wiki_privacy_ok") + tail
+    if not baseline:
+        return "WARN", t("health_check.wiki_privacy_no_baseline", n=n, kinds=kinds) + tail
+    if n > baseline["files"]:
+        return "RED", t("health_check.wiki_privacy_new", n=n, base=baseline["files"], kinds=kinds) + tail
+    return "WARN", t("health_check.wiki_privacy_debt", n=n, base=baseline["files"], kinds=kinds) + tail
+
+
+def check_wiki_privacy():
+    try:
+        import privacy_scan
+        status, detail = privacy_findings(privacy_scan.scan_wiki(),
+                                          privacy_scan.read_json(privacy_scan.BASELINE_FILE),
+                                          privacy_scan.read_json(privacy_scan.GATE_FILE))
+    except Exception as e:
+        status, detail = "RED", f"{type(e).__name__}: {e}"
+    add(t("health_check.wiki_privacy"), status, detail)
+
+
+def read_egress(path=None):
+    """The egress ledger as a list of rows. Missing file means no rows."""
+    rows = []
+    try:
+        with open(path or EGRESS_FILE, encoding="utf-8", errors="replace") as fh:
+            for line in fh:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    row = json.loads(line)
+                except ValueError:
+                    continue
+                if isinstance(row, dict):
+                    rows.append(row)
+    except OSError:
+        pass
+    return rows
+
+
+def cloud_exclude_findings(exists=None, ledger=None, now=None, is_local=None):
+    """(status, detail) for the cloud_exclude rule. Pure enough to test.
+
+    Two failures, and the requirement is red either way:
+
+      1. a listed folder is no longer on disk. A rename silently kills a
+         path-based rule; the 2026-08-28 and 2026-09-19 incidents are exactly
+         this shape, which is why the check runs every hour instead of being
+         remembered.
+      2. the ledger has a row from the last 24 hours that was sent to a cloud
+         provider and carries `blocked: true`. The gate refuses such a call, so
+         this row should be impossible; it is here as the second lock on the
+         same door. The ledger holds no source path by design, so the flag is
+         what makes the second check possible at all.
+    """
+    homes = CLOUD_EXCLUDE
+    exists = exists or (lambda rel: os.path.isdir(os.path.join(VAULT, rel)))
+    if not homes:
+        return "WARN", t("health_check.cloud_exclude_empty")
+    missing = [rel for rel in homes if not exists(rel)]
+    if missing:
+        return "RED", t("health_check.cloud_exclude_missing", paths=", ".join(missing[:3]))
+    if is_local is None:
+        import llm
+        is_local = llm._is_local
+    since = (now or datetime.now()) - timedelta(hours=24)
+    leaked, refused = set(), 0
+    for row in ledger or []:
+        if str(row.get("phase") or "start") != "start":
+            continue          # a completion line carries no send of its own
+        try:
+            stamp = datetime.strptime(str(row.get("ts", "")), "%Y-%m-%d %H:%M:%S")
+        except ValueError:
+            continue
+        if stamp < since:
+            continue
+        if not row.get("sent", True):
+            refused += row.get("blocked") is True   # nothing left the machine
+            continue
+        if is_local(str(row.get("provider", ""))):
+            continue
+        if row.get("blocked"):
+            leaked.add(str(row.get("lane") or "-"))
+    if leaked:
+        return "RED", t("health_check.cloud_exclude_egress", lanes=", ".join(sorted(leaked)[:3]))
+    if refused:
+        return "WARN", t("health_check.cloud_exclude_refused", n=refused)
+    return "OK", t("health_check.cloud_exclude_ok", count=len(homes))
+
+
+def check_cloud_exclude():
+    """A cloud_exclude folder still exists, and nothing from one hit the cloud."""
+    try:
+        status, detail = cloud_exclude_findings(ledger=read_egress())
+    except Exception as e:  # a broken import must show, not hide the row
+        status, detail = "RED", f"{type(e).__name__}: {e}"
+    add(t("health_check.cloud_exclude"), status, detail)
+
+
 def main():
     check_git()
     check_privacy_guards()
+    check_routing()
+    check_cloud_exclude()
+    check_wiki_privacy()
     check_night()
     check_morning_briefing()
     check_kill_criteria()
@@ -522,8 +692,10 @@ def main():
     check_crm()
     check_log_errors()
 
+    engine = [c for c in CHECKS if c[0] not in PROJECT_ROWS]
+    projects = [c for c in CHECKS if c[0] in PROJECT_ROWS]
     worst = "OK"
-    for _, status, _ in CHECKS:
+    for _, status, _ in engine:
         if status == "RED":
             worst = "RED"
             break
@@ -535,11 +707,13 @@ def main():
         t("health_check.title"),
         "",
         t("health_check.status_line", icon=icon, worst=worst, time=datetime.now().strftime('%Y-%m-%d %H:%M')),
-        "",
     ]
-    for label, status, detail in CHECKS:
-        mark = {"OK": "🟢", "WARN": "🟡", "RED": "🔴"}[status]
-        lines.append(f"- {mark} {label}: {detail}")
+    marks = {"OK": "🟢", "WARN": "🟡", "RED": "🔴"}
+    for label, status, detail in projects:
+        lines += ["", t("health_check.projects_line", icon=marks[status], label=label, detail=detail)]
+    lines.append("")
+    for label, status, detail in engine:
+        lines.append(f"- {marks[status]} {label}: {detail}")
     lines.append("")
     lines.append(t("health_check.footer"))
 
@@ -548,7 +722,7 @@ def main():
         fh.write("\n".join(lines) + "\n")
 
     if worst == "RED":
-        reds = "; ".join(f"{label}: {d}" for label, s, d in CHECKS if s == "RED")[:180]
+        reds = "; ".join(f"{label}: {d}" for label, s, d in engine if s == "RED")[:180]
         title = t("health_check.notify_title")
         if shutil.which("osascript"):
             # reds holds LLM error text and paths: argv only, never AppleScript source.

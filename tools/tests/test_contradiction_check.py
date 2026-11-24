@@ -106,6 +106,43 @@ class Check(unittest.TestCase):
                                  deadline=time.monotonic())
         self.assertEqual(n["checked"], 0)
 
+    def test_a_page_the_screen_clears_skips_the_judge_except_every_third(self):
+        self.cc.SCREEN_LOG = self.root / "state" / "contradiction_screen.jsonl"
+        idx = Index([(0.88, ".wiki/concepts/pricing.md", 0)])
+        conflict = json.dumps({"conflicts": [{"page": ".wiki/concepts/pricing.md", "kind": "contradiction",
+                                              "new": "35", "old": "50", "why": "w"}]})
+        asked = []
+        judge = lambda p: asked.append(1) or conflict
+        clean = lambda p: '{"conflicts": []}'
+        rs = [self.cc.check(".wiki/summaries/new.md", run=judge, index=idx, screen=clean) for _ in range(3)]
+        self.assertEqual([bool(r.get("screened_out")) for r in rs], [True, True, False])
+        self.assertEqual(len(asked), 1)                       # only the audited third page was judged
+        self.assertTrue(rs[2]["screen_missed"])                 # and the judge found what the screen cleared
+        self.assertEqual(len(rs[2]["conflicts"]), 1)
+
+    def test_a_flagged_or_failed_screen_goes_to_the_judge(self):
+        self.cc.SCREEN_LOG = self.root / "state" / "contradiction_screen.jsonl"
+        idx = Index([(0.88, ".wiki/concepts/pricing.md", 0)])
+        conflict = json.dumps({"conflicts": [{"page": ".wiki/concepts/pricing.md", "kind": "contradiction",
+                                              "new": "35", "old": "50", "why": "w"}]})
+        for screen_reply in (conflict, None, "not json"):
+            asked = []
+            r = self.cc.check(".wiki/summaries/new.md",
+                              run=lambda p, asked=asked: asked.append(1) or '{"conflicts": []}',
+                              index=idx, screen=lambda p, reply=screen_reply: reply)
+            self.assertEqual((len(asked), r["conflicts"], r["screen_missed"]), (1, [], False))
+
+    def test_night_counts_what_the_screen_cleared(self):
+        self.cc.SCREEN_LOG = self.root / "state" / "contradiction_screen.jsonl"
+        idx = Index([(0.88, ".wiki/concepts/pricing.md", 0)])
+        self.cc.default_screen = lambda: (lambda p: '{"conflicts": []}')
+        import llm
+        old = llm.run_prompt
+        self.addCleanup(setattr, llm, "run_prompt", old)
+        llm.run_prompt = lambda *a, **k: '{"conflicts": []}'
+        _, n = self.cc.run_night([".wiki/summaries/new.md"], index=idx)
+        self.assertEqual((n["checked"], n["screened_out"], n["screen_missed"]), (1, 1, 0))
+
 
 if __name__ == "__main__":
     unittest.main()

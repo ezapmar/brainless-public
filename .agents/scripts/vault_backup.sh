@@ -16,7 +16,18 @@ done
 
 if [ -n "$(git status --porcelain)" ]; then
   git add -A
-  git commit --quiet -m "vault backup: $(date '+%F')" || true
+  # Privacy gate (tools/privacy_scan.py --staged): a file whose ADDED lines carry
+  # personal data in .wiki/ or a secret anywhere is unstaged, so it stays on the
+  # Mac and the rest is committed (exit 1). Any other failure skips tonight's
+  # commit entirely: fail closed, the pushes below only carry gated commits.
+  PYTHONPATH="$PWD/tools${PYTHONPATH:+:$PYTHONPATH}" python3 tools/privacy_scan.py --staged
+  gate=$?
+  if [ "$gate" -le 1 ]; then
+    [ "$gate" -eq 1 ] && echo "$(date '+%F %T') privacy gate held files back; see .agents/state/privacy_gate.json"
+    git diff --cached --quiet || git commit --quiet -m "vault backup: $(date '+%F')" || true
+  else
+    echo "$(date '+%F %T') privacy gate failed (exit $gate); commit skipped, nothing new leaves tonight"
+  fi
 fi
 
 # Private remote guard: `git add -A` holds the whole vault. Push only to a

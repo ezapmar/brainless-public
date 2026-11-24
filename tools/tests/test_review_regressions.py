@@ -1,6 +1,6 @@
 """Offline regressions for document retention, project compilation, and actions.
 
-Run: python3 -m unittest discover -s tools/tests -v
+Run: python3 tools/run_tests.py test_review_regressions   (the whole suite: python3 tools/run_tests.py)
 """
 import contextlib
 import importlib.util

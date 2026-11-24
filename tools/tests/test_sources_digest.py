@@ -19,9 +19,9 @@ class SourcesDigestTests(unittest.TestCase):
     def vault(self, root):
         d = Path(root) / "Library"
         d.mkdir(parents=True)
-        (d / "Lale.md").write_text("same text", encoding="utf-8")
+        (d / "Dünya.md").write_text("same text", encoding="utf-8")
         (d / "b.md").write_text("other text", encoding="utf-8")
-        return [d / "Lale.md", d / "b.md"]
+        return [d / "Dünya.md", d / "b.md"]
 
     def test_same_content_in_two_locations_hashes_the_same(self):
         with tempfile.TemporaryDirectory() as a, tempfile.TemporaryDirectory() as b:

@@ -1,4 +1,11 @@
 {
+  "permissions": {
+    "deny": [
+      "Edit(raw/**)",
+      "Write(raw/**)",
+      "Bash(curl:*)"
+    ]
+  },
   "hooks": {
     "SessionStart": [
       {

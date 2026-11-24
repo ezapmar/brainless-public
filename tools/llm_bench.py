@@ -22,7 +22,7 @@ import time
 # model's speed on Turkish tokens is worse than its speed on English ones and
 # the vault is mostly Turkish.
 _FILLER = (
-    "Toplantida ofis organizasyonu konusuldu ve bir sonraki adim belirlendi. "
+    "Toplantida bordro entegrasyonu konusuldu ve bir sonraki adim belirlendi. "
     "The integration needs a decision on scope before the end of the quarter. "
     "Musteri tarafindaki beklenti net degil, once bir olcum yapilmasi gerekiyor. "
 )

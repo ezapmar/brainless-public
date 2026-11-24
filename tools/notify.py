@@ -36,7 +36,7 @@ CONF_DIR = Path.home() / '.config/brainless'
 # outbox keys and workflow state were built from it.
 ROUTES = {'ops': 'watchdog', 'tasks': 'tasks', 'radar': 'radar', 'content': 'content',
           'daily': 'briefing', 'inbox': 'inbox', 'thinking': 'thinking', 'crm': 'crm',
-          'writing': 'writing', 'dreaming': 'dreaming', 'ask': 'ask'}
+          'writing': 'writing', 'dreaming': 'dreaming', 'ask': 'ask', 'projects': 'projects'}
 EVENT_RE = re.compile(r'tg\d+')
 MAX_TEXT = 4000  # Telegram caps a message at 4096 characters
 QUIET_CHANNELS = frozenset({'crm', 'radar', 'content'})  # delivered without a sound

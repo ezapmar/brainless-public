@@ -71,9 +71,14 @@ _LLM_KEYS = {"provider": "BRAINLESS_LLM_PROVIDER", "base_url": "BRAINLESS_LLM_BA
              "api_budget_stop": "BRAINLESS_API_BUDGET_STOP",
              "api_budget_reset_day": "BRAINLESS_API_BUDGET_RESET_DAY",
              "system_prompt_file": "BRAINLESS_SYSTEM_PROMPT_FILE",
-             "anthropic_workspace_id": "BRAINLESS_ANTHROPIC_WORKSPACE_ID"}
+             "anthropic_workspace_id": "BRAINLESS_ANTHROPIC_WORKSPACE_ID",
+             # Lanes that may only run on a local provider; tools/llm.py refuses the rest.
+             "local_only": "BRAINLESS_LLM_LOCAL_ONLY"}
 
 _loaded = None
+# BRAINLESS_* variables already in the environment before the file was applied,
+# so `source()` can tell an env override from a value this file supplied.
+_env_before: set = set()
 
 
 def google_dir() -> str:
@@ -172,13 +177,28 @@ def to_env(data):
 
 def apply(vault=None, force=False):
     """Set the config's variables as environment defaults. Idempotent per process."""
-    global _loaded
+    global _loaded, _env_before
     if _loaded is not None and not force:
         return _loaded
+    if _loaded is None:
+        _env_before = {k for k in os.environ if k.startswith("BRAINLESS_")}
     _loaded = to_env(load(vault))
     for var, val in _loaded.items():
         os.environ.setdefault(var, val)
     return _loaded
+
+
+def source(var):
+    """Where a variable's current value comes from: "env", "brainless.toml" or
+    "default" (unset). A value set in the process after import counts as env,
+    unless it equals the file's value, which then reads as the file's."""
+    if var not in os.environ:
+        return "default"
+    if var in _env_before:
+        return "env"
+    if _loaded and var in _loaded and os.environ[var] == _loaded[var]:
+        return "brainless.toml"
+    return "env"
 
 
 # ─── secrets ──────────────────────────────────────────────────────

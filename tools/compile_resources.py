@@ -45,6 +45,7 @@ from owner_profile import LANG, lang_name, output_lang_directive, CROSS_LINK_RUL
 from owner_profile import COMPANY_AREA, GENERIC_PRIVATE_SEGMENTS, PRIVATE_SEGMENTS as PROFILE_PRIVATE_SEGMENTS
 from owner_profile import PRIVATE_NAME_PARTS as PROFILE_PRIVATE_NAME_PARTS
 from i18n import t, t_list
+import cloud_gate
 import mac_notify
 import concepts as C
 import output_guard
@@ -85,13 +86,44 @@ PRIVATE_PATH_PARTS = tuple(_nfc(p).casefold() for p in
 
 
 def _is_private(path: Path) -> bool:
+    """A source this compiler never touches: not summarised, not indexed.
+
+    The segment and name-part rules mirror .gitignore; they mark the homes that
+    must not be compiled at all. A note whose own frontmatter says
+    `privacy: secret` is private for the same reason, whatever folder it sits
+    in (P0.4), so the human field and the folder rule end in the same place.
+
+    Cloud-excluded folders are NOT here. They are compiled, on the local model
+    (P0.4 decision b); putting them here would drop them from .wiki entirely,
+    which is the third option, not the chosen one. `_requires_local` is the
+    predicate for them.
+    """
     for seg in path.parts:
         seg_n = _nfc(seg)
         if seg_n in PRIVATE_SEGMENTS or seg_n.endswith(PRIVATE_SUFFIXES):
             return True
     low = _nfc(str(path)).casefold()
-    return (any(p in low for p in PRIVATE_NAME_PARTS)
-            or any(p in low for p in PRIVATE_PATH_PARTS))
+    if any(p in low for p in PRIVATE_NAME_PARTS) or any(p in low for p in PRIVATE_PATH_PARTS):
+        return True
+    return cloud_gate.is_secret(path)
+
+
+def _requires_local(path) -> bool:
+    """Compiled, but only by a local provider: cloud_exclude, or a note marked
+    privacy: personal, secret, or with a value the gate could not read."""
+    return cloud_gate.block_reason(path) in ("cloud_exclude", "privacy:personal",
+                                             "privacy:secret", "privacy:unrecognised")
+
+
+def _compile_lane(*paths) -> str:
+    """The lane for a prompt built from these paths.
+
+    A cloud-excluded or privacy-personal source goes to "compile-local", which
+    brainless.toml pins to the local model and llm.py refuses to serve from a
+    cloud provider. Returning the lane here rather than at the call site keeps
+    one answer to one question.
+    """
+    return "compile-local" if any(_requires_local(p) for p in paths) else "compile"
 
 
 # CROSS_LINK_RULE comes from _Agent-Context/PROFILE.md ("## Cross-link rule") via owner_profile.
@@ -143,15 +175,20 @@ _DANGEROUS_TOOLS = ["Bash", "Write", "Edit", "MultiEdit", "NotebookEdit",
 
 
 def call_claude(prompt: str, timeout: int = 300, *, concept: bool = False,
-                aliases: bool = False, lane: str | None = None) -> str | None:
+                aliases: bool = False, lane: str | None = None, sources=None) -> str | None:
     """All compile prompts go through tools/llm.py (Phase 0 T3): same tool-deny
     list, same llm_status breadcrumb, and BRAINLESS_LLM_PROVIDER can swap the
-    backend for an OpenAI-compatible endpoint without touching this file."""
+    backend for an OpenAI-compatible endpoint without touching this file.
+
+    sources: the vault paths the prompt was built from. llm.py refuses a cloud
+    provider for a cloud-excluded or privacy-personal source, so the argument is
+    the second half of the guarantee the lane choice makes (P0.4).
+    """
     global _CLAUDE_CALLS, _CLAUDE_FAILURES
     _CLAUDE_CALLS += 1
     name = lane or ("compile-aliases" if aliases else "compile-concept" if concept else "compile")
     try:
-        result = run_prompt(prompt.replace("\x00", ""), timeout=timeout, lane=name)
+        result = run_prompt(prompt.replace("\x00", ""), timeout=timeout, lane=name, sources=sources)
     except Exception as exc:  # never let one source kill the batch
         print(f"[llm err] {exc}", file=sys.stderr)
         result = None
@@ -297,6 +334,13 @@ def write_compiled(dst: Path, body: str, sources, *, scope="") -> bool:
         end = text.find("\n---", 4)
         if end != -1:
             text = text[:end] + f"\nsources_hash: {digest}" + text[end:]
+    if any(cloud_gate.block_reason(p) for p in sources):
+        # Written from a source a cloud provider may not see, so this page is
+        # personal by derivation. The later phases (aliases, overview) read this
+        # flag and keep their own calls local too. It is `sensitivity`, the
+        # compiler's field, not `privacy:`: that one belongs to the owner and is
+        # never written in bulk.
+        text = C.set_fm_key(text, "sensitivity", "personal")
     dst.parent.mkdir(parents=True, exist_ok=True)
     atomic_write(dst, text)
     return True
@@ -336,21 +380,26 @@ what changed it. Keep the conversation date on every conclusion: the owner's
 view may have moved since.
 """
 
-def summarize_file(src: Path, dry: bool, full: bool) -> bool:
-    rel = src.relative_to(VAULT)
-    dst = _summary_dst(src)
-    if not needs_rebuild(src, dst, full):
-        return False
-    if dry:
-        print(f"[dry] summarize {rel} → {dst.relative_to(VAULT)}")
-        return True
-    try:
-        body = src.read_text(encoding="utf-8")[:MAX_CHARS]
-    except Exception as e:
-        print(f"[skip] {rel}: {e}")
-        return False
+def cross_effects_guide() -> str:
+    """What goes under a Cross-effects heading, for every compile prompt.
+
+    The owner's cross-link rule asks for personal and work effects to be
+    surfaced, and a prompt that only named the section got it filled whether
+    or not the source said anything: on 20 summaries (19/11/2026) the judge
+    counted 49 statements with no basis in the source, most of them here. With
+    this wording it counted 6, and 16 of the 20 summaries had none."""
+    return (f"<Personal↔work effects that the SOURCES THEMSELVES state. An effect you infer from the rule\n"
+            f" above rather than read in a source goes on its own line starting with\n"
+            f" \"{t('compile_resources.inference_label')}:\" (two such lines at most). Never present an inference\n"
+            f" as something a source says. If there is neither, write \"{t('compile_resources.cross_effects_none')}\".>")
+
+
+def _summary_prompt(src: Path, body: str, rel=None) -> str:
+    """The summary prompt for one source. Shared with cloud_exclude_report.py so
+    a quality sample is the real prompt, not a lookalike."""
+    rel = rel if rel is not None else src.relative_to(VAULT)
     chat_rule = CHAT_RULE if str(rel).startswith(f"{folder('library')}/Chats/") else ""
-    prompt = f"""You are compiling a personal knowledge wiki.
+    return f"""You are compiling a personal knowledge wiki.
 
 {CROSS_LINK_RULE}
 {chat_rule}
@@ -384,11 +433,27 @@ status: seed
      NEVER use a path like [[.wiki/articles/...]] or [[wiki/...]]: those do not resolve in Obsidian. -->
 
 {t("compile_resources.cross_effects_heading")}
-<personal↔work effects>
+{cross_effects_guide()}
 
 {output_lang_directive()}
 """
-    out = call_claude(prompt)
+
+
+def summarize_file(src: Path, dry: bool, full: bool) -> bool:
+    rel = src.relative_to(VAULT)
+    dst = _summary_dst(src)
+    if not needs_rebuild(src, dst, full):
+        return False
+    if dry:
+        print(f"[dry] summarize {rel} → {dst.relative_to(VAULT)}")
+        return True
+    try:
+        body = src.read_text(encoding="utf-8")[:MAX_CHARS]
+    except Exception as e:
+        print(f"[skip] {rel}: {e}")
+        return False
+    prompt = _summary_prompt(src, body, rel)
+    out = call_claude(prompt, lane=_compile_lane(src), sources=[src])
     if not out:
         print(f"[FAIL] summary {src.relative_to(VAULT)}: not produced", file=sys.stderr)
         return False
@@ -586,10 +651,11 @@ status: seed
 {t("compile_resources.decisions_heading")}
 {LINKS_HEADING}
 ## Cross-effects (personal↔work)
+{cross_effects_guide()}
 
 {output_lang_directive()}
 """
-            out = call_claude(prompt)
+            out = call_claude(prompt, lane=_compile_lane(*sources), sources=sources)
             if not out:
                 print(f"[FAIL] project {proj_dir.name}: not produced", file=sys.stderr)
                 continue
@@ -788,26 +854,36 @@ def phase_concept_assign(dry: bool, full: bool, *, propose_only: bool = False):
             print(f"phase {label}: review queue full, stopping")
             break
         batch = todo[i:i + CONCEPT_ASSIGN_BATCH]
-        stems = {s["stem"] for s in batch}
-        out = call_claude(_assign_prompt(concept_rows(), batch, propose_only=propose_only),
-                          timeout=300, concept=True)
-        assign, props = C.parse_assignment(out or "", stems, slugs)
-        if not assign:
-            print(f"[FAIL] {label}: batch {i // CONCEPT_ASSIGN_BATCH + 1} unparsable, left for next run",
-                  file=sys.stderr)
-            continue
-        fresh = C.new_proposals(props, concept_rows())
-        kept = {r["slug"] for r in _append_proposals(fresh, catalogue)}
-        added += [r for r in concept_rows() if r["slug"] in kept]
-        for p in (p for p in fresh if p["slug"] in kept):  # its evidence is assigned to it right away
-            slugs.add(p["slug"])
-            for m in p["members"]:
-                assign[m] = sorted(set(assign.get(m, [])) | {p["slug"]})
-        if propose_only:
-            continue
-        for s in batch:
-            _stamp_concepts(s["path"], assign.get(s["stem"], []), rev)
-            assigned += bool(assign.get(s["stem"]))
+        # The gist of a cloud-excluded or privacy-personal summary is the private
+        # thing itself, not a redacted form of it, so those summaries are assigned
+        # in their own call on the local lane. Splitting costs one extra call per
+        # batch that mixes them; sending them instead would defeat P0.4.
+        parts = [([s for s in batch if not cloud_gate.block_reason(s["source"])], None),
+                 ([s for s in batch if cloud_gate.block_reason(s["source"])], "compile-local")]
+        for part, lane in parts:
+            if not part:
+                continue
+            stems = {s["stem"] for s in part}
+            out = call_claude(_assign_prompt(concept_rows(), part, propose_only=propose_only),
+                              timeout=300, concept=True, lane=lane,
+                              sources=[s["source"] for s in part])
+            assign, props = C.parse_assignment(out or "", stems, slugs)
+            if not assign:
+                print(f"[FAIL] {label}: batch {i // CONCEPT_ASSIGN_BATCH + 1} unparsable, left for next run",
+                      file=sys.stderr)
+                continue
+            fresh = C.new_proposals(props, concept_rows())
+            kept = {r["slug"] for r in _append_proposals(fresh, catalogue)}
+            added += [r for r in concept_rows() if r["slug"] in kept]
+            for p in (p for p in fresh if p["slug"] in kept):  # its evidence is assigned to it right away
+                slugs.add(p["slug"])
+                for m in p["members"]:
+                    assign[m] = sorted(set(assign.get(m, [])) | {p["slug"]})
+            if propose_only:
+                continue
+            for s in part:
+                _stamp_concepts(s["path"], assign.get(s["stem"], []), rev)
+                assigned += bool(assign.get(s["stem"]))
     _announce_proposals(added)
     print(f"phase {label}: {len(todo)} summaries seen, {assigned} assigned, "
           f"{len(added)} concept(s) proposed")
@@ -823,6 +899,32 @@ def _date_key(source: str) -> str:
     rather than every old source arriving as a contradiction to the newest."""
     m = re.search(r"(20\d\d)[-.](\d\d)(?:[-.](\d\d))?", source)
     return "".join(g or "00" for g in m.groups()) if m else "99999999"
+
+
+def _withheld_overview_line(count: int) -> str:
+    """The only thing a cloud model may learn about a personal concept page.
+
+    The overview is one cloud call that folds every concept page into a single
+    text, so a personal page cannot be sent at all. Dropping it silently would
+    hide the fact that the vault holds more than the thesis says; a count keeps
+    the shape of the vault visible and nothing else.
+    """
+    return (f"- {count} concept page(s) are withheld from this compile: they are "
+            f"personal, and neither their content nor their summary is sent.")
+
+
+def _concept_inputs(members):
+    """(lane, sources) for a concept call built from these members.
+
+    If any member is cloud-excluded or privacy-personal, the whole call goes to
+    the local lane and every member comes with it. Withholding only the blocked
+    bodies is not enough: the existing page on disk and the prior article are
+    themselves derivatives of those sources, written before this rule existed, so
+    no part of this concept's prompt is safe to send. Decision (b) allows the
+    local call, and compiling the page locally keeps every cross-link in it.
+    """
+    blocked = any(cloud_gate.block_reason(s["source"]) for s in members)
+    return ("compile-local" if blocked else None), [s["source"] for s in members]
 
 
 def _concept_prompt(row, old, members, prior, personal):
@@ -885,6 +987,7 @@ status: seed
 {t("compile_resources.concept_open_heading")}
 {t("compile_resources.concept_related_heading")}
 {t("compile_resources.cross_effects_heading")}
+{cross_effects_guide()}
 """
 
 
@@ -940,7 +1043,9 @@ def phase_concepts(dry: bool, full: bool):
         prior = "" if old else C.read_page(CONCEPT_ARCHIVE / f"{row['slug']}.article.md")
         text = None
         for attempt in (batch, batch[:max(1, len(batch) // 2)]):
-            out = call_claude(_concept_prompt(row, old, attempt, prior, personal), concept=True)
+            lane, srcs = _concept_inputs(attempt)
+            out = call_claude(_concept_prompt(row, old, attempt, prior, personal),
+                              concept=True, lane=lane, sources=srcs)
             if not out:
                 continue
             stamped = dict(integrated, **{s["stem"]: s["hash"] for s in attempt})
@@ -979,12 +1084,13 @@ OVERVIEW_CHARS = 2500       # per concept page inside the prompt
 OVERVIEW_MAX_CLAIMS = 12
 
 
-def _overview_prompt(pages):
+def _overview_prompt(pages, withheld=0):
     blob = ""
     for p in pages:
         fm, body = C.split_frontmatter(C.read_page(p))
         blob += (f"\n--- [[{p.stem}]] ---\nsummary_en: {C.fm_value(fm, 'summary_en') or ''}\n"
                  f"{body[:OVERVIEW_CHARS]}\n")
+    withheld_block = (_withheld_overview_line(withheld) + "\n") if withheld else ""
     return f"""You write one page of a personal knowledge wiki: the standing thesis of the
 whole vault. The reader is its owner, who wants to know in one screen what this
 vault currently holds, before opening any single page.
@@ -1014,6 +1120,9 @@ RULES (each exists because breaking it destroys what the page is for):
 CONCEPT PAGES:
 {blob[:90000]}
 
+WITHHELD:
+{withheld_block or "(none)"}
+
 Return ONLY the page in this shape:
 
 ---
@@ -1032,20 +1141,43 @@ _{t("compile_resources.overview_generated")}_
 """
 
 
+def _concept_page_personal(p: Path) -> bool:
+    """A compiled page the compiler marked personal, or the owner did.
+
+    Such a page is written from sources that may not reach a cloud provider, so
+    its body must not go there either, whatever lane the phase runs on.
+    `sensitivity` is the compiler's own field (concepts, entities); `privacy` is
+    the owner's, and either one is enough.
+    """
+    fm, _ = C.split_frontmatter(C.read_page(p))
+    level = (C.fm_value(fm, "privacy") or "").strip().lower()
+    return ((C.fm_value(fm, "sensitivity") or "").strip().lower() == "personal"
+            or level in ("personal", "secret"))
+
+
 def phase_overview(dry: bool, full: bool):
-    pages = sorted(CONCEPTS_DIR.glob("*.md"))
-    if not pages:
+    all_pages = sorted(CONCEPTS_DIR.glob("*.md"))
+    # P0.4: the overview is one cloud call that folds every concept page into a
+    # single text. A personal page left in would send its body, so it is left out
+    # entirely rather than redacted: a thesis is not worth a leak.
+    pages = [p for p in all_pages if not _concept_page_personal(p)]
+    if not all_pages:
         print("phase overview: no concept pages yet")
         return
+    if not pages:
+        print("phase overview: every concept page is personal; nothing to compile remotely")
+        return
     if dry:
-        print(f"[dry] overview from {len(pages)} concept page(s)")
+        print(f"[dry] overview from {len(pages)} concept page(s), "
+              f"{len(all_pages) - len(pages)} personal left out")
         return
     if not full and digest_matches(stored_digest(OVERVIEW_PAGE), pages):
         print(f"phase overview: {len(pages)} concept page(s) unchanged, page kept")
         return
     if out_of_time("overview", need=300):
         return
-    out = call_claude(_overview_prompt(pages), lane="overview")
+    withheld = len(all_pages) - len(pages)
+    out = call_claude(_overview_prompt(pages, withheld), lane="overview", sources=pages)
     if not out:
         print("[FAIL] overview: not produced, existing page kept", file=sys.stderr)
         return
@@ -1420,6 +1552,8 @@ Gather everything in the sources about this person/company/project into one livi
 
 RULES:
 - Use ONLY information from the sources; no invention. Leave out anything you are not sure about.
+- A personal↔work effect is written only when a source states it. One you infer yourself goes on its own
+  line starting with "{t('compile_resources.inference_label')}:"; never present an inference as a source's claim.
 - {alias_note}
 - List dated interactions chronologically under "{timeline_heading}" (with the source file name).
 - Use [[wikilink]] for related people/companies/projects/meetings.
@@ -1451,7 +1585,7 @@ status: seed
 {t("compile_resources.entity_relations_heading")}
 {t("compile_resources.entity_sources_heading")}
 """
-        out = call_claude(prompt)
+        out = call_claude(prompt, lane=_compile_lane(*sources), sources=sources)
         if not out and len(sources) > 4:
             # If one attempt is not enough, try once more with the sources halved;
             # otherwise a timeout leaves that entity as a permanent gap.
@@ -1460,7 +1594,7 @@ status: seed
             small = "".join(f"\n--- {p.relative_to(VAULT)} ---\n" + p.read_text(encoding="utf-8")[:3000]
                             for p in half)
             out = call_claude(prompt.split("SOURCES:")[0] + "SOURCES:\n" + small[:20000],
-                              timeout=240)
+                              timeout=240, lane=_compile_lane(*half), sources=half)
             if out:
                 sources = half          # the stamp must reflect the set actually used
         if not out:
@@ -1580,7 +1714,15 @@ def phase_aliases(dry: bool, full: bool):
         if out_of_time("aliases", need=180):
             break
         batch = todo[i:i + ALIAS_BATCH]
-        data = C.parse_json_object(call_claude(_alias_prompt(batch), timeout=240, aliases=True) or "")
+        # A page written from a personal source carries its sensitivity in
+        # frontmatter; its gist is still a gist of the private thing, so the batch
+        # goes to the local model when one is in it. Splitting the batch would
+        # cost one call per personal page for the same guarantee.
+        personal = any(_concept_page_personal(p) for p in batch)
+        data = C.parse_json_object(call_claude(
+            _alias_prompt(batch), timeout=240, aliases=True,
+            lane="compile-local" if personal else None,
+            sources=[str(p) for p in batch]) or "")
         if not data:
             print(f"[FAIL] aliases: batch {i // ALIAS_BATCH + 1} unparsable", file=sys.stderr)
             continue

@@ -4,6 +4,8 @@ type: tweet
 author: 
 source: 
 tags: [resource/tweet, status/seed]
+privacy: internal
+retention: 
 ---
 
 # Tweet by {{author}}

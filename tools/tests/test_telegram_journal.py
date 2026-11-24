@@ -10,7 +10,7 @@ backoff ladder, its attempts counted in the record, and parked with one Buzz
 notice after the last attempt. Telegram and Buzz are mocks; nothing leaves
 the machine. The fixture is copied from test_telegram_whitelist.py.
 
-Run: python3 -B -m unittest discover -s tools/tests -v
+Run: python3 tools/run_tests.py test_telegram_journal   (the whole suite: python3 tools/run_tests.py)
 """
 import atexit
 import contextlib

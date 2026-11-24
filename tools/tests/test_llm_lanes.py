@@ -72,8 +72,10 @@ class TestFallbackDirection(unittest.TestCase):
             self.assertIsNone(llm._resolve_fallback("note-classify", "goose"))
 
     def test_local_to_cloud_needs_an_explicit_opt_in(self):
+        # Only for a lane outside brainless.toml's local_only list; a listed lane
+        # ignores the opt-in (test_llm_local_only.py).
         with Env(BRAINLESS_LLM_FALLBACK="claude-cli",
-                 BRAINLESS_LLM_ALLOW_CLOUD_FALLBACK="1"):
+                 BRAINLESS_LLM_ALLOW_CLOUD_FALLBACK="1", BRAINLESS_LLM_LOCAL_ONLY=None):
             self.assertEqual(llm._resolve_fallback("note-classify", "goose"), "claude-cli")
 
     def test_lane_can_switch_its_fallback_off(self):
@@ -131,6 +133,7 @@ class TestBudget(unittest.TestCase):
         self.costs = Path(self.tmp.name) / "llm_costs.jsonl"
         for patcher in (mock.patch.object(llm, "COST_FILE", str(self.costs)),
                         mock.patch.object(llm, "BUDGET_FILE", str(Path(self.tmp.name) / "llm_budget.json")),
+                        mock.patch.object(llm, "EGRESS_FILE", str(Path(self.tmp.name) / "egress.jsonl")),
                         mock.patch.object(llm, "LOG_FILE", str(Path(self.tmp.name) / "llm_log"))):
             patcher.start()
             self.addCleanup(patcher.stop)
@@ -199,7 +202,7 @@ class TestBudget(unittest.TestCase):
         self.rows((0, "compile", 1.5, "api"), (0, "compile", 0.5, "api"), (0, "nightly", 2.0, "plan"))
         with Env(BRAINLESS_API_BUDGET_USD="100", BRAINLESS_API_BUDGET_RESET_DAY=str(datetime.now().day)):
             out = llm.usage_report()
-        self.assertIn("3 priced calls", out)
+        self.assertIn("3 calls", out)
         self.assertIn("2.00 of 100 USD", out)
         line = next(ln for ln in out.splitlines() if ln.startswith("compile"))
         self.assertIn("2.00", line)

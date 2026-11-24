@@ -4,6 +4,8 @@
   "links_heading": "## Links",
   "open_threads_heading": "## Open Threads",
   "decisions_heading": "## Decisions",
+  "inference_label": "Inference",
+  "cross_effects_none": "None.",
   "cross_effects_heading": "## Cross-effects (if any)",
   "entity_summary_heading": "## Summary",
   "entity_timeline_heading": "## Timeline",

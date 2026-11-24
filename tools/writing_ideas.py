@@ -78,7 +78,7 @@ def load_state():
 
 
 def prompt(topics, previous):
-    guide = read(VAULT / o.EDITOR_DIR / "Guides" / "production-guide.md", 2500) or read(VAULT / o.EDITOR_DIR / "README.md", 1500)
+    guide = read(VAULT / o.EDITOR_DIR / "Rehberler" / "uretim-rehberi.md", 2500) or read(VAULT / o.EDITOR_DIR / "README.md", 1500)
     ask = (t("writing.prompt_topics", count=len(topics)) + "\n" + "\n".join(f"- {x}" for x in topics)) if topics else t("writing.prompt_free")
     return f"""You propose long-form pieces for {o.OWNER} (essays for business publications, Medium posts, blog posts, book chapters). Not social media.
 {ask}

@@ -76,6 +76,13 @@ PRIVATE_NAME_PARTS = _csv("BRAINLESS_PRIVATE_NAME_PARTS", "private_name_parts")
 # They live in PROFILE.md, not in code, because code is exported and names are not.
 PERSONAL_MARKERS = _csv("BRAINLESS_PERSONAL_MARKERS", "personal_markers")
 CORPUS_DIRS = _csv("BRAINLESS_CORPUS_DIRS", "corpus_dirs")
+# Vault-relative folders whose content must never reach a cloud provider (P0.4).
+# These are compiled, but on the local model: they are NOT private segments,
+# which mean "never compiled". tools/cloud_gate.py owns the matching and both
+# compile_resources.py and llm.py read it, so a folder added here changes the
+# compiler's lane and the model gate at the same time. The default is empty:
+# this list is the owner's, and a vault that never sets it has nothing excluded.
+CLOUD_EXCLUDE = _csv("BRAINLESS_CLOUD_EXCLUDE", "cloud_exclude")
 
 
 # Vault-relative homes that must never reach the remote. health_check.py reports on
@@ -96,7 +103,7 @@ def private_segment_patterns():
     """Regexes matching a private segment in a raw or in a compiled path.
 
     The compiled layer flattens and slugifies names, so a folder rule does not
-    reach it: "Şule Öğün" arrives as "sule-ogun". Three shapes are generated
+    reach it: "Gülşen Çimen" arrives as "gulsen-cimen". Three shapes are generated
     per segment, because a name gets typed all three ways: as written, slugified
     with dashes, and with the Turkish letters folded to ASCII but the spaces
     kept, which is what a hand-made folder tends to look like. The guard test

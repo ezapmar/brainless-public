@@ -6,7 +6,7 @@ file fails closed, and the offset advances either way so nothing is replayed.
 The one outgoing Telegram call is the saved receipt, to the whitelisted chat.
 Telegram is a mock; nothing leaves the machine.
 
-Run: python3 -B -m unittest discover -s tools/tests -v
+Run: python3 tools/run_tests.py test_telegram_whitelist   (the whole suite: python3 tools/run_tests.py)
 """
 import contextlib
 import io

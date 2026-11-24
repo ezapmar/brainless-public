@@ -348,7 +348,7 @@ Turn the raw text below into a clean vault note.
 RULES:
 - Do NOT change the content, only clean it: drop filler words, tidy up the sentences.
 - Correct proper nouns that look like transcription errors to their right forms from the context
-  (example: "top table" -> "cap table", "ey pi ay" -> "API").
+  (example: "top table" -> "cap table", "Braitmur" -> "Brightmoor", "o ge ka" -> "OGK").
   The glossary below is the owner's own spelling list: when a word sounds like one of its
   terms, write the term. Leave a word you cannot place as it is rather than guess.
 - Use [[wikilink]] for the projects and people mentioned.

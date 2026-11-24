@@ -155,7 +155,14 @@ def main():
                 pages = wiki_changes.changed_pages(before, after, "summaries")
                 added, n = cc.run_night(pages, deadline=time.monotonic() + time_left() - 900)
                 flags = cc.brief_lines(added)
-                conflicts = f" checked={n['checked']} conflicts={n['conflicts']}"
+                conflicts = (f" checked={n['checked']} conflicts={n['conflicts']}"
+                             f" screened_out={n['screened_out']} screen_missed={n['screen_missed']}")
+            else:
+                # Said out loud: a missing addon used to skip this in silence, and
+                # four nights passed before anyone saw that nothing was checked.
+                print("contradiction check skipped: search addon not available in "
+                      f"{sys.executable}", file=sys.stderr)
+                conflicts = " contradictions_skipped=1"
         except Exception as e:
             failure("contradiction check", e)
 

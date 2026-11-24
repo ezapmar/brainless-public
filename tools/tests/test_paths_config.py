@@ -152,6 +152,12 @@ class TestImportTimeFolders(unittest.TestCase):
                 '[folders]\ndaily = "Notlar"\ndecisions = "Düşünce/Kararlar"\n', encoding="utf-8")
             env = {k: v for k, v in os.environ.items() if not k.startswith("BRAINLESS_")}
             env["BRAINLESS_VAULT"] = vault
+            # The child imports the engine by bare name, so it needs the two
+            # module homes on its own sys.path. The tests supply it here instead
+            # of asking the developer for PYTHONPATH (tools/run_tests.py does the
+            # same for this process).
+            env["PYTHONPATH"] = os.pathsep.join(
+                str(ROOT / rel) for rel in ("tools", ".agents/scripts"))
             code = ("import calibrate, nightly_processor as n; "
                     "print(calibrate.DEC); print(n.CAPTURE_DIR)")
             out = subprocess.run([sys.executable, "-c", code], cwd=ROOT, env=env,

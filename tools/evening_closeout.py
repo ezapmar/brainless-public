@@ -70,19 +70,26 @@ def latest_llm_status():
         return (None, "")
 
 
-def todays_captures():
-    chunks = []
-    if os.path.isdir(CAPTURE_DIR):
-        for name in sorted(os.listdir(CAPTURE_DIR)):
-            path = os.path.join(CAPTURE_DIR, name)
+def todays_capture_files():
+    """The .md capture files the close-out may read. One list for reading and
+    for the model gate, so the two can never disagree about what went in."""
+    if not os.path.isdir(CAPTURE_DIR):
+        return []
+    return [os.path.join(CAPTURE_DIR, name) for name in sorted(os.listdir(CAPTURE_DIR))
             # Only .md: photo captures leave .jpg files in Thinking/Daily;
             # binary content in the prompt makes subprocess choke on a null byte.
-            if os.path.isfile(path) and not name.startswith(".") and name.endswith(".md"):
-                try:
-                    with open(path, errors="replace") as fh:
-                        chunks.append(f"--- {name} ---\n{fh.read()}")
-                except OSError:
-                    pass
+            if not name.startswith(".") and name.endswith(".md")
+            and os.path.isfile(os.path.join(CAPTURE_DIR, name))]
+
+
+def todays_captures():
+    chunks = []
+    for path in todays_capture_files():
+        try:
+            with open(path, errors="replace") as fh:
+                chunks.append(f"--- {os.path.basename(path)} ---\n{fh.read()}")
+        except OSError:
+            pass
     return "\n".join(chunks)
 
 
@@ -195,7 +202,8 @@ BELIEFS OF {OWNER} (reference for the seed and the contradiction):
 Write only the markdown content, nothing else. Do not invent: write nothing that is not in the context. Do NOT mention decision review dates (the system appends that list).
 {context}"""
 
-    result = run_prompt(prompt, timeout=300, lane="closeout")
+    result = run_prompt(prompt, timeout=300, lane="closeout",
+                        sources=todays_capture_files() + [TASKS_FILE, BELIEFS_FILE])
     if not result:
         return None
 

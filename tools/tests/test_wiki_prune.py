@@ -137,6 +137,64 @@ class PruneVault(unittest.TestCase):
         self.assertTrue(dst.exists())
         self.assertIn(f"source: Archive/Content Drafts/{d[:7]}/{old.name}", s.read_text())
 
+    # ---- crm
+
+    def crm_ledger(self, name, last_event):
+        """A ledger shaped the way crm_capture.py writes one."""
+        body = ("# %s\n\nKaynak: CRM (pipedrive), otomatik olay günlüğü. Kişi verisi yok.\n\n---\n\n"
+                "- %s 21:17 %s: \"%s\" yeni anlaşma (Agreement Process)\n"
+                % (name, last_event, name, name))
+        return self.write(f"Inbox/CRM/{name}.md", body)
+
+    def test_crm_ledger_moves_only_with_a_summary_and_two_quiet_weeks(self):
+        old = self.crm_ledger("Akbank", days_ago(60))
+        self.crm_ledger("Agonix", days_ago(41))          # no summary: unread
+        self.crm_ledger("Fresh", days_ago(3))            # too young
+        self.write(".wiki/summaries/inbox_crm_akbank.md",
+                   fm(lang="en", summary_en="x", source="Inbox/CRM/Akbank.md",
+                      compiled_at=f"{days_ago(59)}T00:00:00") + "s\n")
+        self.write(".wiki/summaries/inbox_crm_fresh.md",
+                   fm(lang="en", summary_en="x", source="Inbox/CRM/Fresh.md",
+                      compiled_at=f"{days_ago(2)}T00:00:00") + "s\n")
+        moves = self.wp.candidates(self.now, ["crm"])
+        self.assertEqual([m.src.name for m in moves], [old.name])
+        self.assertEqual(moves[0].dst,
+                         self.vault / "Archive" / "CRM" / days_ago(60)[:7] / old.name)
+        self.assertEqual(moves[0].age, 60)
+
+    def test_crm_age_comes_from_the_last_event_not_the_mtime(self):
+        # A git checkout rewrites mtimes; a ledger whose events are old must
+        # still be seen as old, or nothing ever leaves Inbox after a clone.
+        p = self.crm_ledger("Mustbedam", days_ago(50))
+        import os as _os
+        now_ts = datetime.now().timestamp()
+        _os.utime(p, (now_ts, now_ts))
+        self.write(".wiki/summaries/inbox_crm_mustbedam.md",
+                   fm(lang="en", summary_en="x", source="Inbox/CRM/Mustbedam.md",
+                      compiled_at=f"{days_ago(49)}T00:00:00") + "s\n")
+        self.assertEqual([m.src.name for m in self.wp.candidates(self.now, ["crm"])],
+                         ["Mustbedam.md"])
+
+    def test_crm_move_retargets_the_summary_and_keeps_the_ledger_readable(self):
+        d = days_ago(45)
+        old = self.crm_ledger("Colendi", d)
+        s = self.write(".wiki/summaries/inbox_crm_colendi.md",
+                       fm(lang="en", summary_en="x", source="Inbox/CRM/Colendi.md",
+                          compiled_at=f"{days_ago(44)}T00:00:00") + "s\n")
+        moves = self.wp.candidates(self.now, ["crm"])
+        rows, skipped = self.wp.apply(moves, self.now)
+        self.assertEqual((len(rows), skipped), (1, []))
+        dst = self.vault / "Archive" / "CRM" / d[:7] / old.name
+        self.assertTrue(dst.exists())
+        self.assertFalse(old.exists())
+        self.assertIn("yeni anlaşma", dst.read_text(), "content is kept, nothing deleted")
+        self.assertIn(f"source: Archive/CRM/{d[:7]}/Colendi.md", s.read_text())
+        # Drained: the ledger is outside Inbox, so neither the stale count nor
+        # the pending line sees it any more.
+        self.assertNotIn(self.wp.INBOX, dst.parents)
+        self.assertEqual([m.src.name for m in self.wp.candidates(self.now, ["crm"])], [])
+        self.assertEqual(self.wp.count(self.now)["crm_ready"], 0)
+
     # ---- apply and the log
 
     def test_apply_moves_logs_every_move_twice_and_retargets_the_summary(self):

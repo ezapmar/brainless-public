@@ -6,6 +6,8 @@ tags: [project, status/active]
 area: 
 deadline: 
 deadline_note: 
+privacy: internal
+retention:  
 ---
 
 # {{title}}

@@ -3,6 +3,53 @@
 All notable changes to the public brainless engine. Dates are the day of the public
 push. The private vault this is exported from has its own history.
 
+## 0.11.0 (2026-11-24)
+
+Three-layer privacy, a morning briefing that does not need an open desktop app, weekly
+encrypted backups, and sharper capture and review loops.
+
+- **Three-layer privacy before any cloud call.** `tools/redact.py` masks e-mail, phone,
+  IBAN, national IDs and key shapes in cloud-bound prompts. `tools/cloud_gate.py` reads
+  `cloud_exclude` in `_Agent-Context/PROFILE.md` plus note-level `privacy: personal` and
+  `privacy: secret` frontmatter: personal sources compile locally on the new
+  `compile-local` lane (Gemma 4 12B), secret sources are skipped completely, and
+  `tools/llm.py` refuses any cloud call built from an excluded source (`source_violation`).
+  Every call is recorded in `.agents/state/egress.jsonl` with source paths hashed, and
+  `tools/health_check.py` turns red on drift. Audits: `tools/privacy_scan.py`,
+  `tools/privacy_report.py`, `tools/cloud_exclude_report.py`.
+- **One routing file, fail closed.** `brainless.toml` replaces the lane loop in `env.sh`
+  (`brainless.toml.example` updated to match). Its `local_only` list pins all eight local
+  lanes so a typo or stray environment variable cannot silently route a private lane to a
+  cloud provider.
+- **Model-free morning briefing.** `tools/morning_briefing.py` runs in `cron_wrapper.sh`
+  after 07:00 on weekdays (catching up on wake) and writes the top block of
+  `Daily Briefings/daily-briefing-YYYY-MM-DD.md` directly from files other jobs already
+  wrote: health, breached kill criteria, calendar, open promises, CRM flags, wiki changes,
+  resurface, drift and top actions. Closing the desktop app no longer skips the morning.
+- **Weekly encrypted backups, Sunday dreaming and kill review.** `night.sh` now runs
+  `tools/vault_archive.py create --if-older-days 6` every Sunday instead of once a month
+  (health goes yellow at 9 days and red at 21), moves `dreaming.py` to Sunday as one
+  numbered message, adds `tools/kill_review.py` for overdue kill criteria, and runs
+  `nightly_compile.py` inside the search venv so contradiction checks and hybrid retrieval
+  scores never quietly skip.
+- **Hardened `raw/` immutability and dead-end lint.** `.claude/settings.json` and
+  `tools/hooks/claude_guard.py` now strictly deny `Write` and `Edit` under `raw/`.
+  `tools/lint_wiki.py` adds `deadend_pages()` (pages with inbound links and zero outbound
+  links) alongside broken links and orphans.
+- **Controlled Gmail intake and attention audit.** `.agents/scripts/gmail_brain_intake.py`
+  polls a `Brain` label over read-only IMAP, records processed Message-IDs only after
+  atomic writes (zero duplicates), tags captured notes `privacy: personal` (local compile
+  only), and exits cleanly until the label exists. `tools/attention_audit.py` writes
+  `_Agent-Context/ATTENTION.md` nightly, comparing stated active projects in
+  `PROJECTS-ACTIVE.md` against actual 7-day file activity while excluding protected homes.
+- **Two agents, two commands, and templates.** Added `.claude/agents/scout.md` (read-only
+  explorer) and `librarian.md` (deep `.wiki/` curator), plus `/reply` (Thread to Reply into
+  `Writings/Drafts/` with commitment checks) and `/trace` (end-to-end project traceability
+  audit), bringing the command set to seven. Added `_Templates/40 Questions.md`,
+  `privacy:`/`retention:` fields across `_Templates/`, ready-to-import Obsidian Web Clipper
+  JSON templates under `docs/clipper-templates/`, and `tools/run_tests.py` as the single
+  test entry point.
+
 ## 0.10.0 (2026-11-16)
 
 One Mac. The two-machine setup, the chat relay and the installable layer are gone, and

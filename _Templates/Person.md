@@ -2,6 +2,8 @@
 date: {{date}}
 type: person
 tags: [person]
+privacy: personal
+retention: 
 ---
 
 # {{name}}

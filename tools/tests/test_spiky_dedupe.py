@@ -26,8 +26,8 @@ _spec.loader.exec_module(spiky)
 class TestDuplicateDetection(unittest.TestCase):
     def test_same_task_with_different_turkish_suffixes(self):
         self.assertTrue(spiky.is_duplicate(
-            "Ilgaz ile ofis organizasyonunu konus",
-            ["Ilgaz ile ofis organizasyonu konusulacak"]))
+            "Ozan ile bordro entegrasyonunu konus",
+            ["Ozan ile bordro entegrasyonu konusulacak"]))
 
     def test_same_task_with_different_case_and_articles(self):
         self.assertTrue(spiky.is_duplicate(
@@ -36,19 +36,19 @@ class TestDuplicateDetection(unittest.TestCase):
 
     def test_apostrophe_and_suffix_do_not_hide_a_duplicate(self):
         self.assertTrue(spiky.is_duplicate(
-            "Yedekleme script'ini test et",
-            ["Yedekleme scriptini test etmek"]))
+            "ISO 27001 Windows script'ini test et",
+            ["ISO 27001 Windows scriptini test etmek"]))
 
     def test_two_different_tasks_about_the_same_project_are_kept(self):
-        # The expensive false positive: both mention Kuzeyfirin, both name a
+        # The expensive false positive: both mention Kuzeybank, both name a
         # person, and dropping one loses real work.
         self.assertFalse(spiky.is_duplicate(
-            "Kuzeyfirin API dokumanini Defne'ye ilet",
-            ["Kuzeyfirin katalog'unu Nehir'e goster"]))
+            "Kuzeybank API dokumanini Defne'ye ilet",
+            ["Kuzeybank dashboard'unu Aylin'e goster"]))
 
     def test_unrelated_task_is_kept(self):
         self.assertFalse(spiky.is_duplicate(
-            "Nehir'e katalog gonder", ["Defne ile butce konusunu netlestir"]))
+            "Aylin'e dashboard gonder", ["Defne ile vergi konusunu netlestir"]))
 
     def test_empty_ledger_keeps_everything(self):
         self.assertFalse(spiky.is_duplicate("Lodosbank teklifini hazirla", []))

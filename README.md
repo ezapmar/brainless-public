@@ -177,9 +177,12 @@ iPhone / iPad ──Telegram──▶ Mac  capture (every 2 min)
                                   ├─ reply to bot  → approve, defer, follow up
                                   └─ "?question"   → a cited answer, local model
 iPhone / iPad ◀─iCloud────▶ Mac  the vault, opened in Obsidian
-                            Mac  hourly: tasks, mail, meeting brief, the morning set
-                            Mac  23:00: ingest, digest, compile, index, links, lint,
-                                 Sunday weeklies, health, one commit and push
+                            Mac  hourly: tasks, mail (Spiky + Gmail "Brain" label),
+                                 meeting brief, morning set (model-free briefing after 07:00)
+                            Mac  23:00: ingest, digest, compile, index, links, lint
+                                 (orphans, broken, dead-ends), attention audit,
+                                 Sunday weeklies (dreaming, kill review, weekly archive),
+                                 health, one commit and push
                             Mac  always: a local model on 127.0.0.1:8080
 GitHub (private)                 the off-site copy, one push a night
 ```
@@ -197,11 +200,15 @@ GitHub (private)                 the off-site copy, one push a night
   durable outbox on the bot: queued before it is sent, retried, sent at most once. The
   first line of a message is its label (`#tasks`, `#thinking`, `#dreaming`, `#ops`), and
   my reply is routed by the label of the message it answers.
-- **Two models.** Seven short, private jobs (classifying a note, reading a photo,
-  answering a `?` question) run on Gemma 4 12B on the Mac and never fall back to the
-  cloud: if the local server is down, the job fails and retries, and the text stays home.
-  The pages everything else reads (compile, digests, the morning briefing) are written by
-  Claude on a subscription, because a weak writer caps what any reader can get back.
+- **Two models, one routing file.** Eight short or private lanes (`note-classify`,
+  `dreaming-judge`, `compile-aliases`, `compile-local`, `capture-note`, `capture-photo`,
+  `spiky-actions`, `ask`) run on Gemma 4 12B on the Mac, configured in `brainless.toml`
+  and pinned in its fail-closed `local_only` list. If the local server is down, or if an
+  override tries to send a local lane to the cloud, the call is refused and the text stays
+  home. The pages everything else reads (compile, digests, weekly synthesis) are written by
+  Claude on a subscription, because a weak writer caps what any reader can get back. The
+  morning briefing itself (`tools/morning_briefing.py`) builds with no model at all, so a
+  closed desktop app no longer means a missing morning.
 - **The phone needs no engine.** It opens the vault from iCloud Drive in Obsidian and
   talks to the bot. That is all.
 
@@ -221,20 +228,26 @@ A loop that runs unattended against a folder holding your life needs one rule ab
 the others: nothing writes into your notes without you. The machine proposes and you
 apply.
 
-- Everything runs on your own hardware. The only thing that ever leaves the machine is a
-  question to the model you chose, and pointing it at a model on your own computer keeps
-  even that at home.
-- Folders you mark private, like health or identity papers, are never read by the model.
-- The rules are checks, not requests. A write into your own folders asks you first. A
-  deletion asks. A secret or a bank number never lands in a file. A page where the model
-  talked about itself instead of your source is refused.
+- Everything runs on your own hardware. Three privacy layers sit in front of any cloud
+  model call: pattern redaction (`tools/redact.py`), folder and frontmatter exclusion
+  (`cloud_exclude` in `PROFILE.md` and `privacy: personal` notes compile locally on
+  `compile-local`; `privacy: secret` notes are never compiled; `tools/llm.py` refuses a
+  cloud call on an excluded path), and an egress ledger (`.agents/state/egress.jsonl`)
+  that `health_check.py` turns red on drift.
+- Folders you mark protected, like health or identity papers, stay out of git and out of
+  cloud models.
+- The rules are checks, not requests. `raw/` is strictly read-only (`Edit(raw/**)` and
+  `Write(raw/**)` are denied in `.claude/settings.json` and `claude_guard.py`) so clipped
+  text cannot talk an agent into rewriting your sources. A write into your own folders
+  asks you first. A deletion asks. A secret or a bank number never lands in a file. A page
+  where the model talked about itself instead of your source is refused.
 - What you teach one agent, every agent knows. Your standing preferences and the lessons
   from correcting an agent live in one file in the vault, `_Agent-Context/LEARNINGS.md`,
   not in one tool's memory, so the chat agents, the nightly jobs and whatever you use next
   all read the same list.
-- Once a month the whole vault, history included, is sealed with a key the machine cannot
-  open and put somewhere sync does not reach. A restore test proves it comes back. Sync is
-  not backup: a bad night copies itself everywhere in minutes.
+- Every Sunday the whole vault, history included, is sealed with a key the machine cannot
+  open and put somewhere sync does not reach (`tools/vault_archive.py`). A restore test
+  proves it comes back. Sync is not backup: a bad night copies itself everywhere in minutes.
 - The engine and the notes are separate, so you can share one and keep the other. This
   public repo contains no notes at all.
 
@@ -293,19 +306,21 @@ The vault path defaults to `~/projects/brainless`; set `BRAINLESS_VAULT` to put 
 elsewhere. Then:
 
 1. **Who you are.** Fill `_Agent-Context/PROFILE.md`: your name, the language it should
-   write in (`en` or `tr`), and the folders that must never reach a model or the remote.
-   Put health records and identity papers in that list before your first commit.
+   write in (`en` or `tr`), `protected_homes` (folders that must never reach git) and
+   `cloud_exclude` (folders compiled only on your local model). Put health records and
+   identity papers in those lists before your first commit.
 2. **The bot.** Make one with BotFather, then put its token in
    `~/.config/brainless/telegram_token` and your chat id in
    `~/.config/brainless/telegram_chat_id`. Only that chat can write to the vault.
 3. **The writer model.** Install the Claude CLI and sign in with your subscription. Any
    other backend in `tools/llm.py` works for a lane too (`python3 tools/llm.py --lanes`).
-4. **The local model.** `brew install llama.cpp`, and put a Gemma 4 12B GGUF and its
-   vision projector in `~/models/gemma-4-12b/` (or point `BRAINLESS_LOCAL_MODEL` and
-   `BRAINLESS_LOCAL_MMPROJ` at yours). Without it the jobs still install, and the local
-   lanes fail until the file exists. Which lanes run locally is one loop in
-   `.agents/scripts/env.sh`; move a lane only after checking it agrees with the big model
-   on real samples ([Local Inference](docs/local-inference.md)).
+4. **The local model and routing.** `brew install llama.cpp`, put a Gemma 4 12B GGUF and
+   its vision projector in `~/models/gemma-4-12b/` (or point `BRAINLESS_LOCAL_MODEL` and
+   `BRAINLESS_LOCAL_MMPROJ` at yours), and copy `brainless.toml.example` to
+   `brainless.toml`. Without the model file the jobs still install, and the local lanes
+   fail closed until the file exists. `brainless.toml` is the one place for lane routing
+   and `local_only`; move a lane only after checking it agrees with the big model on real
+   samples ([Local Inference](docs/local-inference.md)).
 5. **The jobs.**
 
    ```bash
@@ -320,7 +335,11 @@ DOCX, XLSX and PPTX extras. Voice needs `ffmpeg` and
 `large-v3-turbo`); transcription stays on the Mac. Backups need
 [age](https://github.com/FiloSottile/age): put the public key in `PROFILE.md` and keep the
 private one in your password manager. Google Tasks and the meeting brief need a Google
-OAuth client of your own.
+OAuth client of your own. For e-mail capture, create a Gmail label named `Brain` and add
+your IMAP app password in `~/.config/brainless/`: `.agents/scripts/gmail_brain_intake.py`
+reads it read-only, tracks Message-IDs so nothing duplicates, and saves notes as
+`privacy: personal` (compiled locally only). For browser clipping, import the three JSON
+templates in [docs/clipper-templates/](docs/clipper-templates/) into Obsidian Web Clipper.
 
 **Other agents (optional).** `tools/mcp_server.py` serves the compiled wiki read-only to
 any MCP client: search, one page, the index. It never serves a page git ignores.
@@ -348,17 +367,25 @@ Open `_Templates/`. Copy `Belief.md` into `Thinking/Beliefs/` and write one thin
 believe about your work. Copy `Decision.md` into `Thinking/Decisions/` for the last real
 decision you made, with a prediction and a date.
 
-Inside Claude Code, from the vault root, five slash commands remain:
+Inside Claude Code, from the vault root, seven slash commands and two agents live beside
+your notes:
 
 - `/decide`: a decision against your beliefs and past decisions, reversibility first.
 - `/research`: a question researched in a fixed order, hypotheses before searching.
 - `/weekly`: the weekly review.
 - `/context`: a snapshot of where things stand, and where `CONTEXT.md` has drifted.
-- `/lint`: wiki integrity checks and repairs.
+- `/lint`: wiki integrity checks (broken links, orphans, dead-ends) and repairs.
+- `/reply`: turn a saved conversation or e-mail thread plus rough notes into a
+  commitment-checked draft in `Writings/Drafts/`, keeping open decisions outside the draft.
+- `/trace`: end-to-end traceability audit of one active project from raw sources through
+  `.wiki/`, tasks, contradictions, attention gaps and drafts.
+- Agents (`.claude/agents/`): `scout` (read-only explorer for `Inbox/`, `raw/` and
+  `.wiki/`) and `librarian` (deep `.wiki/` curator enforcing privacy and edit caps).
 
-Their definitions live in `.wiki/_commands/`, one Markdown prompt each, and the
-`.claude/commands/` wrappers only point back there, so they work with any agent that can
-read files. Every answer is filed back into `.wiki/digests/queries/`.
+Every slash command definition lives in `.wiki/_commands/`, one Markdown prompt each, and
+the `.claude/commands/` wrappers only point back there, so they work with any agent that
+can read files. Every answer is filed back into `.wiki/digests/queries/`. `_Templates/`
+also includes `40 Questions.md` for an annual and decade review.
 
 ---
 
@@ -402,7 +429,7 @@ than a feature request.
 The regression tests run offline, with no credentials and no model calls:
 
 ```bash
-PYTHONPATH=tools:.agents/scripts python3 -B -m unittest discover -s tools/tests
+python3 tools/run_tests.py
 ```
 
 ## Licence

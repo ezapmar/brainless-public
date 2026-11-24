@@ -39,7 +39,11 @@ SHOW_DAYS = 14
 # Levels, not tallies: a second run in the day replaces the value, it does not
 # add to it. Summed, two compiles at hit5=88 read 176, and the next single run
 # at 91 raised a retrieval alarm for a score that had gone up (04/10/2026).
-GAUGES = {"hit1", "hit5", "mrr", "compile_rc", "broken", "orphans", "dupes", "junk"}
+# The same went for sizes: two index builds on 18/11/2026 read as 2019 pages in
+# a wiki of about 1000, and seven ingest runs as 63 parked files where 9 were.
+GAUGES = {"hit1", "hit5", "mrr", "compile_rc", "broken", "orphans", "dupes", "junk",
+          "pages", "passages", "orphan_homes", "new_links", "near_identical",
+          "parked", "backed_off"}
 RUNLOG_RE = re.compile(r"^RUNLOG((?:\s+[a-z_][a-z0-9_]*=\S+)+)\s*$")
 
 

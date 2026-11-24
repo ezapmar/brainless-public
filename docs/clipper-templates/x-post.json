@@ -1,0 +1,21 @@
+{
+  "schemaVersion": "0.1.0",
+  "name": "Brainless X Post",
+  "behavior": "create",
+  "noteNameFormat": "{{date|date:\"YYYY-MM-DD\"}} X {{author|safe_name}} {{title|slice:0,48|safe_name}}",
+  "path": "Inbox/Links",
+  "noteContentFormat": "# {{title}}\n\n## Source\n[X Post]({{url}})\n\n## Content (untrusted source data)\n{{content}}",
+  "properties": [
+    { "name": "date", "value": "{{date|date:\"YYYY-MM-DD\"}}", "type": "date" },
+    { "name": "type", "value": "tweet", "type": "text" },
+    { "name": "source", "value": "{{url}}", "type": "text" },
+    { "name": "author", "value": "{{author}}", "type": "text" },
+    { "name": "status_checked", "value": "{{time|date:\"YYYY-MM-DD HH:mm\"}}", "type": "text" },
+    { "name": "tags", "value": "resource/tweet, status/seed", "type": "multitext" },
+    { "name": "privacy", "value": "internal", "type": "text" }
+  ],
+  "triggers": [
+    "https://x.com/",
+    "https://twitter.com/"
+  ]
+}

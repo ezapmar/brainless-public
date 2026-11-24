@@ -12,6 +12,18 @@ contradict any of them, or show one of their claims out of date?
               document (not its raw twin, its book folder or a renamed copy,
               which score above SAME_TEXT), still live, above MIN_SIM, at most
               NEIGHBOURS of them; summaries, concepts, projects, entities, ideas
+  screen      optional, when the lane "contradiction-screen" runs on a local
+              model: the same prompt goes there first, and a page it finds
+              clean is not sent to the judge. Measured 19/11/2026 on 20 pages:
+              the local model flagged every page the judge flagged (5 of 5)
+              and five more, so it can clear pages but not convict them.
+              In production the next night it cleared two of five pages
+              that did hold a conflict, so the lane is off in env.sh.
+              Twenty pages is a small sample, so every third clean page goes
+              to the judge anyway (AUDIT_EVERY); a conflict found there is a
+              miss, counted in the run log and logged in
+              .agents/state/contradiction_screen.jsonl. A failed screen call
+              sends the page to the judge.
   judge       one model call per summary, JSON out; different emphasis or
               more detail is not a contradiction, and an empty list is the
               normal answer
@@ -27,6 +39,7 @@ Usage:
 """
 import argparse
 import hashlib
+import json
 import os
 import re
 import sys
@@ -39,6 +52,9 @@ VAULT = Path(os.environ.get("BRAINLESS_VAULT") or Path(__file__).resolve().paren
 WIKI = VAULT / ".wiki"
 REPORT = VAULT / "_Agent-Context" / "CONTRADICTIONS.md"
 LANE = "contradiction-judge"
+SCREEN_LANE = "contradiction-screen"
+SCREEN_LOG = VAULT / ".agents" / "state" / "contradiction_screen.jsonl"
+AUDIT_EVERY = 3     # every third page the screen clears is judged anyway
 KINDS = ("summaries", "concepts", "projects", "entities", "ideas")
 MAX_PER_NIGHT = 8
 NEIGHBOURS = 3
@@ -153,8 +169,41 @@ def _ignored(rels) -> set[str]:
         return set(rels)        # unsure means guarded
 
 
-def check(rel: str, run=None, index=None) -> dict:
-    """{'page', 'candidates', 'conflicts'} for one summary; conflicts None on failure."""
+def default_screen():
+    """The local first pass, or None when the screen lane is not on a local model."""
+    import llm
+    if not llm._is_local(llm.resolve_provider(SCREEN_LANE)):
+        return None
+    return lambda p: llm.run_prompt(p, timeout=300, lane=SCREEN_LANE)
+
+
+def _screen_rows() -> list[dict]:
+    try:
+        return [json.loads(line) for line in SCREEN_LOG.read_text(encoding="utf-8").splitlines() if line.strip()]
+    except (OSError, ValueError):
+        return []
+
+
+def _audit_due() -> bool:
+    cleared = sum(1 for r in _screen_rows() if r.get("screen") == 0)
+    return (cleared + 1) % AUDIT_EVERY == 0
+
+
+def _screen_log(rel: str, screen, judge, audit: bool) -> None:
+    row = {"ts": datetime.now().isoformat(timespec="seconds"), "page": rel,
+           "screen": screen, "judge": judge, "audit": audit}
+    try:
+        SCREEN_LOG.parent.mkdir(parents=True, exist_ok=True)
+        with SCREEN_LOG.open("a", encoding="utf-8") as fh:
+            fh.write(json.dumps(row, ensure_ascii=False) + "\n")
+    except OSError:
+        pass
+
+
+def check(rel: str, run=None, index=None, screen=None) -> dict:
+    """{'page', 'candidates', 'conflicts'} for one summary; conflicts None on failure.
+    With a screen, also 'screened_out' (cleared locally, judge not asked) and
+    'screen_missed' (an audited clean page the judge found a conflict in)."""
     text = _read(rel)
     if index is None:
         import semantic_index
@@ -174,8 +223,24 @@ def check(rel: str, run=None, index=None) -> dict:
 
         def run(p):
             return run_prompt(p, timeout=300, lane=LANE)
+        if screen is None:
+            screen = default_screen()
     others = [(o, _read(o)) for o in res["candidates"]]
-    res["conflicts"] = parse(run(prompt(rel, text, others)), set(res["candidates"]))
+    question, allowed = prompt(rel, text, others), set(res["candidates"])
+    first, audit = None, False
+    if screen is not None:
+        first = parse(screen(question), allowed)
+        if first == []:
+            audit = _audit_due()
+            if not audit:
+                _screen_log(rel, 0, None, False)
+                res["screened_out"] = True
+                return res
+    res["conflicts"] = parse(run(question), allowed)
+    if screen is not None:
+        found = res["conflicts"]
+        _screen_log(rel, None if first is None else len(first), None if found is None else len(found), audit)
+        res["screen_missed"] = bool(audit and found)
     return res
 
 
@@ -228,7 +293,7 @@ def run_night(pages: list[str], run=None, index=None, deadline=None) -> tuple[li
     """Check up to MAX_PER_NIGHT pages before `deadline` (time.monotonic());
     returns (added conflicts, counts)."""
     import time
-    counts = {"checked": 0, "conflicts": 0, "failed": 0}
+    counts = {"checked": 0, "conflicts": 0, "failed": 0, "screened_out": 0, "screen_missed": 0}
     results = []
     for rel in pages[:MAX_PER_NIGHT]:
         if deadline is not None and time.monotonic() > deadline - 300:
@@ -237,6 +302,8 @@ def run_night(pages: list[str], run=None, index=None, deadline=None) -> tuple[li
         r = check(rel, run=run, index=index)
         if r["candidates"]:
             counts["checked"] += 1
+        counts["screened_out"] += bool(r.get("screened_out"))
+        counts["screen_missed"] += bool(r.get("screen_missed"))
         if r["conflicts"] is None:
             counts["failed"] += 1
             continue

@@ -29,7 +29,7 @@ def classify(text, *, projects=(), people=(), peers=(), weight=1.0, name="note.m
                 "features": f, "candidate": candidate}
 
 
-TASK = "# Sunum\n\nYarın Nehir'e katalog örneklerini gönder.\n\n- [ ] Örnekleri gönder\n"
+TASK = "# Sunum\n\nYarın Aylin'e dashboard örneklerini gönder.\n\n- [ ] Örnekleri gönder\n"
 
 MEETING = """# Haftalık Review
 Tarih: 2026-09-17

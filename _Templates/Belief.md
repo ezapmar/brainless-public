@@ -4,6 +4,8 @@ type: belief
 confidence: high/medium/low
 last_challenged: {{date}}
 tags: [belief]
+privacy: internal
+retention: 
 ---
 
 # Belief: {{title}}

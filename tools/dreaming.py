@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-"""dreaming.py: a nightly pass that turns link suggestions into proposals the owner approves.
+"""dreaming.py: a weekly pass that turns link suggestions into proposals the owner approves.
 
 tools/link_suggest.py finds pages that mean the same thing and do not link.
 Nearness is not a reason, though: two people pages on one team, or two CRM
 stubs, sit close because they share a template. Dreaming reads each candidate
 pair, decides, and asks.
 
-Each night:
+Each run (Sunday night, night.sh):
   pick     the top N pairs from link_suggest (orphan homes first, then new
            links, then near-identical), minus every pair already decided.
   judge    one model call per pair reads both pages' opening passages and
@@ -14,7 +14,11 @@ Each night:
              link       the pages belong together; each gets a Related line
              duplicate  one source stored twice; a merge for the owner
              none       nearness without a relation; logged, never asked
-  propose  every link and duplicate becomes a preview in Buzz #dreaming.
+  propose  the run's links and duplicates go out as ONE numbered message in
+           #dreaming. The owner replies once: "evet" approves all of them,
+           "1 3 evet, 2 hayır" picks, and anything left unnamed stays open.
+           It used to be one message per proposal, every night: 28 proposals
+           in 56 days, none answered (19/11/2026).
   apply    an approved link becomes a row in _Agent-Context/links.md; the
            compiler writes the Related section from that registry, so a
            recompile cannot erase it. An approved duplicate is recorded for
@@ -23,10 +27,10 @@ Each night:
 Nothing reaches a page without a yes. A rejection is recorded too, so the
 pair is never asked again.
 
-Bounds: at most N proposals a night and at most one of them a duplicate; a
-judged duplicate over that waits in the state for a later night, so it is not
-judged twice. At most 2N judge calls a night. No new proposals while ten wait unanswered; an unanswered proposal
-expires after 14 days. Kill rule: when at least ten proposals were decided
+Bounds: at most N proposals a run and at most one of them a duplicate; a
+judged duplicate over that waits in the state for a later run, so it is not
+judged twice. At most 2N judge calls a run. No new proposals while ten wait unanswered; an unanswered proposal
+expires after 7 days. Kill rule: when at least ten proposals were decided
 in the last 14 days and under 30% were approved, dreaming stops and says so
 in #dreaming. The judge's "none" is remembered for 60 days.
 
@@ -55,7 +59,10 @@ CHANNEL = IDENTITY = "dreaming"
 LANE = "dreaming-judge"
 N = 5
 MAX_PENDING = 10
-EXPIRE_DAYS = 14
+# Seven, not fourteen: with five proposals a night the queue of ten filled in
+# two nights and then blocked new ones for two weeks. By 19/11/2026 none of 28
+# proposals had been answered, so most nights proposed nothing at all.
+EXPIRE_DAYS = 7
 NONE_DAYS = 60
 SKIP_DAYS = 30
 KILL_WINDOW_DAYS, KILL_MIN, KILL_RATE = 14, 10, 0.30
@@ -211,6 +218,17 @@ def approval_rate(state: dict, now: float) -> tuple[int, float]:
 
 # ─── Proposals ──────────────────────────────────────────────────
 
+def digest(props: list[dict]) -> str:
+    """One message for the whole run. Each proposal carries its number in "no"."""
+    from i18n import t
+    lines = [t("dreaming.batch_title", n=len(props)), ""]
+    for p in props:
+        tag = t("dreaming.batch_merge_tag") if p["verdict"] == "duplicate" else t("dreaming.batch_link_tag")
+        lines += [f"{p['no']}. {tag} `{Path(p['a']).stem}` ↔ `{Path(p['b']).stem}`",
+                  f"   {t('dreaming.reason')}: {p['reason']}", ""]
+    return "\n".join(lines + [t("dreaming.batch_footer", days=EXPIRE_DAYS)])
+
+
 def preview(p: dict) -> str:
     from i18n import t
     a, b = Path(p["a"]).stem, Path(p["b"]).stem
@@ -302,26 +320,28 @@ def run(dry: bool = False, n: int = N, box=None, judge_fn=None) -> dict:
                     continue
                 dup_used = True
             ready.append(item)
-        for item in ready:
+        props = []
+        for no, item in enumerate(ready, 1):
             a, b = item["a"], item["b"]
-            k = pair_key(a, b)
-            p = {"a": a, "b": b, "verdict": item["verdict"], "reason": item["reason"],
-                 "evidence": f"{evidence(a, b)} · {evidence(b, a)}", "sim": item["sim"],
-                 "created": now, "status": "pending",
-                 # The time is in the key: a skipped pair returns later with new text,
-                 # and the outbox refuses a key reused for different content.
-                 "key": "dreaming:prop:" + hashlib.sha256(f"{k}\0{int(now)}".encode()).hexdigest()[:20]}
-            print(("[dry] " if dry else "") + preview(p).replace("\n", "\n  ") + "\n")
-            if dry:
-                continue
-            from notify import Outbox
-            box = box or Outbox()
-            box.enqueue(IDENTITY, CHANNEL, preview(p), key=p["key"])
-            box.deliver(p["key"])
-            rec = box.record(p["key"])
-            p["event"] = rec["event"] if rec else None
-            state["proposals"][k] = p
-            counts["proposed"] += 1
+            props.append({"a": a, "b": b, "verdict": item["verdict"], "reason": item["reason"],
+                          "evidence": f"{evidence(a, b)} · {evidence(b, a)}", "sim": item["sim"],
+                          "created": now, "status": "pending", "no": no})
+        if props:
+            # One key for the run. The time is in it: a skipped pair returns later
+            # with new text, and the outbox refuses a key reused for different content.
+            pairs = "\0".join(pair_key(p["a"], p["b"]) for p in props)
+            key = "dreaming:batch:" + hashlib.sha256(f"{pairs}\0{int(now)}".encode()).hexdigest()[:20]
+            print(("[dry] " if dry else "") + digest(props).replace("\n", "\n  ") + "\n")
+            if not dry:
+                from notify import Outbox
+                box = box or Outbox()
+                box.enqueue(IDENTITY, CHANNEL, digest(props), key=key)
+                box.deliver(key)
+                rec = box.record(key)
+                for p in props:
+                    p.update(key=key, event=rec["event"] if rec else None)
+                    state["proposals"][pair_key(p["a"], p["b"])] = p
+                    counts["proposed"] += 1
     print("RUNLOG " + " ".join(f"{k}={v}" for k, v in counts.items()))
     return counts
 
@@ -335,9 +355,48 @@ def words(kind: str) -> set[str]:
     return {w.casefold() for lang in ("tr", "en") for w in t_list(f"dreaming.{kind}_words", lang)}
 
 
+def parse_reply(text: str, numbers: list[int]) -> dict[int, str]:
+    """{proposal number: apply|reject|skip} from one reply.
+
+    Numbers collect until a reply word claims them ("1 3 evet, 2 hayır"). A word
+    with no numbers before it takes every proposal not named yet, so "evet"
+    answers the whole message and "1 evet, hayır" approves one and rejects the
+    rest. Other words are ignored; numbers left without a word decide nothing."""
+    out: dict[int, str] = {}
+    current: list[int] = []
+    for tok in re.findall(r"\d+|[^\W\d_]+", text.casefold()):
+        if tok.isdigit():
+            current.append(int(tok))
+            continue
+        kind = next((k for k in ("apply", "reject", "skip") if tok in words(k)), None)
+        if not kind:
+            continue
+        if current:
+            out.update({n: kind for n in current if n in numbers})
+        else:
+            for n in numbers:
+                out.setdefault(n, kind)
+        current = []
+    return out
+
+
+def _decide(p: dict, kind: str, now: float) -> None:
+    if kind == "apply":
+        decision = "merge" if p["verdict"] == "duplicate" else "link"
+        record(p["a"], p["b"], decision, p["reason"])
+        from compile_resources import apply_link_registry
+        apply_link_registry([{"a": p["a"], "b": p["b"], "d": decision, "reason": p["reason"]}])
+        p.update(status="approved", decided_at=now)
+    elif kind == "reject":
+        record(p["a"], p["b"], "merge-rejected" if p["verdict"] == "duplicate" else "rejected", p["reason"])
+        p.update(status="rejected", decided_at=now)
+    else:
+        p.update(status="skipped", decided_at=now)
+
+
 def handle(msg, channel, owner, *, text=None, box=None):
-    """Apply, reject or skip the proposal this message replies to. False when
-    the message is not a reply to a dreaming proposal, so the generic reply
+    """Apply, reject or skip the proposals this message replies to. False when
+    the message is not a reply to a dreaming message, so the generic reply
     worker can answer it instead."""
     from notify import Outbox, event_id
     from i18n import t
@@ -353,33 +412,35 @@ def handle(msg, channel, owner, *, text=None, box=None):
             if not p.get("event"):
                 rec = box.record(p["key"])
                 p["event"] = rec["event"] if rec else None
-        hit = next(((k, p) for k, p in state["proposals"].items() if p.get("event") == parent), None)
-        if not hit:
+        # A proposal sent on its own (before 19/11/2026) has no number: it is 1.
+        hits = {p.get("no", 1): p for p in state["proposals"].values() if p.get("event") == parent}
+        if not hits:
             return False
-        k, p = hit
         if mid in state.setdefault("handled", []):
             return True
-        word = (msg.get("content", "") if text is None else text).strip().casefold().rstrip(".!")
+        reply = msg.get("content", "") if text is None else text
         now = time.time()
-        if p["status"] != "pending":
-            body = t("dreaming.already", decision=p["status"])
-        elif word in words("apply"):
-            decision = "merge" if p["verdict"] == "duplicate" else "link"
-            record(p["a"], p["b"], decision, p["reason"])
-            from compile_resources import apply_link_registry
-            apply_link_registry([{"a": p["a"], "b": p["b"], "d": decision, "reason": p["reason"]}])
-            p.update(status="approved", decided_at=now)
-            body = t("dreaming.applied_merge" if decision == "merge" else "dreaming.applied_link",
-                     a=Path(p["a"]).stem, b=Path(p["b"]).stem)
-        elif word in words("reject"):
-            record(p["a"], p["b"], "merge-rejected" if p["verdict"] == "duplicate" else "rejected", p["reason"])
-            p.update(status="rejected", decided_at=now)
-            body = t("dreaming.rejected")
-        elif word in words("skip"):
-            p.update(status="skipped", decided_at=now)
-            body = t("dreaming.skipped")
+        open_ = {no: p for no, p in hits.items() if p["status"] == "pending"}
+        choices = parse_reply(reply, sorted(open_))
+        if not open_:
+            body = t("dreaming.already", decision=", ".join(sorted({p["status"] for p in hits.values()})))
+        elif not choices:
+            body = t("dreaming.unknown" if len(hits) == 1 else "dreaming.batch_unknown")
         else:
-            body = t("dreaming.unknown")
+            for no in sorted(choices):
+                _decide(open_[no], choices[no], now)
+            if len(hits) == 1:
+                p = open_[next(iter(choices))]
+                body = {"approved": t("dreaming.applied_merge" if p["verdict"] == "duplicate" else "dreaming.applied_link",
+                                      a=Path(p["a"]).stem, b=Path(p["b"]).stem),
+                        "rejected": t("dreaming.rejected"), "skipped": t("dreaming.skipped")}[p["status"]]
+            else:
+                nums = lambda kind: ", ".join(str(n) for n in sorted(choices) if choices[n] == kind)
+                left = ", ".join(str(n) for n in sorted(open_) if n not in choices)
+                body = "\n".join(t(f"dreaming.batch_{kind}", nums=nums(kind))
+                                 for kind in ("apply", "reject", "skip") if nums(kind))
+                if left:
+                    body += "\n" + t("dreaming.batch_left", nums=left, days=EXPIRE_DAYS)
         key = "dreaming:reply:" + mid
         box.enqueue(IDENTITY, CHANNEL, body, key=key, parent=mid)
         box.deliver(key)

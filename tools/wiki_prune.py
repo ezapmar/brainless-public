@@ -26,14 +26,18 @@ So this script does two things, in the order the three layers need them.
              .wiki/_archive/. Nothing is deleted; git keeps the history and
              LOG.md keeps the reasons. Dry run by default; --apply moves.
 
-The rules never touch a human home except two. Approved on 2026-09-19: a
+The rules never touch a human home except three. Approved on 2026-09-19: a
 Spiky meeting report that has been summarised, mined for tasks and left in
 Inbox/ for two weeks moves to Archive/Spiky/. Approved on 2026-10-04: a weekly
 file of content drafts, summarised and two weeks old, moves to
 Archive/Content Drafts/; the content engine writes one every week and nothing
-else ever moved them. That is the CLAUDE.md map, "a processed file leaves
-Inbox", finally executed. Everything else in the human homes is listed under
-"Pending" in the scorecard and left where it is.
+else ever moved them. Approved on 2026-11-21: a CRM organisation ledger that
+has been summarised and has seen no event for two weeks moves to
+Archive/CRM/<YYYY-MM>/; crm_capture.py appends to one file per organisation
+forever, so Inbox/CRM only grew (82 files, September, 25 MB) and nothing ever
+emptied it. That is the CLAUDE.md map, "a processed file leaves Inbox", finally
+executed. Everything else in the human homes is listed under "Pending" in the
+scorecard and left where it is.
 
 Every move is written twice: .agents/state/prune_log.jsonl for machines and
 .wiki/_archive/LOG.md for the owner, with the rule and the reason. To undo
@@ -44,6 +48,7 @@ one, git mv the file back and mark the row.
   python3 tools/wiki_prune.py --archive --apply      # move it, log it
   python3 tools/wiki_prune.py --archive --only spiky --apply
   python3 tools/wiki_prune.py --archive --only drafts --apply
+  python3 tools/wiki_prune.py --archive --only crm --apply
 """
 import argparse
 import json
@@ -70,8 +75,12 @@ INBOX = VAULT / folder("inbox")
 SPIKY = INBOX / "Spiky"
 # Machine ledgers that live under Inbox/ and wait for nobody. crm_capture.py
 # appends to one file per organisation; counted as pile, its 82 quiet files
-# took the stale count from 6 to 93 in a week (27/09/2026).
+# took the stale count from 6 to 93 in a week (27/09/2026). They are not pile,
+# and since 2026-11-21 they are drained by their own rule instead: a ledger
+# that has a summary and has seen no event for two weeks moves to Archive/CRM.
 INBOX_LEDGERS = (INBOX / "CRM",)
+CRM = INBOX / "CRM"
+CRM_ARCHIVE = VAULT / "Archive" / "CRM"
 SPIKY_ARCHIVE = VAULT / "Archive" / "Spiky"
 DRAFTS = INBOX / "Content Drafts"
 DRAFTS_ARCHIVE = VAULT / "Archive" / "Content Drafts"
@@ -101,11 +110,13 @@ TASK_STALE_DAYS = 60
 SEED_LONELY_DAYS = 30
 SCORECARD_ROWS = 20
 GRAPH_ROWS = 26          # weeks of graph-health history (tools/wiki_metrics.py)
-RULES = ("query", "summary", "orphan", "spiky", "drafts")
+RULES = ("query", "summary", "orphan", "spiky", "drafts", "crm")
 # Rules that move a source out of a human home; its summary follows it.
-SOURCE_RULES = ("spiky", "drafts")
+SOURCE_RULES = ("spiky", "drafts", "crm")
 
 _DATE = re.compile(r"(20\d\d-\d\d-\d\d)")
+# A CRM ledger line: "- 2026-09-11 21:17 Akbank: ..." (crm_capture.py writes it).
+_CRM_LINE = re.compile(r"^-\s+(20\d\d-\d\d-\d\d)(?:\s+\d\d:\d\d)?\s", re.M)
 
 
 class Move(NamedTuple):
@@ -171,6 +182,24 @@ def inbox_date(p: Path) -> datetime:
     m = _DATE.search(parse_fm(read(p)).get("captured", "") or "")
     if m:
         return datetime.strptime(m.group(1), "%Y-%m-%d")
+    return page_date(p, {})
+
+
+def crm_date(p: Path) -> datetime:
+    """When a CRM ledger last saw an event: the newest dated line inside it.
+
+    Not the mtime: a git checkout rewrites that, so on a fresh clone every ledger
+    looks new and none would ever leave Inbox. Not the file name either: a ledger
+    is named after its organisation, not a date. crm_capture.py stamps every line,
+    so the last line is the honest answer, and a ledger whose events are all old
+    is exactly the one that may move.
+    """
+    stamps = _CRM_LINE.findall(read(p))
+    for raw in sorted(stamps, reverse=True):
+        try:
+            return datetime.strptime(raw, "%Y-%m-%d")
+        except ValueError:
+            continue
     return page_date(p, {})
 
 
@@ -295,6 +324,35 @@ def rule_drafts(now, summaries=None):
         yield Move("drafts", f, dst, t("wiki_prune.reason_drafts", days=age), 0, age)
 
 
+def rule_crm(now, summaries=None):
+    """A CRM organisation ledger the compiler has summarised, quiet for two weeks.
+
+    crm_capture.py appends one line per event, forever, to a file per
+    organisation, so Inbox/CRM only ever grows: 82 files and 25 MB on
+    2026-11-21, all of them from September. The summary is what carries the
+    history forward, which is the same test Spiky and Content Drafts pass: a
+    ledger with no summary has not been read by anything and stays where it is.
+
+    The move keeps the ledger readable and keeps crm_capture.py working: a new
+    event for an archived organisation simply starts a fresh file with a header,
+    because the job appends and never reads the old one back. The destination
+    month is the month of the last event, not of the move, so a ledger filed in
+    September stays under 2026-09 whenever it is drained.
+    """
+    if not CRM.exists():
+        return
+    summaries = summaries if summaries is not None else summary_index()
+    for f in sorted(CRM.glob("*.md")):
+        if nfc(rel(f)) not in summaries:
+            continue
+        d = crm_date(f)
+        age = (now - d).days
+        if age <= INBOX_STALE_DAYS:
+            continue
+        dst = CRM_ARCHIVE / d.strftime("%Y-%m") / f.name
+        yield Move("crm", f, dst, t("wiki_prune.reason_crm", days=age), 0, age)
+
+
 def candidates(now, only=None, files=None, graph=None):
     files = files if files is not None else all_wiki_files()
     graph = graph if graph is not None else link_graph(files)
@@ -316,6 +374,8 @@ def candidates(now, only=None, files=None, graph=None):
         moves.extend(rule_spiky(now))
     if "drafts" in only:
         moves.extend(rule_drafts(now))
+    if "crm" in only:
+        moves.extend(rule_crm(now))
     return moves
 
 
@@ -497,6 +557,7 @@ def count(now):
                 lonely += 1
 
     spiky_ready = sum(1 for _ in rule_spiky(now))
+    crm_ready = sum(1 for _ in rule_crm(now))
 
     # Graph health (orphan rate, degree, components, bridges): the direction
     # over weeks says whether ingestion still links, which daily use never shows.
@@ -525,6 +586,7 @@ def count(now):
         "tasks_stale": tasks_stale,
         "seeds_lonely": lonely,
         "spiky_ready": spiky_ready,
+        "crm_ready": crm_ready,
         "wiki_pages": len(files),
         **{k: graph_health[k] for k in ("orphan_rate", "avg_degree", "main_share", "components",
                                         "stale_concepts", "bridges") if k in graph_health},
@@ -594,6 +656,7 @@ def scorecard_markdown(c, moves=None):
              "",
              t("wiki_prune.pending_heading"), "",
              t("wiki_prune.pending_spiky", n=c["spiky_ready"], days=INBOX_STALE_DAYS),
+             t("wiki_prune.pending_crm", n=c.get("crm_ready", 0), days=INBOX_STALE_DAYS),
              t("wiki_prune.pending_tasks", n=c["tasks_stale"], days=TASK_STALE_DAYS, open=c["tasks_open"]),
              t("wiki_prune.pending_seeds", n=c["seeds_lonely"], days=SEED_LONELY_DAYS),
              ""]

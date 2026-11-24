@@ -41,30 +41,42 @@ step nightly  python3 tools/nightly_processor.py           # the day's captures
 if [ "$(date +%H)" -ge 20 ]; then
   step closeout python3 tools/evening_closeout.py
 fi
-step compile  python3 tools/nightly_compile.py             # wiki pages, concepts, index
+# In the venv as well: the compile's last stages (contradiction check, retrieval
+# score) need the search libraries. Under system python3 they skipped without a
+# word from 15/11 to 19/11/2026: no contradiction was checked on any night and
+# the nightly score was BM25 only.
+step compile  "${BRAINLESS_SEARCH_PY:-python3}" tools/nightly_compile.py   # wiki pages, concepts, index
 step index    "${BRAINLESS_SEARCH_PY:-python3}" tools/semantic_index.py build   # hybrid search vectors
 step links    "${BRAINLESS_SEARCH_PY:-python3}" tools/link_suggest.py
-# Report only, after the graph has settled: 2 s, no model. health_check reads the
-# report, so the counts reach the morning briefing instead of waiting for Sunday,
-# which is how 474 broken links and 108 orphans accumulated unseen.
-step lint     python3 tools/lint_wiki.py
-# dreaming imports link_suggest, so it needs the venv too: numpy lives only there.
-step dreaming "${BRAINLESS_SEARCH_PY:-python3}" tools/dreaming.py   # link proposals to Telegram
+# After the graph has settled: 2 s, no model. health_check reads the report, so
+# the counts reach the morning briefing instead of waiting for Sunday, which is
+# how 474 broken links and 108 orphans accumulated unseen. Links to a page that
+# exists under another name are repointed, and a concept page loses the links
+# that only it asks for (the compiler links every first mention; see
+# lint_wiki.lonely_targets). Shared missing targets stay as entity candidates.
+step lint     python3 tools/lint_wiki.py --fix-links --prune-lonely concepts
+step attention python3 tools/attention_audit.py
 
 if [ "$(date +%u)" = 7 ]; then                             # Sunday
+  # One numbered message a week, answered with one reply. dreaming imports
+  # link_suggest, so it needs the venv too: numpy lives only there.
+  step dreaming  "${BRAINLESS_SEARCH_PY:-python3}" tools/dreaming.py   # link proposals to Telegram
   step prune     python3 tools/wiki_prune.py --count --archive --apply
   step research  python3 tools/weekly_research.py
   step radar     python3 .agents/scripts/relationship_radar.py
   step thinking  python3 .agents/scripts/thinking_loop.py --ask
   step reconcile python3 tools/weekly_reconcile.py
+  step kill-review python3 tools/kill_review.py              # overdue kill criteria, one message
   step lint-fix  python3 tools/lint_wiki.py --fix --fix-links   # rewrites the report, post-fix
+  # Weekly, not monthly: since 15/11/2026 this Mac is the only working copy, and
+  # an archive on the 1st left up to a month of private-home edits (they are not
+  # in git) with no copy that sync cannot reach. A missed Sunday is caught up the
+  # next one; health_check goes yellow at 9 days and red at 21.
+  step archive   python3 tools/vault_archive.py create --if-older-days 6
 fi
 case "$(date +%m-%d)" in
   0[13579]-01|11-01) step writing-ideas python3 tools/writing_ideas.py ;;
 esac
-if [ "$(date +%d)" = 01 ]; then
-  step archive python3 tools/vault_archive.py create --if-older-days 25
-fi
 
 python3 tools/health_check.py >> logs/health_check.log 2>&1
 step backup bash .agents/scripts/vault_backup.sh             # the day's one commit + push

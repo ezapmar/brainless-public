@@ -85,6 +85,15 @@ class RunLog(unittest.TestCase):
         counts = self.rl.rollup(self.rl.load(), now=now)[0]["counts"]
         self.assertEqual((counts["hit5"], counts["wiki_changed"]), (88, 318))
 
+    def test_rollup_keeps_the_last_value_of_a_size(self):
+        # Two index builds in one day: passages embedded add up, the page count does not.
+        now = datetime(2026, 11, 18, 23, 59)
+        for h, embedded in ((0, 400), (23, 316)):
+            self.rl.record("semantic_index", "ok", 1.0, {"pages": 1010, "embedded": embedded},
+                           now=now.replace(hour=h))
+        counts = self.rl.rollup(self.rl.load(), now=now)[0]["counts"]
+        self.assertEqual((counts["pages"], counts["embedded"]), (1010, 716))
+
     def test_job_name_comes_from_the_script(self):
         self.assertEqual(self.rl.job_name(["python3", "tools/nightly_processor.py", "--x"]), "nightly_processor")
 
@@ -130,6 +139,15 @@ class HealthFindings(unittest.TestCase):
     def test_a_partial_run_is_named(self):
         roll = [self.day(1, "nightly_compile", status="partial"), self.day(2, "nightly_compile")]
         self.assertTrue(any("nightly_compile" in m for m in self.texts(roll)))
+
+    def test_a_skipped_contradiction_check_is_named(self):
+        roll = [self.day(0, "nightly_compile", contradictions_skipped=1)]
+        self.assertTrue(any("nightly_compile" in m for m in self.texts(roll)))
+
+    def test_a_retired_job_is_not_reported_as_silent(self):
+        roll = [self.day(n, "worker_reach") for n in range(6, 10)]
+        found = [m for _, m in self.hc.run_findings(roll, now=self.now, exists=lambda job: False)]
+        self.assertEqual(found, [])
 
     def test_a_weekly_job_is_not_quiet_after_three_days(self):
         roll = [self.day(n, "wiki_prune") for n in (3, 10)]

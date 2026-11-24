@@ -2,6 +2,8 @@
 date: {{date}}
 type: daily
 tags: [daily]
+privacy: internal
+retention: 
 ---
 
 # {{date}}: {{day}}

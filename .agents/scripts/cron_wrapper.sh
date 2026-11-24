@@ -9,6 +9,7 @@ python3 tools/net_wait.py --wait || { python3 tools/health_check.py >> logs/heal
 run crm python3 .agents/scripts/crm_capture.py              # Pipedrive snapshot, no LLM
 run spiky python3 .agents/scripts/spiky_capture.py          # Gmail IMAP, no LLM
 run spiky python3 .agents/scripts/spiky_actions.py          # action items, local model
+run mail python3 .agents/scripts/gmail_brain_intake.py      # Gmail "Brain" label intake, no LLM
 if [ -x "$GPY" ]; then
   run tasks "$GPY" .agents/scripts/gtasks_sync.py           # TASKS.md <-> Google Tasks
   run brief "$GPY" .agents/scripts/meeting_brief.py         # brief before the next meeting
@@ -22,6 +23,10 @@ if [ "$(date +%H)" -ge 7 ] && [ "$(cat "$STAMP" 2>/dev/null)" != "$TODAY" ]; the
   echo "$TODAY" > "$STAMP"
   run classify python3 tools/note_classify.py
   run morning python3 tools/think_surface.py
+  # The briefing's morning half, built from files other jobs wrote: no model, so
+  # it no longer depends on the desktop app being open at 07:00. The venv has the
+  # Google client for the calendar table; without it that one section says so.
+  run morning "${GPY:-python3}" tools/morning_briefing.py
   run morning python3 .agents/scripts/task_reminder.py      # today queue to Telegram
   case "$(date +%u)" in
     1) run morning python3 tools/resurface.py

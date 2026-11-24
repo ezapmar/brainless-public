@@ -6,6 +6,8 @@ status: pending
 confidence:        # calibrated probability this decision proves right, e.g. 70%
 review:            # YYYY-MM-DD, when to grade this against reality (do not leave blank)
 default_risk:      # ego | emotion | social | inertia | none, which bias most threatens this call
+privacy: internal
+retention: 
 ---
 
 # Decision: {{title}}

@@ -13,6 +13,7 @@ _ENGINE = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file
 from paths import folder, vault_root
 BRAINLESS_ROOT = vault_root()
 import llm
+from redact import redact_for_cloud
 from owner_profile import COMPANY_AREA, LANG, lang_name, output_lang_directive
 from i18n import t
 import mac_notify
@@ -145,7 +146,7 @@ Transcribe every legible word faithfully - do NOT invent, translate, or summariz
 
 Then turn the transcription into a clean vault note:
 - First line: a short title starting with '# '.
-- Fix obvious transcription errors in proper nouns using CONTEXT.md (e.g. "top table" -> "cap table", "ey pi ay" -> "API").
+- Fix obvious transcription errors in proper nouns using CONTEXT.md (e.g. "top table" -> "cap table", "o ge ka" -> "OGK").
 - Use [[wikilinks]] for the projects and people mentioned.
 - Write any action item as a '- [ ]' task line.
 - Last line: 1-3 relevant tags (e.g. #work #personal) if appropriate.
@@ -184,10 +185,13 @@ def _source_block(path, lane):
     """How the model gets the document. claude-cli opens it itself with the Read
     tool, so a whole book fits; any other provider gets the text in the prompt,
     cut at MAX_CHARS and saying so."""
-    if llm.resolve_provider(lane) == "claude-cli":
-        return f"Read the markdown file at '{path}'.", ["Read"]
     with open(path, encoding="utf-8", errors="replace") as fh:
         text = fh.read()
+    # The Read tool would hand claude-cli the raw file, past llm.py's cloud
+    # mask. Only a document with no personal data or secrets takes that path;
+    # any other goes inline, where the mask applies (tools/redact.py).
+    if llm.resolve_provider(lane) == "claude-cli" and not redact_for_cloud(text)[1]:
+        return f"Read the markdown file at '{path}'.", ["Read"]
     note = ""
     if len(text) > MAX_CHARS:
         text, note = text[:MAX_CHARS], f"\n(The document was cut at {MAX_CHARS} characters.)"

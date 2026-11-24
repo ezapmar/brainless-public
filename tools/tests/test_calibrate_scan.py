@@ -4,7 +4,7 @@
   NEEDS PREDICTION  decided, but no confidence or prediction written
   NO REVIEW DATE    pending or deferred with no review date
 
-Run: python3 -B -m unittest discover -s tools/tests -v
+Run: python3 tools/run_tests.py test_calibrate_scan   (the whole suite: python3 tools/run_tests.py)
 """
 from datetime import date, timedelta
 from pathlib import Path

@@ -4,6 +4,8 @@ type: article
 source: 
 author: 
 tags: [resource/article, status/seed]
+privacy: internal
+retention: 
 ---
 
 # {{title}}

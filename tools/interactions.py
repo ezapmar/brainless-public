@@ -8,6 +8,7 @@ routes each reply by the channel of the message it answers:
   #tasks     today queue (apply / edit / defer / dismiss)
   #thinking  weekly thinking loop
   #dreaming  link proposals, then concept proposals
+  #projects  the weekly kill criteria review (close / archive / hold / defer)
   anything   else: a read-only, cited answer from the vault (lane "ask")
 
 Replaced buzz_interactions.py on 2026-11-15. Same ordering rule: a failed reply
@@ -26,11 +27,13 @@ from today_reply import handle as today_handle
 import thinking_reply
 import dreaming
 import concept_review
+import kill_review
 
 HANDLERS = {
     'tasks': [today_handle],
     'thinking': [thinking_reply.handle],
     'dreaming': [dreaming.handle, concept_review.handle],
+    'projects': [kill_review.handle],
 }
 DASHES = {chr(0x2014): ', ', chr(0x2013): '-'}
 

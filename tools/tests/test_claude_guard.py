@@ -27,8 +27,14 @@ spec.loader.exec_module(guard)
 def run(sub, payload):
     """Run the hook the way Claude Code does and return (decision, reason, raw stdout)."""
     raw = payload if isinstance(payload, str) else json.dumps(payload)
+    # The hook imports its neighbours by bare name (leak_patterns, paths), so the
+    # child needs tools/ on sys.path. Set here rather than asking the developer
+    # for PYTHONPATH, which is what tools/run_tests.py does for this process.
+    env = {**os.environ, "BRAINLESS_VAULT": str(ROOT),
+           "PYTHONPATH": os.pathsep.join(
+               [str(ROOT / "tools"), *filter(None, [os.environ.get("PYTHONPATH")])])}
     out = subprocess.run([sys.executable, str(SCRIPT), sub], input=raw, capture_output=True,
-                         text=True, env={**os.environ, "BRAINLESS_VAULT": str(ROOT)})
+                         text=True, env=env)
     assert out.returncode == 0, out.stderr
     if not out.stdout.strip():
         return None, "", ""
@@ -81,6 +87,10 @@ class HumanAreas(unittest.TestCase):
         self.assertIsNone(write(ROOT / "Writings/Drafts/pitch.md", "hi")[0])
         self.assertIsNone(write(WIKI, "hi")[0])
         self.assertIsNone(write("/private/tmp/scratch.md", "hi")[0])
+
+    def test_raw_corpus_is_strictly_denied(self):
+        self.assertEqual(write(ROOT / "raw/clipping.md", "hi")[0], "deny")
+        self.assertEqual(edit(ROOT / "raw/Medium Posts/post.md", "a", "b")[0], "deny")
 
 
 class Secrets(unittest.TestCase):

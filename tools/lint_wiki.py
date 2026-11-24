@@ -10,6 +10,7 @@ Checks:
 - missing pages: unresolved targets aggregated by frequency (entity-page candidates, not errors)
 - orphan files (no inbound or outbound links, excluding INDEX/_commands; INDEX links do not
   grant inbound, otherwise the auto-generated index would mask every orphan)
+- dead-end files (at least one inbound link, zero outbound links; distinct from orphans)
 - stale summaries (source mtime newer than summary)
 - missing frontmatter (lang, summary_en, compiled_at) on non-command files
 
@@ -17,6 +18,8 @@ Fix mode:
 - --fix : backfill minimal required frontmatter on legacy wiki files (digests, summaries, articles, ideas, etc.)
 - --fix-links : remap path/prefix mistakes to the correct target (non-destructive; unresolved links are left alone)
 - --prune-links : with --fix-links, ALSO de-link unresolved targets (destructive; off by default)
+- --prune-lonely FOLDER : with --fix-links, de-link the unresolved targets that only one page asks
+  for, in that .wiki/ folder (repeatable). A target several pages ask for stays a missing-page signal.
 - --dry-run with --fix : preview changes without writing
 
 Usage:
@@ -320,6 +323,14 @@ def orphan_pages(files, graph):
             and "INDEX" not in p.name and "_commands" not in str(p)]
 
 
+def deadend_pages(files, graph):
+    """Pages with at least one inbound link and zero outbound links.
+    Orphans (0 in, 0 out) are reported separately so the two lists do not overlap."""
+    return [p for p in files
+            if graph["inbound"][p] > 0 and graph["outbound"][p] == 0
+            and "INDEX" not in p.name and "_commands" not in str(p)]
+
+
 # Captures target + optional #heading + optional |alias, so we can rewrite a link
 # while preserving its display alias.
 FIX_LINK_RE = re.compile(r"\[\[([^\]\|#]+)(#[^\]\|]+)?(\|[^\]]+)?\]\]")
@@ -362,12 +373,12 @@ def name_index(files) -> dict:
     return out
 
 
-# A name must end where the page name's next word begins, so "Can" reaches
-# "Can Çelikkol" and never "Canan Holding". Whitespace and the underscore that
+# A name must end where the page name's next word begins, so "Ege" reaches
+# "Ege Çamlıbel" and never "Egemen Holding". Whitespace and the underscore that
 # separates a summary stem's path parts, and nothing else: with the hyphen in
 # this set, the first word of every kebab-case slug claimed its page, and
-# "Bahce" (the payroll module) resolved to the concept page
-# "bahce-tabanli-sulama-kanali", which is a different thing.
+# "Bordro" (the payroll module) resolved to the concept page
+# "bordro-tabanli-banka-kanali", which is a different thing.
 _BOUNDARY = re.compile(r"[\s_]")
 
 
@@ -387,6 +398,21 @@ def prefix_index(files) -> dict:
                 if key:
                     claims.setdefault(key, set()).add(p)
     return {k: next(iter(v)) for k, v in claims.items() if len(v) == 1}
+
+
+def lonely_targets(real_broken) -> dict:
+    """{page: targets only that page asks for}. The missing-page list ranks
+    targets by demand, and a target one page wants is not demand: the concept
+    compiler links every first mention, so 20 concept pages carried 268 links
+    to names nothing else in the wiki mentions (11/2026)."""
+    pages: dict[str, set] = {}
+    for p, target in real_broken:
+        pages.setdefault(target, set()).add(p)
+    out: dict[Path, set] = {}
+    for target, ps in pages.items():
+        if len(ps) == 1:
+            out.setdefault(next(iter(ps)), set()).add(target)
+    return out
 
 
 def fix_links_in_file(path: Path, broken_targets: set, remap, dry_run: bool = False,
@@ -437,6 +463,9 @@ def main():
     ap.add_argument("--prune-links", action="store_true",
                     help="With --fix-links: de-link (keep text, drop [[ ]]) targets that resolve "
                          "nowhere. Destructive; erases the missing-page signal. Off by default.")
+    ap.add_argument("--prune-lonely", action="append", default=[], metavar="FOLDER",
+                    help="With --fix-links: in this .wiki/ folder (repeatable), de-link unresolved "
+                         "targets that no other page asks for. Shared targets are left alone.")
     ap.add_argument("--no-llm", action="store_true", help="(deprecated) kept for compatibility")
     args = ap.parse_args()
 
@@ -478,13 +507,24 @@ def main():
         broken_by_file: dict[Path, set] = {}
         for p, target in real_broken:
             broken_by_file.setdefault(p, set()).add(target)
+        lonely = lonely_targets(real_broken) if args.prune_lonely else {}
         for p, targets in broken_by_file.items():
             c = fix_links_in_file(p, targets, lambda t, p=p: remap(t, p), dry_run=args.dry_run,
                                   prune=args.prune_links)
             links_remapped += c["remapped"]
             links_delinked += c["delinked"]
+            # A second pass over the same file: what the first pass remapped no
+            # longer matches, so only the truly unresolved lonely targets go.
+            if p in lonely and p.relative_to(WIKI).parts[0] in args.prune_lonely:
+                links_delinked += fix_links_in_file(p, lonely[p], lambda t, p=p: remap(t, p),
+                                                    dry_run=args.dry_run, prune=True)["delinked"]
+        if (links_remapped or links_delinked) and not args.dry_run:
+            # The report and the run log count what is left, not what was there.
+            graph = link_graph(files)
+            real_broken, external_refs = graph["broken"], graph["external"]
 
     orphans = orphan_pages(files, graph)
+    deadends = deadend_pages(files, graph)
 
     # stale summaries (based on frontmatter source pointer)
     stale = []
@@ -532,6 +572,7 @@ def main():
            + (" (dry-run, no files written)" if args.dry_run else "")] if args.fix_links else []),
         f"- external / raw references (informational): {len(external_refs)}",
         f"- orphan files: {len(orphans)}",
+        f"- dead-end files: {len(deadends)}",
         f"- stale summaries: {len(stale)}",
         f"- frontmatter issues: {len(fm_issues)}",
     ]
@@ -567,6 +608,9 @@ def main():
                 lambda x: f"- `{x[0].relative_to(VAULT)}` → `[[{x[1]}]]` (outside wiki)")
 
     section("Orphan files (no links in or out)", orphans,
+            lambda p: f"- `{p.relative_to(VAULT)}`")
+
+    section("Dead-end files (inbound links, no outbound links)", deadends,
             lambda p: f"- `{p.relative_to(VAULT)}`")
 
     section("Stale summaries (source newer than wiki copy)", stale,
@@ -652,13 +696,13 @@ def main():
     atomic_write(out, "\n".join(lines))
     print(f"[ok] {out.relative_to(VAULT)}")
     print(f"real_broken={len(real_broken)} placeholders_suppressed={placeholder_count} "
-          f"external={len(external_refs)} orphans={len(orphans)} stale={len(stale)} "
-          f"fm_issues={len(fm_issues)} fixed={len(fixed)}")
+          f"external={len(external_refs)} orphans={len(orphans)} deadends={len(deadends)} "
+          f"stale={len(stale)} fm_issues={len(fm_issues)} fixed={len(fixed)}")
     if metrics:
         print(f"orphan_rate={metrics['orphan_rate']} avg_degree={metrics['avg_degree']} "
               f"main_share={metrics['main_share']} components={metrics['components']} dupes={len(dupes)}")
-    print(f"RUNLOG broken={len(real_broken)} orphans={len(orphans)} fixed={len(fixed)} dupes={len(dupes)} "
-          f"junk={len(junk)}")
+    print(f"RUNLOG broken={len(real_broken)} orphans={len(orphans)} deadends={len(deadends)} "
+          f"fixed={len(fixed)} dupes={len(dupes)} junk={len(junk)}")
 
 
 if __name__ == "__main__":

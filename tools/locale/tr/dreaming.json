@@ -15,5 +15,14 @@
   "skipped": "Atlandı; 30 gün sonra yeniden sorulabilir.",
   "unknown": "Anlamadım. Bu öneriye yanıt: evet / hayır / atla",
   "already": "Bu öneri zaten karara bağlandı: {decision}.",
-  "stopped": "🛑 Dreaming durdu: son 14 günde {n} önerinin yalnızca %{rate}'i onaylandı (eşik %30). Yeniden başlatmak için .agents/state/dreaming.json içindeki \"stopped\" alanını sil."
+  "stopped": "🛑 Dreaming durdu: son 14 günde {n} önerinin yalnızca %{rate}'i onaylandı (eşik %30). Yeniden başlatmak için .agents/state/dreaming.json içindeki \"stopped\" alanını sil.",
+  "batch_title": "🔗 Bu haftanın {n} bağlantı önerisi",
+  "batch_link_tag": "Bağlantı:",
+  "batch_merge_tag": "Kopya:",
+  "batch_footer": "Bu mesaja tek yanıt yeter: «evet» hepsini onaylar. Seçmek için: «1 3 evet, 2 hayır». Yanıtlamadıkların {days} gün sonra düşer. Kopya onayında hiçbir dosya silinmez.",
+  "batch_apply": "✅ Bağlandı: {nums}. Kayıt: _Agent-Context/links.md",
+  "batch_reject": "Reddedildi, bir daha sorulmayacak: {nums}",
+  "batch_skip": "Atlandı, 30 gün sonra yeniden sorulabilir: {nums}",
+  "batch_left": "Açık kalan: {nums} ({days} gün içinde düşer)",
+  "batch_unknown": "Anlamadım. Örnek yanıt: «evet» (hepsi) ya da «1 3 evet, 2 hayır»."
 }

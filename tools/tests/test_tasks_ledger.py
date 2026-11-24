@@ -18,7 +18,7 @@ for d in (ROOT / "tools",):
         sys.path.insert(0, str(d))
 import tasks_ledger as tl  # noqa: E402
 
-TEXT = "# Ledger\n\n## Promises\n\n- [ ] Call the supplier | [[2026-10-01]] | 2026-10-01\n- [x] Send the deck | [[2026-10-02]] | 2026-10-02\n\n## Waiting\n\n- [ ] Mira: contract draft | [[2026-10-03]] | 2026-10-03\n"
+TEXT = "# Ledger\n\n## Promises\n\n- [ ] Call the supplier | [[2026-10-01]] | 2026-10-01\n- [x] Send the deck | [[2026-10-02]] | 2026-10-02\n\n## Waiting\n\n- [ ] Ayşe: contract draft | [[2026-10-03]] | 2026-10-03\n"
 
 
 class LedgerTests(unittest.TestCase):
@@ -36,9 +36,9 @@ class LedgerTests(unittest.TestCase):
         rows = ledger.rows()
         self.assertEqual([(r.section, r.done, r.title) for r in rows],
                          [("promises", False, "Call the supplier"), ("promises", True, "Send the deck"),
-                          ("waiting", False, "Mira: contract draft")])
+                          ("waiting", False, "Ayşe: contract draft")])
         self.assertEqual(rows[0].source, "2026-10-01")
-        self.assertEqual(ledger.titles(include_done=False), ["Call the supplier", "Mira: contract draft"])
+        self.assertEqual(ledger.titles(include_done=False), ["Call the supplier", "Ayşe: contract draft"])
 
     def test_add_goes_to_the_section_end_and_dedups(self):
         with tl.edit(self.path) as ledger:

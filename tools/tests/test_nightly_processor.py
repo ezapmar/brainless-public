@@ -6,7 +6,7 @@ empty digest; classify_today and weight_block read note_classify.py's state
 file, where the last line wins; _clean_task makes a ledger row that the Google
 Tasks sync can parse. run_prompt is replaced by a fixed reply.
 
-Run: python3 -B -m unittest discover -s tools/tests -v
+Run: python3 tools/run_tests.py test_nightly_processor   (the whole suite: python3 tools/run_tests.py)
 """
 import atexit
 import contextlib
@@ -79,7 +79,12 @@ class ProcessNotes(VaultFixture):
     def test_reply_is_stripped_and_the_call_uses_the_nightly_lane(self):
         out = self.run_digest([self.note("a.md", "hello")])
         self.assertEqual(out, "# Digest\n\nBody.")
-        self.assertEqual(self.llm.call_args.kwargs, {"timeout": 600, "lane": "nightly"})
+        kwargs = self.llm.call_args.kwargs
+        self.assertEqual(kwargs["timeout"], 600)
+        self.assertEqual(kwargs["lane"], "nightly")
+        # P0.4: the prompt's source paths travel with the call, so a note moved
+        # into a cloud_exclude folder refuses a cloud provider instead of leaking.
+        self.assertEqual(kwargs["sources"], [str(self.daily / "a.md")])
 
     def test_each_source_carries_its_label_and_unlabelled_means_story(self):
         files = [self.note("a.md", "alpha"), self.note("b.md", "beta")]

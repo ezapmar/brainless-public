@@ -6,7 +6,7 @@ hint at all. The glossary file now feeds both, and every voice note keeps
 whisper's own words in a folded callout so a misheard name can be checked.
 Nothing here calls whisper or an LLM.
 
-Run: python3 -B -m unittest discover -s tools/tests -v
+Run: python3 tools/run_tests.py test_capture_glossary   (the whole suite: python3 tools/run_tests.py)
 """
 import atexit
 import os

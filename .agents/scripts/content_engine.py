@@ -17,8 +17,8 @@ from notify import send
 from functools import partial
 send_buzz = partial(send, 'content')
 
-GUIDE = os.path.join(VAULT, "Writings", "Editor", "Guides", "production-guide.md")
-EDITOR_RULES = os.path.join(VAULT, "Writings", "Editor", "Editor Rules.md")
+GUIDE = os.path.join(VAULT, "Writings", "Editor", "Rehberler", "uretim-rehberi.md")
+EDITOR_RULES = os.path.join(VAULT, "Writings", "Editor", "Editör Kuralları.md")
 SOURCES = ["Inbox/Spiky", "Inbox/Links", "Thinking/Daily"]
 OUT_DIR = os.path.join(VAULT, "Inbox", "Content Drafts")
 LOOKBACK_DAYS = 7

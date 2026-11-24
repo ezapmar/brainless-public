@@ -15,5 +15,14 @@
   "skipped": "Skipped; it may come back after 30 days.",
   "unknown": "Not understood. Reply to this proposal: yes / no / skip",
   "already": "This proposal is already decided: {decision}.",
-  "stopped": "🛑 Dreaming stopped: only {rate}% of {n} proposals in the last 14 days were approved (threshold 30%). To restart, delete \"stopped\" from .agents/state/dreaming.json."
+  "stopped": "🛑 Dreaming stopped: only {rate}% of {n} proposals in the last 14 days were approved (threshold 30%). To restart, delete \"stopped\" from .agents/state/dreaming.json.",
+  "batch_title": "🔗 This week's {n} link proposals",
+  "batch_link_tag": "Link:",
+  "batch_merge_tag": "Duplicate:",
+  "batch_footer": "One reply to this message is enough: \"yes\" approves all. To pick: \"1 3 yes, 2 no\". What you do not answer expires in {days} days. Approving a duplicate deletes no file.",
+  "batch_apply": "✅ Linked: {nums}. Record: _Agent-Context/links.md",
+  "batch_reject": "Rejected, never asked again: {nums}",
+  "batch_skip": "Skipped, may be asked again in 30 days: {nums}",
+  "batch_left": "Still open: {nums} (expires within {days} days)",
+  "batch_unknown": "I did not understand. Example reply: \"yes\" (all) or \"1 3 yes, 2 no\"."
 }

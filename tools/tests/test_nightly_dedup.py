@@ -27,8 +27,8 @@ class NightlyDedupTest(unittest.TestCase):
         self.ledger = self.vault / "_Agent-Context" / "TASKS.md"
         self.ledger.write_text(
             "# Ledger\n\n## Promises\n\n"
-            "- [ ] Kuzeyfirin organizasyonu için Defne ile butce konusunu görüş | [[2026-09-10]] | 2026-09-10\n"
-            "- [x] Nehir'e katalog örneklerini gönder | [[2026-09-11]] | 2026-09-11\n")
+            "- [ ] Kuzeybank entegrasyonu için Defne ile vergi konusunu görüş | [[2026-09-10]] | 2026-09-10\n"
+            "- [x] Aylin'e dashboard örneklerini gönder | [[2026-09-11]] | 2026-09-11\n")
 
     def tearDown(self):
         self.tmp.cleanup()
@@ -39,12 +39,12 @@ class NightlyDedupTest(unittest.TestCase):
         return self.ledger.read_text()
 
     def test_a_rephrased_task_is_not_added_again(self):
-        text = self.sync("Defne ile Kuzeyfirin organizasyonunun butce konusunu görüşmek")
+        text = self.sync("Defne ile Kuzeybank entegrasyonunun vergi konusunu görüşmek")
         self.assertEqual(text.count("- [ ]"), 1)
 
     def test_a_task_already_closed_is_not_reopened_in_other_words(self):
-        text = self.sync("Dashboard örneklerini Nehir'e gönder")
-        self.assertEqual(text.count("Nehir"), 1)
+        text = self.sync("Dashboard örneklerini Aylin'e gönder")
+        self.assertEqual(text.count("Aylin"), 1)
 
     def test_a_new_task_is_added_once(self):
         text = self.sync("Lodosbank teklif toplantısı için sunumu hazırla",

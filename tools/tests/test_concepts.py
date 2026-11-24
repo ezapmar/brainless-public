@@ -45,12 +45,12 @@ class Registry(unittest.TestCase):
         text = """# Concept registry
 Row format: `slug | Title | aliases | status | sensitivity | scope`.
 nakit-disiplini | Nakit disiplini | cash discipline, profit first | active | | cash before growth
-bahce-duzeni | Bahçe düzeni | | proposed | personal | garden layouts
+okul-gecisi | Okul geçişi | | proposed | personal | school moves
 Bad Slug | x | | active | |
 old-idea | Old | | retired | |
 """
         rows = C.parse_registry(text)
-        self.assertEqual([r["slug"] for r in rows], ["nakit-disiplini", "bahce-duzeni", "old-idea"])
+        self.assertEqual([r["slug"] for r in rows], ["nakit-disiplini", "okul-gecisi", "old-idea"])
         self.assertEqual(rows[0]["aliases"], ["cash discipline", "profit first"])
         self.assertEqual(rows[1]["sensitivity"], "personal")
 
@@ -72,7 +72,7 @@ class Scope(unittest.TestCase):
         for src in ("Work/Acme/About People/Ozan.md", "Inbox/CRM/deal.md",
                     "Inbox/Spiky/2026-09-01 x.md", "Archive/Spiky/2025-08/x.md",
                     "Work/Acme/Finance/pack.md", "Work/Acme/Investor Relations/r.md",
-                    "Library/People/Staff Export/x.md", "Work/Other Co/x.md", ""):
+                    "Library/People/Employee List - Apr 2026/x.md", "Work/Other Co/x.md", ""):
             self.assertFalse(C.in_scope(src, self.AREA), src)
 
     def test_health_and_family_sources_are_personal(self):
@@ -109,10 +109,10 @@ class Delta(unittest.TestCase):
 class Assignment(unittest.TestCase):
     def test_unknown_stems_and_slugs_are_dropped_and_skipped_stems_get_empty(self):
         out = json.dumps({"assign": {"s1": ["nakit", "invented"], "ghost": ["nakit"]},
-                          "proposals": [{"title": "Bahçe düzeni", "members": ["s1", "s2", "ghost"]}]})
+                          "proposals": [{"title": "Okul geçişi", "members": ["s1", "s2", "ghost"]}]})
         assign, props = C.parse_assignment("chatter " + out, {"s1", "s2"}, {"nakit"})
         self.assertEqual(assign, {"s1": ["nakit"], "s2": []})
-        self.assertEqual(props[0]["slug"], "bahce-duzeni")
+        self.assertEqual(props[0]["slug"], "okul-gecisi")
         self.assertEqual(sorted(props[0]["members"]), ["s1", "s2"])
 
     def test_malformed_output_assigns_nothing(self):
@@ -123,10 +123,10 @@ class Assignment(unittest.TestCase):
         props = [
             {"slug": "profit-first", "title": "Profit First", "aliases": [], "scope": "", "members": ["a", "b"]},
             {"slug": "tek", "title": "Tek kaynak", "aliases": [], "scope": "", "members": ["a"]},
-            {"slug": "bahce", "title": "Bahçe", "aliases": [], "scope": "", "members": ["a", "b"]},
-            {"slug": "bahce", "title": "Bahçe", "aliases": [], "scope": "", "members": ["c", "d"]},
+            {"slug": "okul", "title": "Okul", "aliases": [], "scope": "", "members": ["a", "b"]},
+            {"slug": "okul", "title": "Okul", "aliases": [], "scope": "", "members": ["c", "d"]},
         ]
-        self.assertEqual([p["slug"] for p in C.new_proposals(props, rows)], ["bahce"])
+        self.assertEqual([p["slug"] for p in C.new_proposals(props, rows)], ["okul"])
 
 
 class Validator(unittest.TestCase):
