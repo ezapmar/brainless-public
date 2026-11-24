@@ -4,6 +4,8 @@
   "breached_heading": "## 🔴 Breached ({n})",
   "breached_row": "- <span style=\"color:red\">**{project}**: {date} | {condition}{consequence} ({days} days overdue)</span>",
   "none_breached": "- no breaches",
+  "pending_close_heading": "## ⏸️ On-hold, box still unticked ({n})",
+  "pending_close_row": "- **{project}** ({status}): {date} | {condition}{consequence} ({days} days overdue)",
   "due_heading": "## 🟡 Due within {days} days ({n})",
   "due_row": "- **{project}**: {date} | {condition}{consequence} ({left} days left)",
   "none_due": "- nothing due",

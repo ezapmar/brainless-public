@@ -32,6 +32,7 @@ import build_dashboard as bd
 OUT_FILE = os.path.join(VAULT, "_Agent-Context", "KILL-CRITERIA.md")
 DUE_SOON_DAYS = 14
 SKIP_STATUSES = ("archiv", "wind", "done", "closed")
+HOLD_STATUSES = ("on-hold", "hold", "paused", "parked")
 LINE_RE = re.compile(r"^\s*-\s*\[( |x|X)\]\s*(\d{4}-\d{2}-\d{2})\s*\|\s*([^|]+?)\s*(?:\|\s*(.+?))?\s*$")
 
 
@@ -53,28 +54,32 @@ def criteria_lines(text):
 
 def scan(today=None):
     today = today or date.today()
-    res = {"breached": [], "due": [], "upcoming": 0, "done": 0, "missing": []}
+    res = {"breached": [], "pending_close": [], "due": [], "upcoming": 0, "done": 0, "missing": []}
     for cat, name, path in bd.project_notes():
         text = path.read_text(errors="ignore", encoding="utf-8")
         status = bd.fm(text).get("status", "active").lower()
         if any(k in status for k in SKIP_STATUSES):
             continue
+        is_hold = any(k in status for k in HOLD_STATUSES)
         rows = criteria_lines(text)
         open_rows = [r for r in rows if not r[0]]
         res["done"] += len(rows) - len(open_rows)
         if not open_rows:
-            res["missing"].append((cat, name, status))
+            if not is_hold:
+                res["missing"].append((cat, name, status))
             continue
         for _, d, cond, cons in open_rows:
             delta = (d - today).days
-            item = {"project": name, "cat": cat, "date": d, "days": delta, "condition": cond, "consequence": cons}
+            item = {"project": name, "cat": cat, "date": d, "days": delta,
+                    "condition": cond, "consequence": cons, "status": status}
             if delta < 0:
-                res["breached"].append(item)
+                (res["pending_close"] if is_hold else res["breached"]).append(item)
             elif delta <= DUE_SOON_DAYS:
                 res["due"].append(item)
             else:
                 res["upcoming"] += 1
     res["breached"].sort(key=lambda i: i["date"])
+    res["pending_close"].sort(key=lambda i: i["date"])
     res["due"].sort(key=lambda i: i["date"])
     return res
 
@@ -92,6 +97,11 @@ def render(res, now=None):
                    condition=i["condition"], consequence=_cons(i), days=-i["days"]))
     if not res["breached"]:
         L.append(t("kill_criteria.none_breached"))
+    if res.get("pending_close"):
+        L += ["", t("kill_criteria.pending_close_heading", n=len(res["pending_close"]))]
+        for i in res["pending_close"]:
+            L.append(t("kill_criteria.pending_close_row", project=i["project"], status=i["status"],
+                       date=i["date"].isoformat(), condition=i["condition"], consequence=_cons(i), days=-i["days"]))
     L += ["", t("kill_criteria.due_heading", days=DUE_SOON_DAYS, n=len(res["due"]))]
     for i in res["due"]:
         L.append(t("kill_criteria.due_row", project=i["project"], date=i["date"].isoformat(),

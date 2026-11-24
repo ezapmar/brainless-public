@@ -4,6 +4,8 @@
   "breached_heading": "## 🔴 İhlal edildi ({n})",
   "breached_row": "- <span style=\"color:red\">**{project}**: {date} | {condition}{consequence} ({days} gün geçti)</span>",
   "none_breached": "- ihlal yok",
+  "pending_close_heading": "## ⏸️ Beklemede, kutusu kapatılmamış ({n})",
+  "pending_close_row": "- **{project}** ({status}): {date} | {condition}{consequence} ({days} gün geçti)",
   "due_heading": "## 🟡 {days} gün içinde ({n})",
   "due_row": "- **{project}**: {date} | {condition}{consequence} ({left} gün kaldı)",
   "none_due": "- yaklaşan kriter yok",
