@@ -47,7 +47,8 @@ PREFIX = "brainless-"
 SUFFIX = ".tar.gz.age"
 # Rebuildable or machine-local: never worth a backup, sometimes large.
 EXCLUDE_DIRS = {".git", ".venv", "venv", "node_modules", "__pycache__", ".pytest_cache",
-                "logs", ".obsidian/cache", ".trash", ".claude/worktrees"}
+                "logs", ".obsidian/cache", ".trash", ".claude/worktrees",
+                ".tmp.driveupload", ".state"}
 EXCLUDE_SUFFIXES = (".pyc", ".tmp", ".DS_Store")
 
 

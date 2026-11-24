@@ -40,7 +40,7 @@ from logline import log
 
 def read_file(path):
     try:
-        with open(path, encoding="utf-8") as fh:
+        with open(path, encoding="utf-8", errors="replace") as fh:
             return fh.read()
     except OSError:
         return None
@@ -95,7 +95,11 @@ def name_tokens(event):
 
 def gather_context(tokens):
     spiky = []
-    files = sorted(os.listdir(SPIKY_DIR), reverse=True) if os.path.isdir(SPIKY_DIR) else []
+    files = sorted(
+        (f for f in os.listdir(SPIKY_DIR)
+         if f.endswith(".md") and os.path.isfile(os.path.join(SPIKY_DIR, f))),
+        reverse=True,
+    ) if os.path.isdir(SPIKY_DIR) else []
     for f in files[:40]:
         body = read_file(os.path.join(SPIKY_DIR, f)) or ""
         hits = sum(1 for t in tokens if t.lower() in (f + body[:4000]).lower())

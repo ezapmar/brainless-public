@@ -264,6 +264,13 @@ class Rooted(unittest.TestCase):
             patcher = patch.object(cloud_gate, name, value)
             patcher.start()
             self.addCleanup(patcher.stop)
+        for name, value in (
+            ("EGRESS_FILE", str(self.root / "egress.jsonl")),
+            ("STATUS_FILE", str(self.root / "llm_status")),
+        ):
+            patcher = patch.object(llm, name, value)
+            patcher.start()
+            self.addCleanup(patcher.stop)
 
     def write(self, rel, text="# x\n"):
         p = self.root / rel
@@ -274,8 +281,8 @@ class Rooted(unittest.TestCase):
 
 class CloudExcludeLane(Rooted):
     def test_a_cloud_excluded_source_picks_the_local_lane(self):
-        with patch.object(cloud_gate, "CLOUD_EXCLUDE", ("Personal/Move Abroad",)):
-            local = self.write("Personal/Move Abroad/school.md")
+        with patch.object(cloud_gate, "CLOUD_EXCLUDE", ("Personal/UK Relocation",)):
+            local = self.write("Personal/UK Relocation/school.md")
             safe = self.write("Library/Books/a.md")
             self.assertEqual(compiler._compile_lane(local), "compile-local")
             self.assertEqual(compiler._compile_lane(safe), "compile")
@@ -312,8 +319,8 @@ class CloudGateRefusal(Rooted):
         self.addCleanup(patcher.stop)
 
     def test_cloud_excluded_source_never_reaches_a_cloud_prompt(self):
-        with patch.object(cloud_gate, "CLOUD_EXCLUDE", ("Personal/Move Abroad",)):
-            src = self.write("Personal/Move Abroad/school.md")
+        with patch.object(cloud_gate, "CLOUD_EXCLUDE", ("Personal/UK Relocation",)):
+            src = self.write("Personal/UK Relocation/school.md")
             with Env(BRAINLESS_LLM_PROVIDER_COMPILE="claude-cli", BRAINLESS_LLM_LOCAL_ONLY=None):
                 self.assertIsNone(llm.run_prompt("prompt", lane="compile", sources=[src]))
         self.assertEqual(self.calls, [], "the dispatcher must not be called at all")
@@ -402,20 +409,20 @@ class LinkMeta(Rooted):
 
     def members(self):
         safe = self.write("Library/Books/a.md", "# A\nSAFE BODY\n")
-        excluded = self.write("Personal/Move Abroad/School.md", "# School\nPRIVATE BODY\n")
+        excluded = self.write("Personal/UK Relocation/School.md", "# School\nPRIVATE BODY\n")
         return [
-            {"stem": "personal_move_abroad_school",
-             "source": "Personal/Move Abroad/School.md", "path": excluded},
+            {"stem": "personal_uk_relocation_school",
+             "source": "Personal/UK Relocation/School.md", "path": excluded},
             {"stem": "library_books_a", "source": "Library/Books/a.md", "path": safe},
         ]
 
     def test_a_mixed_concept_moves_whole_to_the_local_lane(self):
         # Not just the blocked body: the page on disk and the prior article are
         # derivatives of the same sources, so the entire call stays on the Mac.
-        with patch.object(cloud_gate, "CLOUD_EXCLUDE", ("Personal/Move Abroad",)):
+        with patch.object(cloud_gate, "CLOUD_EXCLUDE", ("Personal/UK Relocation",)):
             lane, sources = compiler._concept_inputs(self.members())
         self.assertEqual(lane, "compile-local")
-        self.assertEqual(sources, ["Personal/Move Abroad/School.md", "Library/Books/a.md"],
+        self.assertEqual(sources, ["Personal/UK Relocation/School.md", "Library/Books/a.md"],
                          "the local lane keeps every source, so no link is lost")
 
     def test_a_concept_with_no_blocked_member_stays_on_its_lane(self):
