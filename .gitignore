@@ -25,6 +25,8 @@ venv/
 **/.venv/
 __pycache__/
 *.pyc
+*.epub
+*.EPUB
 .obsidian/workspace*.json
 
 # --- never absorb vault content ---

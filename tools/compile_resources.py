@@ -20,6 +20,7 @@ Usage:
   python3 tools/compile_resources.py --full-rebuild   # rebuild all
   python3 tools/compile_resources.py --dry-run        # show plan
   python3 tools/compile_resources.py --only summaries # phase: summaries|concept-assign|concepts|overview|projects|entities|ideas|index
+  python3 tools/compile_resources.py --file Inbox/x.md # compile one source (summary, concepts, index)
   python3 tools/compile_resources.py --only concept-propose  # one-shot: propose a starting concept set
   python3 tools/compile_resources.py --only concept-migrate  # one-off: articles -> concepts
 """
@@ -355,6 +356,35 @@ def needs_rebuild(src: Path, dst: Path, full: bool) -> bool:
     return src.stat().st_mtime > dst.stat().st_mtime
 
 
+def _is_hidden_path(path: Path, root: Path | None = None) -> bool:
+    """True if any segment inside root (or VAULT) starts with '.'.
+    Keeps hidden tool state (such as Inbox/Spiky/.state/retired-notes/ or .vscode/)
+    out of the compiler's source walk and entity corpus."""
+    base = root if root is not None else VAULT
+    try:
+        rel = path.relative_to(base)
+    except ValueError:
+        rel = path
+    return any(part.startswith(".") for part in rel.parts)
+
+
+# Generated per-call breakdowns already rolled up into sibling synthesis hubs
+# (e.g. Inbox/Spiky/Analiz/Yönetici Özeti.md, Ürün Haritası/, Konular/).
+EXCLUDED_SUBTREES = (
+    tuple(_nfc(seg).casefold() for seg in (folder("inbox"), "Spiky", "Analiz", "Görüşmeler")),
+)
+
+
+def _is_excluded_subtree(path: Path) -> bool:
+    """True if path sits inside an excluded subtree (NFC-normalised, casefolded)."""
+    parts = tuple(_nfc(seg).casefold() for seg in path.parts)
+    for sub in EXCLUDED_SUBTREES:
+        n = len(sub)
+        if any(parts[i:i + n] == sub for i in range(len(parts) - n + 1)):
+            return True
+    return False
+
+
 def iter_sources(roots):
     # A linked folder (brainless init) is its own root and also sits under the
     # library root; Pythons that follow links in rglob would yield it twice.
@@ -363,7 +393,7 @@ def iter_sources(roots):
         if not root.exists():
             continue
         for p in root.rglob("*.md"):
-            if p in seen or _is_private(p):
+            if p in seen or _is_hidden_path(p, root) or _is_excluded_subtree(p) or _is_private(p):
                 continue
             seen.add(p)
             yield p
@@ -403,6 +433,10 @@ def _summary_prompt(src: Path, body: str, rel=None) -> str:
 
 {CROSS_LINK_RULE}
 {chat_rule}
+If the source records post-ship outcomes or external feedback (customer replies,
+editorial/legal edits, audit findings, measured launch results), preserve them
+explicitly as observed evidence under ## Key Points, separate from untested plans.
+
 SOURCE FILE: {rel}
 SOURCE CONTENT:
 ---
@@ -649,6 +683,8 @@ status: seed
 {STATUS_HEADING}
 {t("compile_resources.open_threads_heading")}
 {t("compile_resources.decisions_heading")}
+{t("compile_resources.feedback_heading")}
+<Observed post-ship outcomes and external feedback stated in the project files (such as Outcomes & Feedback entries, outreach logs, counsel/editorial edits, or audit results). Weight observed outcomes above untested plans. If the files record none, write "{t('compile_resources.cross_effects_none')}".>
 {LINKS_HEADING}
 ## Cross-effects (personal↔work)
 {cross_effects_guide()}
@@ -782,15 +818,15 @@ def _append_proposals(props, catalogue):
 
 
 def _announce_proposals(rows):
-    """Each waiting proposal becomes a message in Buzz #dreaming that a reply
+    """Each waiting proposal becomes a message in Telegram #dreaming that a reply
     decides (tools/concept_review.py). Personal ones show no title."""
     if not rows:
         return
     try:
         import concept_review
-        print(f"[buzz] {concept_review.announce(catalogue=summary_catalogue())} concept proposal(s) announced")
+        print(f"[notify] {concept_review.announce(catalogue=summary_catalogue())} concept proposal(s) announced")
     except Exception as e:  # a failed announcement must never cost the compile
-        print(f"[buzz] concept proposal announcement failed: {e}", file=sys.stderr)
+        print(f"[notify] concept proposal announcement failed: {e}", file=sys.stderr)
 
 
 def _assign_prompt(rows, batch, *, propose_only=False):
@@ -956,6 +992,9 @@ RULES (each exists because breaking it destroys what the page is for):
 - Keep every [[link]] already on the page.
 - Every claim cites its source as [[summary-stem]] with a date when one is known, and one confidence
   label: {' | '.join(C.CONFIDENCE)}. Self-reported numbers keep that label forever.
+- Weight observed post-ship outcomes and real-world feedback (primary evidence) above untested
+  hypotheses or plans; when observed outcomes disagree with an existing claim, record the tension
+  under Contested or supersede the outdated assumption.
 - Only record a relationship the source states. Do not infer.
 - Link the first mention of any entity or concept with [[wikilink]].
 - Use ONLY the sources and the existing page. Nothing from general knowledge.
@@ -1272,6 +1311,8 @@ def phase_ideas(dry: bool, full: bool):
         if not d.exists():
             continue
         for p in d.rglob("*.md"):
+            if _is_hidden_path(p, d):
+                continue
             try:
                 blob += f"\n--- {p.relative_to(VAULT)} ---\n" + p.read_text(encoding="utf-8")[:5000]
             except Exception:
@@ -1485,7 +1526,7 @@ def _entity_corpus():
             if not root.exists():
                 continue
             for p in root.rglob("*.md"):
-                if _is_private(p) or p.name.startswith("."):
+                if _is_hidden_path(p, root) or _is_excluded_subtree(p) or _is_private(p):
                     continue
                 try:
                     text = _nfc(p.read_text(errors="replace", encoding="utf-8")).casefold()
@@ -1877,27 +1918,226 @@ ON_DEMAND = {
     "concept-migrate": lambda dry, full: migrate_articles(dry),
 }
 
+# CLAUDE.md caps edits at 15 wiki pages per source: 1 summary + up to 14 concepts.
+SINGLE_FILE_MAX_CONCEPTS = 14
+
+
+def _resolve_vault_file(file_arg: str) -> tuple[Path | None, str]:
+    """Resolve a vault-relative or absolute markdown path inside VAULT."""
+    vault_res = VAULT.resolve()
+    cand = Path(file_arg)
+    try:
+        resolved = cand.resolve() if cand.is_absolute() else (vault_res / cand).resolve()
+        rel = resolved.relative_to(vault_res)
+    except (OSError, ValueError):
+        return None, f"path is outside the vault: {file_arg}"
+    src = VAULT / rel
+    if not src.is_file():
+        return None, f"file not found: {rel.as_posix()}"
+    if src.suffix.lower() != ".md":
+        return None, f"only markdown (.md) files can be compiled directly: {rel.as_posix()}"
+    return src, ""
+
+
+def _summary_entry(dst: Path) -> dict | None:
+    if not dst.exists():
+        return None
+    text = C.read_page(dst)
+    fm, _ = C.split_frontmatter(text)
+    source = C.fm_value(fm, "source") or ""
+    return {
+        "stem": dst.stem,
+        "path": dst,
+        "source": source,
+        "summary_en": (C.fm_value(fm, "summary_en") or "")[:400],
+        "hash": C.fm_value(fm, "sources_hash") or "",
+        "concepts": C.read_concepts_key(text),
+        "rev": C.fm_value(fm, "concepts_rev") or "",
+    }
+
+
+def compile_single_file(file_arg: str, dry: bool = False, full: bool = False) -> dict:
+    """Compile one source on demand: summary -> concept assign -> affected concepts -> index.
+
+    Respects the same privacy, retraction, source-filter, local-only lane, and
+    15-page-per-source boundaries as the nightly compiler.
+    """
+    src, err = _resolve_vault_file(file_arg)
+    if err or src is None:
+        print(f"[FAIL] --file: {err}", file=sys.stderr)
+        return {"status": "error", "error": err}
+
+    rel = src.relative_to(VAULT).as_posix()
+    if _is_hidden_path(src):
+        print(f"[skip] {rel}: hidden path, never compiled")
+        return {"status": "skipped", "reason": "hidden", "source": rel}
+    if _is_excluded_subtree(src):
+        print(f"[skip] {rel}: excluded subtree, never compiled")
+        return {"status": "skipped", "reason": "excluded", "source": rel}
+    if _is_private(src):
+        print(f"[skip] {rel}: private/secret source, never compiled")
+        return {"status": "skipped", "reason": "private", "source": rel}
+
+    reason = source_skip(src)
+    if reason:
+        print(f"[skip] {rel}: {reason}")
+        return {"status": "skipped", "reason": reason, "source": rel}
+
+    lane = _compile_lane(src)
+    dst = _summary_dst(src)
+    summary_changed = summarize_file(src, dry, full)
+    _COUNTS["summaries"] = int(bool(summary_changed))
+
+    assigned_slugs: list[str] = []
+    concepts_updated: list[str] = []
+    proposals_added: list[str] = []
+    in_concept_scope = C.in_scope(rel, COMPANY_AREA)
+
+    if dry:
+        if in_concept_scope:
+            print(f"[dry] concept-assign {dst.stem} (lane: {lane})")
+        print(f"[dry] single-file summary: {rel} -> {dst.relative_to(VAULT)} (lane: {lane})")
+        return {
+            "status": "dry-run",
+            "source": rel,
+            "lane": lane,
+            "summary": dst.relative_to(VAULT).as_posix(),
+            "summary_changed": summary_changed,
+            "in_concept_scope": in_concept_scope,
+            "assigned": assigned_slugs,
+            "concepts_updated": concepts_updated,
+            "proposals": proposals_added,
+        }
+
+    entry = _summary_entry(dst)
+    if entry and in_concept_scope:
+        rows = concept_rows()
+        rev = _active_rev(rows)
+        slugs = {r["slug"] for r in rows if r["status"] != "retired"}
+        need_assign = full or summary_changed or entry["concepts"] is None or entry["rev"] != rev
+        if need_assign:
+            assign_lane = "compile-local" if cloud_gate.block_reason(entry["source"]) else None
+            out = call_claude(_assign_prompt(rows, [entry]), timeout=300, concept=True,
+                              lane=assign_lane, sources=[entry["source"]])
+            assign, props = C.parse_assignment(out or "", {entry["stem"]}, slugs)
+            if assign:
+                catalogue = summary_catalogue()
+                fresh = C.new_proposals(props, concept_rows())
+                kept = {r["slug"] for r in _append_proposals(fresh, catalogue)}
+                added_rows = [r for r in concept_rows() if r["slug"] in kept]
+                proposals_added = [r["slug"] for r in added_rows]
+                for p in (p for p in fresh if p["slug"] in kept):
+                    slugs.add(p["slug"])
+                    if entry["stem"] in p["members"]:
+                        assign[entry["stem"]] = sorted(set(assign.get(entry["stem"], [])) | {p["slug"]})
+                _stamp_concepts(dst, assign.get(entry["stem"], []), rev)
+                _announce_proposals(added_rows)
+            else:
+                print(f"[FAIL] concept-assign {entry['stem']}: unparsable output", file=sys.stderr)
+
+        assigned_slugs = C.read_concepts_key(C.read_page(dst)) or []
+        if assigned_slugs:
+            active_rows = {r["slug"]: r for r in concept_rows() if r["status"] == "active"}
+            catalogue = summary_catalogue()
+            if len(assigned_slugs) > SINGLE_FILE_MAX_CONCEPTS:
+                print(f"[warn] capping concept updates at {SINGLE_FILE_MAX_CONCEPTS} (15-page source cap)")
+            for slug in assigned_slugs[:SINGLE_FILE_MAX_CONCEPTS]:
+                row = active_rows.get(slug)
+                if not row:
+                    continue
+                if out_of_time("concepts", need=300):
+                    break
+                members = [s for s in catalogue if slug in (s["concepts"] or [])]
+                c_dst = CONCEPTS_DIR / f"{slug}.md"
+                old = C.read_page(c_dst)
+                integrated = {} if full else C.read_members(old)
+                todo = C.delta({s["stem"]: s["hash"] for s in members}, integrated)
+                if not todo:
+                    continue
+                by_stem = {s["stem"]: s for s in members}
+                batch = sorted((by_stem[s] for s in todo), key=lambda s: _date_key(s["source"]))
+                batch = batch[:CONCEPT_MAX_DELTA]
+                if full:
+                    old = ""
+                personal = row["sensitivity"] == "personal" or any(C.is_personal(s["source"]) for s in members)
+                prior = "" if old else C.read_page(CONCEPT_ARCHIVE / f"{slug}.article.md")
+                text = None
+                for attempt in (batch, batch[:max(1, len(batch) // 2)]):
+                    c_lane, c_srcs = _concept_inputs(attempt)
+                    out = call_claude(_concept_prompt(row, old, attempt, prior, personal),
+                                      concept=True, lane=c_lane, sources=c_srcs)
+                    if not out:
+                        continue
+                    stamped = dict(integrated, **{s["stem"]: s["hash"] for s in attempt})
+                    candidate = _finish_concept(out, row, stamped, personal)
+                    problems = C.validate_update(old, candidate)
+                    if not problems:
+                        text, batch = candidate, attempt
+                        break
+                    print(f"[reject] concept {slug}: {'; '.join(problems)}", file=sys.stderr)
+                    if len(attempt) == 1:
+                        break
+                if text is None:
+                    print(f"[FAIL] concept {slug}: not produced, existing page kept", file=sys.stderr)
+                    continue
+                c_dst.parent.mkdir(parents=True, exist_ok=True)
+                atomic_write(c_dst, text)
+                for s in batch:
+                    _inject_backlink(s["stem"], slug)
+                print(f"[ok] {c_dst.relative_to(VAULT)} (+{len(batch)})")
+                concepts_updated.append(slug)
+
+    _COUNTS["concepts"] = len(concepts_updated)
+    if summary_changed or concepts_updated:
+        phase_index(dry=False, full=False)
+
+    print(
+        f"single-file compile: {rel} (lane={lane}) | "
+        f"summary={'updated' if summary_changed else 'unchanged'} ({dst.relative_to(VAULT)}) | "
+        f"assigned={len(assigned_slugs)} updated_concepts={len(concepts_updated)} proposals={len(proposals_added)}"
+    )
+    return {
+        "status": "ok",
+        "source": rel,
+        "lane": lane,
+        "summary": dst.relative_to(VAULT).as_posix(),
+        "summary_changed": summary_changed,
+        "in_concept_scope": in_concept_scope,
+        "assigned": assigned_slugs,
+        "concepts_updated": concepts_updated,
+        "proposals": proposals_added,
+    }
+
 
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--full-rebuild", action="store_true")
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--only", choices=list(PHASES.keys()) + list(ON_DEMAND.keys()))
+    ap.add_argument("--file", help="compile a single markdown source inside the vault (summary, concepts, index)")
     ap.add_argument("--budget-seconds", type=int,
                     default=int(os.environ.get("BRAINLESS_COMPILE_BUDGET", "0")),
                     help="wall-clock budget in seconds; 0 = unlimited. The run "
                          "stops between items and still rebuilds the index.")
     args = ap.parse_args()
+    if args.file and args.only:
+        ap.error("--file cannot be combined with --only")
 
     global _DEADLINE
     if args.budget_seconds > 0 and not args.dry_run:
         _DEADLINE = time.monotonic() + args.budget_seconds
         print(f"=== budget: {args.budget_seconds}s ===")
 
-    phases = [args.only] if args.only else list(PHASES.keys())
-    for ph in phases:
-        print(f"\n=== phase: {ph} ===")
-        {**PHASES, **ON_DEMAND}[ph](args.dry_run, args.full_rebuild)
+    if args.file:
+        print(f"\n=== single-file: {args.file} ===")
+        res = compile_single_file(args.file, dry=args.dry_run, full=args.full_rebuild)
+        if res.get("status") == "error":
+            sys.exit(1)
+    else:
+        phases = [args.only] if args.only else list(PHASES.keys())
+        for ph in phases:
+            print(f"\n=== phase: {ph} ===")
+            {**PHASES, **ON_DEMAND}[ph](args.dry_run, args.full_rebuild)
 
     if not args.dry_run:
         if _BUDGET_NOTED:

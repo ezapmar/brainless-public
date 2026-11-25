@@ -49,14 +49,13 @@ Each command reads specific parts of the vault, reasons over them, and prints a 
 | Command | What it does | Reads from |
 |---|---|---|
 | `/context` | Snapshot of your current state, projects, priorities, staleness | `_Agent-Context/`, `.wiki/digests/` (last 7) |
-| `/trace <topic>` | Timeline of how your thinking on a topic evolved | whole vault, grep + dates |
-| `/connect <A> <B>` | Shortest link-path between two notes, plus proposed new edges | `[[links]]` across vault |
-| `/ideas [area]` | Generate atomic idea candidates from belief × project intersections | `Thinking/Beliefs/`, `.wiki/ideas/`, recent dailies |
-| `/graduate [days]` | Seeds ready for promotion to `#status/growing` or `#status/evergreen` | notes tagged `#status/seed` |
-| `/decide <question>` | Fills in a decision framework using your beliefs + past decisions | `Thinking/Beliefs/`, `Thinking/Decisions/` |
-| `/calibrate` | Grades matured decisions in one line (agent drafts outcome, you confirm) | `Thinking/Decisions/`, `Thinking/Calibration.md`, `tools/calibrate.py` |
+| `/decide <question>` | Fills in a decision framework using your beliefs + past decisions, reversibility first | `Thinking/Beliefs/`, `Thinking/Decisions/` |
+| `/ingest <path>` | Immediate single-source compilation into `.wiki/` (up to 15 pages), linking, conflict check, and 3-sentence diff | target file, `.wiki/INDEX.md`, `tools/compile_resources.py --file` |
+| `/lint` | Wiki integrity checks (broken links, orphans, dead-ends, frontmatter) and repairs | `.wiki/`, `tools/lint_wiki.py` |
+| `/reply <thread>` | Turns a saved thread plus rough notes into a commitment-checked draft in `Writings/Drafts/` | `_Agent-Context/`, `Work/`, `Personal/`, `.wiki/` |
+| `/research <question>` | Structured research pass: opening question and falsifiable hypotheses before opening sources | `.wiki/`, `docs/method.md` |
+| `/trace <project>` | End-to-end traceability audit of an active project across sources, `.wiki/`, tasks, conflicts and attention | `Work/`, `Personal/`, `.wiki/`, `_Agent-Context/` |
 | `/weekly [days]` | Themes, blind spots, promotion candidates from recent dailies | `.wiki/digests/`, git log |
-| `/contradict` | Pairs of beliefs/decisions that conflict; stale unused beliefs | `Thinking/Beliefs/`, `Thinking/Decisions/` |
 
 ## Install checklist
 

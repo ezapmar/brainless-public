@@ -12,7 +12,7 @@
   "skipped": "Beklemede kaldı; sıradaki yerini korur.",
   "already": "Bu öneri zaten karara bağlandı: {decision}.",
   "waiting_heading": "## Kararını bekleyenler",
-  "waiting_line": "- {label}: {days} gündür bekliyor, Buzz #dreaming'de yanıtla",
+  "waiting_line": "- {label}: {days} gündür bekliyor, Telegram #dreaming'de yanıtla",
   "waiting_none": "- Bekleyen yok",
   "unknown": "{slug} adında bir öneri yok.",
   "none_waiting": "Bekleyen kavram önerisi yok.",

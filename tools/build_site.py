@@ -179,8 +179,8 @@ def page_html(releases: list[Release], version: str) -> str:
     </a>
     <nav class="nav-links" aria-label="Sections">
       <a href="index.html#loop">The loop</a>
-      <a href="index.html#voices">Six voices</a>
-      <a href="index.html#writing">Writing</a>
+      <a href="index.html#runs">How it runs</a>
+      <a href="index.html#editions">Lite</a>
       <a href="index.html#install">Install</a>
       <a href="whats-new.html" aria-current="page">What's new</a>
       <a href="{REPO}">GitHub</a>

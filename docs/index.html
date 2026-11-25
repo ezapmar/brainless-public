@@ -3,9 +3,9 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="description" content="brainless: a personal second brain. Notes collect in one folder, link themselves, come back when relevant, then argue with you. Open source, MIT, runs on one Mac.">
+<meta name="description" content="brainless: a personal second brain in plain Markdown. Notes collect in one folder, link themselves, check the graph, and argue back before you decide. Open source, MIT.">
 <meta property="og:title" content="brainless">
-<meta property="og:description" content="A second brain, woven from your own notes. Open source, runs on one Mac.">
+<meta property="og:description" content="A second brain woven from plain Markdown notes. Full one-Mac edition or zero-daemon Lite. Open source, MIT.">
 <meta property="og:image" content="assets/brainless-social.png">
 <link rel="icon" href="assets/favicon.ico">
 <link rel="alternate" type="application/atom+xml" title="brainless releases" href="feed.xml">
@@ -23,6 +23,7 @@
     <nav class="nav-links" aria-label="Sections">
       <a href="#loop">The loop</a>
       <a href="#runs">How it runs</a>
+      <a href="#editions">Lite</a>
       <a href="#writing">Writing</a>
       <a href="#install">Install</a>
       <a href="whats-new.html">What's new</a>
@@ -34,12 +35,12 @@
 <section class="hero">
   <div class="wrap">
     <img src="assets/brainless-banner.webp" alt="brainless: a brain drawn as a kilim" width="720">
-    <span class="eyebrow">Open source · MIT · runs on one Mac</span>
-    <h1>A second brain, woven from your own notes.</h1>
-    <p class="lede">Notes arrive from everywhere, collect in one folder, link themselves to each other and come back to you when they are relevant. Then they argue with you, through one chat on your phone.</p>
+    <span class="eyebrow">Open source · MIT · one Mac or zero-daemon Lite</span>
+    <h1>A second brain woven from your own notes.</h1>
+    <p class="lede">Notes arrive from everywhere, collect in one Markdown folder, link themselves overnight, and push back before you commit to a decision. Yours on disk, open in twenty years.</p>
     <div class="cta">
-      <a class="btn btn-primary" href="#install">Set it up</a>
-      <a class="btn btn-quiet" href="https://github.com/ezapmar/brainless-public">Read the code</a>
+      <a class="btn btn-primary" href="#install">Set up full (Mac)</a>
+      <a class="btn btn-quiet" href="https://ezapmar.github.io/brainless-lite/">Try brainless-lite</a>
     </div>
     <div class="install">
       <div class="cmd">
@@ -57,32 +58,32 @@
     <div class="section-head">
       <span class="eyebrow">The loop</span>
       <h2>Four knots. Each one holds because of the one before it.</h2>
-      <p>Collect everything without judging it. Let the machine read it and make the connections. Argue with what you are about to decide. Write the decision down as a bet, and settle it later.</p>
+      <p>Unread notes are storage. Summaries nobody challenges are tidier storage. Here is the loop that turns a folder into a working partner.</p>
     </div>
     <div class="loop">
       <div class="knot">
         <svg data-motif="eye" viewBox="0 0 15 15" aria-hidden="true"></svg>
         <span class="motif-name">göz · the eye</span>
         <h3>Collect</h3>
-        <p>Everything comes in through one door. A voice note, a photo of a handwritten page, a link, a PDF, a meeting transcript, a line typed on the phone. Nothing is tagged, filed or judged on the way in.</p>
+        <p>Voice memos, whiteboard photos, links, PDFs, Gmail "Brain" threads, and clipped articles land in one folder. Nothing is tagged or filed on entry. Filing at capture time is how good thoughts die in a car park.</p>
       </div>
       <div class="knot">
         <svg data-motif="tree" viewBox="0 0 15 15" aria-hidden="true"></svg>
         <span class="motif-name">hayat ağacı · the tree of life</span>
-        <h3>Link</h3>
-        <p>The machine reads it so you do not have to. Every note is summarised and tied to the people, companies and ideas it names. An idea that keeps coming back gets a page of its own, and every new source improves that page.</p>
+        <h3>Compile and link</h3>
+        <p>Every night (or right away with <code>/ingest</code>), the compiler summarises sources into <code>.wiki/</code>, links recurring concepts, weights observed post-ship outcomes above untested plans, and checks the visible Obsidian graph for orphans and leaks.</p>
       </div>
       <div class="knot">
         <svg data-motif="horn" viewBox="0 0 15 15" aria-hidden="true"></svg>
         <span class="motif-name">koçboynuzu · the ram's horn</span>
         <h3>Argue</h3>
-        <p>Before a real decision, <code>/decide</code> quotes what you believe and what you decided before, and asks first what undoing it would cost. Every night each new source is read against the pages nearest to it, and a contradiction reaches you in the morning.</p>
+        <p>Before a real choice, <code>/decide</code> quotes what you believe and asks what undoing it costs. Overnight, new sources are checked against nearby pages for contradictions, and an attention audit compares stated priorities against what you actually worked on.</p>
       </div>
       <div class="knot">
         <svg data-motif="star" viewBox="0 0 15 15" aria-hidden="true"></svg>
         <span class="motif-name">yıldız · the star</span>
-        <h3>Decide</h3>
-        <p>A decision is written as a bet, with a prediction and a review date. When the date passes you grade it in one line, so you stop being wrong the same way twice.</p>
+        <h3>Grade</h3>
+        <p>A decision is written as a bet with a prediction, confidence, and review date. When the date passes, the morning briefing nags until you record what actually happened, so you stop being wrong the same way twice.</p>
       </div>
     </div>
   </div>
@@ -94,28 +95,28 @@
   <div class="wrap">
     <div class="section-head">
       <span class="eyebrow">How it runs</span>
-      <h2>One Mac, four jobs, one chat.</h2>
-      <p>No second machine, no relay, no VPN. The phone talks to a Telegram bot and opens the vault from iCloud Drive. Everything else happens on the Mac, in four launchd jobs, and only one of them ever writes to git.</p>
+      <h2>One Mac, four jobs, one Telegram chat.</h2>
+      <p>No second machine, no chat relay, no VPN. I had three devices and two schedulers until the plumbing became the hobby. Everything now runs on one Mac, and only one job writes to git.</p>
     </div>
     <div class="voices four">
       <div class="voice">
         <svg data-motif="eye" data-colour="madder" viewBox="0 0 15 15" aria-hidden="true"></svg>
-        <div><h3>capture</h3><div class="book">every two minutes</div><p>Reads the bot. A plain message becomes a note, a reply to the bot approves or defers, a message starting with ? gets an answer cited from your own pages.</p></div>
+        <div><h3>capture</h3><div class="book">every two minutes</div><p>Polls the Telegram bot. Plain messages become notes, replies approve or defer proposals, and messages starting with <code>?</code> return a cited answer from your local model.</p></div>
       </div>
       <div class="voice">
         <svg data-motif="eye" data-colour="saffron" viewBox="0 0 15 15" aria-hidden="true"></svg>
-        <div><h3>hourly</h3><div class="book">every hour</div><p>Cheap work that should not wait for the night: tasks, mail (including a Gmail "Brain" label), a brief before the next meeting, and the model-free morning briefing after seven.</p></div>
+        <div><h3>hourly</h3><div class="book">every hour</div><p>Tasks sync, Gmail "Brain" label intake, pre-meeting briefs, health check, and a model-free morning briefing after 07:00 that includes wiki changes and 7-day attention gaps.</p></div>
       </div>
       <div class="voice">
         <svg data-motif="eye" data-colour="teal" viewBox="0 0 15 15" aria-hidden="true"></svg>
-        <div><h3>night</h3><div class="book">23:00, or on wake if the lid was shut</div><p>One ordered chain: ingest, digest, compile, index, links, lint (with dead-ends), attention audit, the Sunday weeklies (dreaming, kill review, weekly archive), the health check, then the day's single commit and push.</p></div>
+        <div><h3>night</h3><div class="book">23:00, or on wake</div><p>One ordered chain: ingest, digest, compile, search index, link suggestions, wiki lint, visible vault graph audit, attention audit, Sunday weeklies (dreaming, kill review, encrypted backup), then one commit and push.</p></div>
       </div>
       <div class="voice">
         <svg data-motif="eye" data-colour="orange" viewBox="0 0 15 15" aria-hidden="true"></svg>
-        <div><h3>llm</h3><div class="book">always on, 127.0.0.1:8080</div><p>Gemma 4 12B on llama-server. Eight private lanes, including local compilation for cloud-excluded folders, are pinned fail-closed in <code>brainless.toml</code>. If it is down, the job waits; the text stays home.</p></div>
+        <div><h3>llm</h3><div class="book">always on, 127.0.0.1:8080</div><p>Gemma 4 12B on <code>llama-server</code>. Eight short or private lanes are pinned in <code>brainless.toml</code> under <code>local_only</code>. If the server is down or misconfigured, the call fails closed and the text stays home.</p></div>
       </div>
     </div>
-    <p class="note">Everything the system says to you goes through one durable outbox: queued before it is sent, retried, sent at most once.</p>
+    <p class="note">Every outbound notice runs through a SQLite outbox (<code>tools/notify.py</code>): queued, retried with backoff, sent at most once per key.</p>
   </div>
 </section>
 
@@ -124,29 +125,66 @@
 <section id="yours">
   <div class="wrap">
     <div class="section-head">
-      <span class="eyebrow">Yours</span>
-      <h2>On your disk, in plain text, with the private parts on your own model.</h2>
+      <span class="eyebrow">Keep it yours</span>
+      <h2>Hard checks on disk, before any prompt leaves the machine.</h2>
     </div>
     <div class="yours">
       <div>
         <div class="dot"></div>
-        <h3>A folder of Markdown</h3>
-        <p>No server, no account, nothing to sign up for. Your notes stay in your folder, in a format you could still open in twenty years. Obsidian if you like it, any editor if you do not.</p>
+        <h3>Three privacy layers</h3>
+        <p>Pattern redaction strips e-mails, phones, IBANs and keys. <code>cloud_exclude</code> folders and <code>privacy: personal</code> notes compile locally only; <code>privacy: secret</code> skips compilation. Every call logs to an egress ledger checked daily.</p>
       </div>
       <div>
         <div class="dot"></div>
-        <h3>Two models, by job</h3>
-        <p>Short private jobs (classifying a note, reading a photo, answering a question) run on the model on your Mac. The pages everything else reads are written by Claude on a subscription. Each job is a named lane you can move.</p>
+        <h3>Human vs machine areas</h3>
+        <p><code>raw/</code> is strictly read-only. Human folders require explicit approval before an agent writes. The engine owns <code>.wiki/</code> and can rebuild it from scratch at any time.</p>
       </div>
       <div>
         <div class="dot"></div>
-        <h3>Secrets outside the folder</h3>
-        <p>The bot token and the chat id live in <code>~/.config/brainless</code>, never in the vault, because the vault is a git repository, and a git repository is where keys go to leak. The nightly push refuses a remote that is public.</p>
+        <h3>Graph leak guard</h3>
+        <p><code>tools/vault_graph.py</code> checks the Obsidian-visible vault every night. A tracked file linking into a gitignored folder turns system health red, and unexpected work/personal bridges get flagged.</p>
       </div>
       <div>
         <div class="dot"></div>
-        <h3>A compiled layer you can regenerate</h3>
-        <p>You own the source notes. The machine owns a wiki of summaries, concept pages and digests on top, and it can rebuild that layer from scratch at any time.</p>
+        <h3>Weekly encrypted archive</h3>
+        <p>Every Sunday the full vault and git history are sealed with <code>age</code> outside the synced folder. Sync copies mistakes everywhere in minutes; an encrypted archive waits quietly until you need it.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<svg class="band" aria-hidden="true"></svg>
+
+<section id="editions">
+  <div class="wrap">
+    <div class="section-head">
+      <span class="eyebrow">Two editions</span>
+      <h2>Run the full Mac loop, or start in five minutes with Lite.</h2>
+      <p>Same thinking method, same templates, same privacy rules. Pick how much automation you want to babysit.</p>
+    </div>
+    <div class="ways">
+      <div class="way">
+        <span class="eyebrow">brainless · v0.12 · full</span>
+        <h3>One Mac, always wired</h3>
+        <p>The exact setup I run every day. Built for macOS with background jobs, Telegram capture, and a local 12B model.</p>
+        <ul>
+          <li>Telegram voice, photo, link and <code>?question</code> capture</li>
+          <li>Four <code>launchd</code> jobs, model-free morning briefing, weekly encrypted archive</li>
+          <li>Gmail "Brain" intake, Google Tasks sync, pre-meeting briefs</li>
+          <li>Eight slash commands (including <code>/ingest</code>, <code>/reply</code>, <code>/trace</code>) plus <code>scout</code> and <code>librarian</code></li>
+        </ul>
+      </div>
+      <div class="way">
+        <span class="eyebrow">brainless-lite · zero daemon</span>
+        <h3>Plain folder, one CLI, any OS</h3>
+        <p>Everything that makes the method work, with zero background services to configure.</p>
+        <ul>
+          <li>Runs on macOS, Linux and Windows with Python 3.11+</li>
+          <li>Works with Claude Code, Codex, Gemini CLI, or any LLM in <code>brainless.toml</code></li>
+          <li>One CLI: <code>add</code>, <code>ingest</code>, <code>compile</code>, <code>search</code>, <code>graph</code>, <code>lint</code>, <code>briefing</code>, <code>health</code></li>
+          <li>Same three-layer privacy, templates, and eight slash commands</li>
+        </ul>
+        <p style="margin-top:8px"><a href="https://ezapmar.github.io/brainless-lite/">Visit brainless-lite site</a> · <a href="https://github.com/ezapmar/brainless-lite">GitHub repo</a></p>
       </div>
     </div>
   </div>
@@ -158,8 +196,8 @@
   <div class="wrap">
     <div class="section-head">
       <span class="eyebrow">Writing</span>
-      <h2>The story so far, in two series.</h2>
-      <p>Longer pieces on Medium about the habits brainless forced on its author. Shorter, more technical articles on X about how it is built and what it runs on.</p>
+      <h2>How it grew, in two series.</h2>
+      <p>Longer pieces on Medium about the habits this forced on me. Shorter technical notes on X about the architecture.</p>
     </div>
     <div class="writing">
       <div class="series">
@@ -191,7 +229,7 @@
           <time datetime="2026-09-29">29 Sep</time>
           <div>
             <h3>Why brainless runs on Omarchy</h3>
-            <p>The night shift runs on a 2019 ThinkBook with its lid closed. Four reasons for the operating system underneath, with the machine's own numbers.</p>
+            <p>The old night shift on a 2019 ThinkBook with its lid closed, before the move to one Mac.</p>
             <span class="kind">article</span>
           </div>
         </a>
@@ -207,39 +245,10 @@
           <time datetime="2026-09-28">28 Sep</time>
           <div>
             <h3>Where six years of sociology ended up</h3>
-            <p>The announcement. Capture, compile, search, the hardware, the six voices and decisions as bets, in one long post with the people whose work it stands on.</p>
+            <p>The announcement post: capture, compile, search, decisions as bets, and the books underneath it.</p>
             <span class="kind">long post</span>
           </div>
         </a>
-      </div>
-    </div>
-  </div>
-</section>
-
-<svg class="band" aria-hidden="true"></svg>
-
-<section id="ways">
-  <div class="wrap">
-    <div class="section-head">
-      <span class="eyebrow">What changed</span>
-      <h2>Three devices became one.</h2>
-    </div>
-    <div class="ways">
-      <div class="way">
-        <span class="eyebrow">0.9 · September to November 2026</span>
-        <h3>A phone, a laptop and a worker that never slept</h3>
-        <p>An always-on Linux laptop behind a VPN, thirty-four timers, a self-hosted chat relay, six persona agents arguing at set hours, and an installer for three operating systems.</p>
-      </div>
-      <div class="way">
-        <span class="eyebrow">0.11 · now</span>
-        <h3>One Mac, one bot, fail-closed privacy</h3>
-        <p>The setup had become the hobby, so it was cut back to what gets used every day, then hardened so private notes stay on the machine.</p>
-        <ul>
-          <li>Telegram capture and replies, plus idempotent Gmail "Brain" intake</li>
-          <li>Four launchd jobs, model-free morning briefing, weekly encrypted archive</li>
-          <li>Three-layer privacy: redaction, local-only compile, and an egress ledger</li>
-          <li>Seven slash commands (including /reply and /trace) plus scout and librarian agents</li>
-        </ul>
       </div>
     </div>
   </div>
@@ -252,7 +261,7 @@
     <div class="section-head">
       <span class="eyebrow">Set it up</span>
       <h2>An afternoon on a Mac. Two minutes to the first note.</h2>
-      <p>You need git, Homebrew, Python 3.13, a Telegram bot and the Claude CLI. Fill in the profile, put the bot token in <code>~/.config/brainless</code>, add a Gemma 4 12B model file for the local lanes, then install the four jobs. The README has every step.</p>
+      <p>Needs git, Homebrew, Python 3.13, a Telegram bot and the Claude CLI. Fill in <code>_Agent-Context/PROFILE.md</code>, copy <code>brainless.toml.example</code> to <code>brainless.toml</code>, put bot secrets in <code>~/.config/brainless</code>, add a Gemma 4 12B model for local lanes, then install the four jobs.</p>
     </div>
     <div class="install-grid">
       <div>
@@ -268,7 +277,7 @@
           <code id="cmd-jobs">bash .agents/launchd/install.sh</code>
           <button type="button" data-copy="cmd-jobs">Copy</button>
         </div>
-        <p class="hint">Run it again after changing a path; --uninstall removes the jobs.</p>
+        <p class="hint">Rerun after changing paths; <code>--uninstall</code> removes the jobs. Want zero daemons instead? Use <a href="https://github.com/ezapmar/brainless-lite">brainless-lite</a>.</p>
       </div>
     </div>
   </div>
@@ -280,7 +289,7 @@
   <div class="wrap">
     <div class="aside">
       <h3>The name is a joke that stuck.</h3>
-      <p>In the office I kept saying "let us use our own brain first, then we can talk about a second brain", so when the folder needed a name I typed brainless. Not a second brain, zero brain. The joke carries the design rule anyway. The system keeps the memory and the connections; the thinking stays yours.</p>
+      <p>In the office I kept saying "let us use our own brain first, then we can talk about a second brain", so when the folder needed a name I typed brainless. Not a second brain, zero brain. It ended up carrying the design rule anyway: the scripts keep the memory and the links; the thinking stays yours.</p>
     </div>
   </div>
 </section>
@@ -296,20 +305,20 @@
           <svg data-motif="star" data-ground="night" viewBox="0 0 15 15"></svg>
           <svg data-motif="figure" data-ground="night" viewBox="0 0 15 15"></svg>
         </div>
-        <p style="margin-top:18px">The mark is a brain drawn as a kilim. The motifs are the weaver's own, from the looms of Anatolia and the steppe: the eye, the tree of life, the ram's horn, the star, the figure with hands on hips. Notes are the motifs. Links are the threads. The mind holds because each knot is tied to the others.</p>
+        <p style="margin-top:18px">The mark is a brain drawn as a kilim. The motifs come from the looms of Anatolia and the steppe: the eye, the tree of life, the ram's horn, the star, the figure with hands on hips. Notes are the motifs; links are the threads.</p>
       </div>
       <div class="foot-links">
         <a href="whats-new.html">What's new</a>
         <a href="feed.xml">Release feed (Atom)</a>
+        <a href="https://ezapmar.github.io/brainless-lite/">brainless-lite (zero daemon)</a>
         <a href="https://github.com/ezapmar/brainless-public">Source on GitHub</a>
-        <a href="https://github.com/ezapmar/brainless-public/wiki">Wiki</a>
         <a href="https://github.com/ezapmar/brainless-public/blob/main/docs/ARCHITECTURE.md">Architecture</a>
         <a href="https://github.com/ezapmar/brainless-public/blob/main/docs/design.md">Design</a>
       </div>
     </div>
     <div class="foot-bottom">
       <span>brainless · MIT licence</span>
-      <span>Made by one person and a few scripts.</span>
+      <span>Built by one person and a few scripts.</span>
     </div>
   </div>
 </footer>

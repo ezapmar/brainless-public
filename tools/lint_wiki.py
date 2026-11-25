@@ -235,7 +235,7 @@ ARCHIVE = WIKI / "_archive"
 
 
 # Generated reports in .wiki/ name pages; they are not pages themselves.
-REPORTS = {"_lint-report.md", "_link-suggestions.md"}
+REPORTS = {"_lint-report.md", "_link-suggestions.md", "_vault-graph-report.md"}
 
 
 def all_wiki_files():
@@ -373,8 +373,8 @@ def name_index(files) -> dict:
     return out
 
 
-# A name must end where the page name's next word begins, so "Ege" reaches
-# "Ege Çamlıbel" and never "Egemen Holding". Whitespace and the underscore that
+# A name must end where the page name's next word begins, so "Can" reaches
+# "Can Çelikkol" and never "Canan Holding". Whitespace and the underscore that
 # separates a summary stem's path parts, and nothing else: with the hyphen in
 # this set, the first word of every kebab-case slug claimed its page, and
 # "Bordro" (the payroll module) resolved to the concept page

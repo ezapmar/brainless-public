@@ -115,7 +115,7 @@ RULES = ("query", "summary", "orphan", "spiky", "drafts", "crm")
 SOURCE_RULES = ("spiky", "drafts", "crm")
 
 _DATE = re.compile(r"(20\d\d-\d\d-\d\d)")
-# A CRM ledger line: "- 2026-09-11 21:17 Akbank: ..." (crm_capture.py writes it).
+# A CRM ledger line: "- 2026-09-11 21:17 AcmeBank: ..." (crm_capture.py writes it).
 _CRM_LINE = re.compile(r"^-\s+(20\d\d-\d\d-\d\d)(?:\s+\d\d:\d\d)?\s", re.M)
 
 

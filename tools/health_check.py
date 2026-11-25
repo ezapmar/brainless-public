@@ -328,6 +328,58 @@ def check_graph():
         main=f"{data['main_share']:.0%}", date=data.get("date", "?")))
 
 
+def vault_graph_findings(data, age_s):
+    """(status, detail) for the Obsidian-visible vault graph report (tools/vault_graph.py).
+    Pure enough to test directly."""
+    if age_s > RED_FLAG_SECONDS:
+        return "RED", t("health_check.vault_graph_stale", age=ago(age_s))
+    leaks = int(data.get("gitignore_leaks", 0))
+    if leaks > 0:
+        return "RED", t("health_check.vault_graph_leaks", leaks=leaks)
+    import vault_graph
+    res_view = {
+        "gitignore_leak_count": leaks,
+        "orphan_count": int(data.get("orphans", 0)),
+        "components": int(data.get("components", 1)),
+        "main_share": float(data.get("main_share", 1.0)),
+        "cross_unexpected_count": int(data.get("cross_unexpected", 0)),
+    }
+    status = vault_graph.worst_status(res_view)
+    detail = t(
+        "health_check.vault_graph_detail",
+        orphans=res_view["orphan_count"],
+        components=res_view["components"],
+        main=f"{res_view['main_share'] * 100:.1f}",
+        cross=res_view["cross_unexpected_count"],
+        leaks=leaks,
+        age=ago(age_s),
+    )
+    return status, detail
+
+
+def check_vault_graph():
+    """Obsidian-visible vault connectivity (tools/vault_graph.py, nightly in night.sh).
+    Tracks orphans, connected components, Work-Personal modularity and gitignore leaks."""
+    label = t("health_check.vault_graph_label")
+    path = os.path.join(VAULT, ".wiki", "_vault-graph-report.md")
+    try:
+        with open(path, errors="replace", encoding="utf-8") as fh:
+            text = fh.read()
+        m = re.search(r"<!-- vault_graph: (\{.*?\}) -->", text)
+        data = json.loads(m.group(1)) if m else None
+    except (OSError, ValueError):
+        data = None
+    if not data:
+        add(label, "WARN", t("health_check.vault_graph_missing"))
+        return
+    try:
+        age_s = time.time() - datetime.fromisoformat(str(data.get("generated_at", ""))).timestamp()
+    except ValueError:
+        age_s = time.time() - os.path.getmtime(path)
+    status, detail = vault_graph_findings(data, age_s)
+    add(label, status, detail)
+
+
 _LINT_FIELDS = {"broken": r"broken links \(real\): (\d+)", "orphans": r"orphan files: (\d+)",
                 "stale": r"stale summaries: (\d+)", "fm": r"frontmatter issues: (\d+)"}
 
@@ -399,12 +451,13 @@ def run_findings(roll, now=None, exists=None):
             # A compile whose every model call failed exits cleanly and says
             # partial; on 24/09/2026 that read as a quiet night.
             out.append(("WARN", t("health_check.runs_partial", job=job, day=last["day"], time=last["last"])))
-        # Expected gap from the job's own history: several runs a day, or one run every few days.
+        # Expected gap from the job's own active-day cadence: counting distinct
+        # active days instead of total runs keeps a one-off burst of manual or
+        # test runs on a single day from making a weekly job look daily.
         if len(days) >= 2:
             span = (datetime.strptime(last["day"], "%Y-%m-%d")
                     - datetime.strptime(days[0]["day"], "%Y-%m-%d")).days or 1
-            per_day = sum(e["runs"] for e in days) / max(span, 1)
-            gap_days = max(1.0, 1 / per_day) if per_day else span
+            gap_days = max(1.0, span / (len(days) - 1))
             quiet = (now - datetime.strptime(f"{last['day']} {last['last']}", "%Y-%m-%d %H:%M")).total_seconds() / 86400
             if quiet > 2.5 * gap_days and (exists is None or exists(job)):
                 out.append(("WARN", t("health_check.runs_quiet", job=job, days=f"{quiet:.1f}")))
@@ -684,6 +737,7 @@ def main():
     check_kill_criteria()
     check_pile()
     check_graph()
+    check_vault_graph()
     check_lint()
     check_runs()
     check_backup()

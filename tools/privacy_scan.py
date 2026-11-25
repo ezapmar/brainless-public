@@ -45,7 +45,10 @@ from redact import (EMAIL, IBAN, PHONE, REDACT, SECRETS, TCKN,  # noqa: F401  re
 
 
 def _git(*args: str) -> str:
-    return subprocess.run(["git", *args], cwd=VAULT, capture_output=True, text=True, check=True).stdout
+    return subprocess.run(
+        ["git", *args], cwd=VAULT, capture_output=True, text=True,
+        encoding="utf-8", errors="replace", check=True,
+    ).stdout
 
 
 def _tracked(prefix: str) -> set[str]:

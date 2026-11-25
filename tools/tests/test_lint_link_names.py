@@ -44,46 +44,46 @@ class LinkNames(unittest.TestCase):
         summ = self.dir / "summaries"
         ent.mkdir()
         summ.mkdir()
-        (ent / "Umit Dincel.md").write_text('---\naliases: ["Ümit Dinçel"]\n---\n# Umit Dincel\n',
+        (ent / "Ilkim Sevinc.md").write_text('---\naliases: ["İlkim Sevinç"]\n---\n# Ilkim Sevinc\n',
                                             encoding="utf-8")
-        (summ / "work_about-people_ümit-dincel.md").write_text("# Ümit Dinçel\n", encoding="utf-8")
-        names = name_index_of = lw.name_index([ent / "Umit Dincel.md",
-                                               summ / "work_about-people_ümit-dincel.md"])
-        self.assertEqual(name_index_of[lw.fold_name("Ümit Dinçel")].parent.name, "entities")
-        self.assertEqual(names[lw.fold_name("Umit Dincel")].parent.name, "entities")
+        (summ / "work_about-people_ilkim-sevinc.md").write_text("# İlkim Sevinç\n", encoding="utf-8")
+        names = name_index_of = lw.name_index([ent / "Ilkim Sevinc.md",
+                                               summ / "work_about-people_ilkim-sevinc.md"])
+        self.assertEqual(name_index_of[lw.fold_name("İlkim Sevinç")].parent.name, "entities")
+        self.assertEqual(names[lw.fold_name("Ilkim Sevinc")].parent.name, "entities")
 
     def test_two_entities_sharing_a_name_still_resolve_to_neither(self):
         ent = self.dir / "entities"
         ent.mkdir()
-        a = ent / "Firat Bircan.md"
-        b = ent / "Firat Umur.md"
-        a.write_text('---\naliases: ["Firat"]\n---\n# Firat Bircan\n', encoding="utf-8")
-        b.write_text('---\naliases: ["Firat"]\n---\n# Firat Umur\n', encoding="utf-8")
-        self.assertNotIn(lw.fold_name("Firat"), lw.name_index([a, b]))
+        a = ent / "Selin Acar.md"
+        b = ent / "Selin Uysal.md"
+        a.write_text('---\naliases: ["Selin"]\n---\n# Selin Acar\n', encoding="utf-8")
+        b.write_text('---\naliases: ["Selin"]\n---\n# Selin Uysal\n', encoding="utf-8")
+        self.assertNotIn(lw.fold_name("Selin"), lw.name_index([a, b]))
 
     def test_prefix_reaches_a_longer_page_name_only_at_a_word_boundary(self):
-        ege = self.page("Ege Çamlıbel.md", "# Ege Çamlıbel\n")
-        egemen = self.page("Egemen Holding.md", "# Egemen Holding\n")
+        can = self.page("Can Çelikkol.md", "# Can Çelikkol\n")
+        canan = self.page("Canan Holding.md", "# Canan Holding\n")
         cut = self.page("library_kitap-harvard-business-review-press_20260908-kitap-harvard-busine.md",
                         "# Playing to Win\n")
-        kebab = self.page("bordro-tabanli-banka-kanali.md", "# Bordro tabanli banka kanali\n")
+        kebab = self.page("bahce-tabanli-sulama-kanali.md", "# Bahce tabanli sulama kanali\n")
         other = self.page("library_makale-mckinsey_19731201-makale-mckinsey.md", "# McKinsey\n")
-        pre = lw.prefix_index([ege, egemen, cut, kebab, other])
-        self.assertEqual(pre[lw.fold_name("Ege")], ege)
+        pre = lw.prefix_index([can, canan, cut, kebab, other])
+        self.assertEqual(pre[lw.fold_name("Can")], can)
         # The cut summary stem: the citation stops where the slug was truncated.
         self.assertEqual(pre[lw.fold_name("library_kitap-harvard-business-review-press")], cut)
         # A hyphen is not a boundary, or the first word of every kebab slug
-        # would claim its page ("Bordro" is not "bordro-tabanli-banka-kanali").
-        self.assertNotIn(lw.fold_name("Bordro"), pre)
+        # would claim its page ("Bahce" is not "bahce-tabanli-sulama-kanali").
+        self.assertNotIn(lw.fold_name("Bahce"), pre)
         # A path part two summaries share claims neither.
         self.assertNotIn(lw.fold_name("library"), pre)
-        # Only whole words: "Egem" stops inside a name.
-        self.assertIsNone(pre.get(lw.fold_name("Egem")))
+        # Only whole words: "Cana" stops inside a name.
+        self.assertIsNone(pre.get(lw.fold_name("Cana")))
 
     def test_prefix_two_pages_share_resolves_to_neither(self):
-        a = self.page("Ege Çamlıbel.md", "# Ege Çamlıbel\n")
-        b = self.page("Ege Demir.md", "# Ege Demir\n")
-        self.assertNotIn(lw.fold_name("Ege"), lw.prefix_index([a, b]))
+        a = self.page("Can Çelikkol.md", "# Can Çelikkol\n")
+        b = self.page("Can Demir.md", "# Can Demir\n")
+        self.assertNotIn(lw.fold_name("Can"), lw.prefix_index([a, b]))
 
     def test_remapped_link_keeps_its_wording(self):
         target = self.page("Acme Robotics.md", "# Acme Robotics\n")

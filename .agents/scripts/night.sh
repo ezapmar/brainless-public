@@ -55,6 +55,7 @@ step links    "${BRAINLESS_SEARCH_PY:-python3}" tools/link_suggest.py
 # that only it asks for (the compiler links every first mention; see
 # lint_wiki.lonely_targets). Shared missing targets stay as entity candidates.
 step lint     python3 tools/lint_wiki.py --fix-links --prune-lonely concepts
+step vault-graph python3 tools/vault_graph.py
 step attention python3 tools/attention_audit.py
 
 if [ "$(date +%u)" = 7 ]; then                             # Sunday

@@ -247,6 +247,51 @@ class IterSources(PrivacyFixture):
         got = [p.relative_to(self.root).as_posix() for p in compiler.iter_sources(roots)]
         self.assertEqual(sorted(got), ["vault/Library/Sub/c.md", "vault/Library/top.md"])
 
+    def test_hidden_dot_directories_and_files_are_skipped(self):
+        self.write("vault/Inbox/Spiky/.state/retired-notes/old.md")
+        self.write("vault/Inbox/Spiky/.vscode/note.md")
+        self.write("vault/Inbox/Spiky/.hidden.md")
+        live = self.write("vault/Inbox/Spiky/live.md")
+        inbox = self.root / "vault/Inbox"
+        got = [p.relative_to(self.root).as_posix() for p in compiler.iter_sources([inbox])]
+        self.assertEqual(got, ["vault/Inbox/Spiky/live.md"])
+        # A dot-segment above the root (e.g. a hidden parent workspace) must not be rejected.
+        self.assertFalse(
+            compiler._is_hidden_path(
+                Path("/tmp/.hidden-parent/vault/Inbox/Spiky/live.md"),
+                Path("/tmp/.hidden-parent/vault/Inbox"),
+            )
+        )
+        self.assertTrue(compiler._is_hidden_path(self.root / "vault/Inbox/Spiky/.state/retired-notes/old.md", inbox))
+        with patch.object(compiler, "ENTITY_SOURCE_ROOTS", [self.root / "vault/Inbox/Spiky"]), \
+             patch.object(compiler, "_ENTITY_CORPUS", None):
+            corpus_paths = [p for p, _ in compiler._entity_corpus()]
+        self.assertEqual(corpus_paths, [live])
+        with patch.object(compiler, "VAULT", self.root / "vault"):
+            res = compiler.compile_single_file("Inbox/Spiky/.state/retired-notes/old.md", dry=True)
+        self.assertEqual(res["status"], "skipped")
+        self.assertEqual(res["reason"], "hidden")
+
+    def test_spiky_per_call_analiz_subtree_is_excluded_while_rollups_stay(self):
+        self.write(nfd("vault/Inbox/Spiky/Analiz/Görüşmeler/call-nfd.md"))
+        self.write(nfc("vault/Inbox/Spiky/Analiz/Görüşmeler/call-nfc.md"))
+        rollup = self.write("vault/Inbox/Spiky/Analiz/Yönetici Özeti.md")
+        topic = self.write("vault/Inbox/Spiky/Konular/pricing.md")
+        inbox = self.root / "vault/Inbox"
+        got = sorted(p.relative_to(self.root).as_posix() for p in compiler.iter_sources([inbox]))
+        self.assertEqual(
+            got,
+            sorted([rollup.relative_to(self.root).as_posix(), topic.relative_to(self.root).as_posix()]),
+        )
+        with patch.object(compiler, "ENTITY_SOURCE_ROOTS", [self.root / "vault/Inbox/Spiky"]), \
+             patch.object(compiler, "_ENTITY_CORPUS", None):
+            corpus_paths = sorted(p for p, _ in compiler._entity_corpus())
+        self.assertEqual(corpus_paths, sorted([rollup, topic]))
+        with patch.object(compiler, "VAULT", self.root / "vault"):
+            res = compiler.compile_single_file(nfc("Inbox/Spiky/Analiz/Görüşmeler/call-nfc.md"), dry=True)
+        self.assertEqual(res["status"], "skipped")
+        self.assertEqual(res["reason"], "excluded")
+
 
 class Rooted(unittest.TestCase):
     """A throwaway vault root, so cloud_gate's path matching is exercised for real.

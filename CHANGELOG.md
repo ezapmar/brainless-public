@@ -3,10 +3,21 @@
 All notable changes to the public brainless engine. Dates are the day of the public
 push. The private vault this is exported from has its own history.
 
+## 0.12.0 (2026-11-24)
+
+Full-vault graph checks, on-demand single-file ingest, outcome-weighted synthesis, and a lighter companion repo.
+
+- **Obsidian-visible graph audit (`tools/vault_graph.py`).** `lint_wiki.py` only sees `.wiki/`, which Obsidian hides. `vault_graph.py` audits the visible Markdown graph every night for orphans, disconnected islands, tracked files linking into gitignored paths, and unexpected `Work` and `Personal` edges outside `_Agent-Context/PROFILE.md`'s `cross_domain_allow`. `health_check.py` surfaces the result automatically.
+- **Immediate single-source ingest (`/ingest` and `compile_resources.py --file`).** Compile one new note into `.wiki/` right away instead of waiting for 23:00, with the same privacy rules, `compile-local` lane, and 15-page edit cap. Brings the slash command set to eight.
+- **Cleaner compiler boundaries.** `compile_resources.py` now skips hidden dot-folders (`.state/`, `.vscode/`) and per-call transcript dumps across the walk, entity corpus, and `--file`, while keeping rolled-up synthesis hubs.
+- **Outcomes weighted above untested plans.** `_Templates/Project.md` adds `## Agent Role` and `## Outcomes & Feedback`, and the summary, concept, and project prompts keep observed post-ship reactions separate from plans.
+- **Attention gaps in the morning briefing.** `tools/morning_briefing.py` surfaces quiet active projects and unlisted active folders from fresh `_Agent-Context/ATTENTION.md` (up to five each, silent when clean).
+- **Hygiene and fixes.** Binary-safe UTF-8 handling in `tools/privacy_scan.py`, `markitdown 0.1.9`, `.epub` in `.gitignore`, burst-day cadence fix in `run_log` tests, and remaining stale "Buzz" locale labels switched to "Telegram".
+- **Simpler docs and [`brainless-lite`](https://github.com/ezapmar/brainless-lite).** Tightened README and site copy, and split out a zero-daemon, agent-first Lite edition for anyone who wants the thinking loop without Telegram, `launchd`, or a local model server.
+
 ## 0.11.0 (2026-11-24)
 
-Three-layer privacy, a morning briefing that does not need an open desktop app, weekly
-encrypted backups, and sharper capture and review loops.
+Three-layer privacy, a model-free morning briefing, weekly encrypted backups, and sharper capture and review loops.
 
 - **Three-layer privacy before any cloud call.** `tools/redact.py` masks e-mail, phone,
   IBAN, national IDs and key shapes in cloud-bound prompts. `tools/cloud_gate.py` reads
@@ -52,8 +63,7 @@ encrypted backups, and sharper capture and review loops.
 
 ## 0.10.0 (2026-11-16)
 
-One Mac. The two-machine setup, the chat relay and the installable layer are gone, and
-what is left is the system I actually run.
+One Mac. The two-machine setup, the chat relay and the installable layer are gone, and what is left is the system I actually run.
 
 - **Four launchd jobs instead of a scheduler per platform.** `capture` every two minutes,
   `hourly`, `night` at 23:00 (run on wake if the Mac slept) and `llm`, the local model

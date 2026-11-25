@@ -13,10 +13,10 @@ iPhone / iPad ◀─iCloud Drive─▶ [Mac] the vault (Obsidian)
 [Mac] hourly    cron_wrapper.sh  CRM snapshot, Spiky mail, Gmail "Brain" label intake,
                                  Google Tasks, meeting brief, morning set once a day
                                  after 07:00 (including model-free morning briefing), health check
-[Mac] 23:00     night.sh         ingest → nightly → close-out → compile → index → links
-                                 → lint (orphans, broken, dead-ends) → attention audit
-                                 → Sunday weeklies (dreaming, prune, research, kill review,
-                                 weekly archive) → health → one commit + push
+[Mac] 23:00     night.sh         ingest -> nightly -> close-out -> compile -> index -> links
+                                 -> lint (orphans, broken, dead-ends) -> vault graph -> attention audit
+                                 -> Sunday weeklies (dreaming, prune, research, kill review,
+                                 weekly archive) -> health -> one commit + push
 [Mac] always    llama-server     Gemma 4 12B on 127.0.0.1:8080, the local lanes
 GitHub (private)                 off-site copy only, one push a night
 ```
@@ -57,7 +57,8 @@ with `requirements-core.txt`, `requirements-search.txt` and
   hourly job after 07:00 on weekdays (catches up on wake) and writes the top block
   of `Daily Briefings/daily-briefing-YYYY-MM-DD.md` from files other jobs already
   wrote (health, breached kill criteria, calendar, open promises, CRM flags, wiki
-  changes, resurface, drift, top actions). No model, no open desktop app required.
+  changes, attention gaps from fresh `ATTENTION.md`, resurface, drift, top actions).
+  No model, no open desktop app required.
 - **Controlled Gmail intake** (`.agents/scripts/gmail_brain_intake.py`): polls a
   dedicated Gmail label (`Brain` by default) over read-only IMAP. Records processed
   Message-IDs in `.agents/state/gmail_intake_state.json` only after writing
@@ -68,9 +69,18 @@ with `requirements-core.txt`, `requirements-search.txt` and
   writes `_Agent-Context/ATTENTION.md`, comparing stated active projects in
   `PROJECTS-ACTIVE.md` against actual 7-day file activity while excluding all
   protected homes and private segments.
-- **Lint with dead-end detection** (`tools/lint_wiki.py`): checks broken links,
-  orphans, dead-ends (inbound links, zero outbound links), stale summaries,
-  frontmatter and model chatter every night.
+- **Wiki lint and visible vault graph** (`tools/lint_wiki.py`, `tools/vault_graph.py`):
+  `lint_wiki.py` checks `.wiki/` for broken links, orphans, dead-ends, stale summaries,
+  and frontmatter. `vault_graph.py` audits the Obsidian-visible Markdown tree (read-only
+  over human areas) for orphans, disconnected islands, tracked-to-gitignored link leaks
+  (red alert), and unexpected `Work` and `Personal` edges outside `cross_domain_allow`
+  in `_Agent-Context/PROFILE.md`, writing `.wiki/_vault-graph-report.md` for
+  `health_check.py`.
+- **On-demand ingest and outcome weighting** (`tools/compile_resources.py --file`):
+  compiles a single source immediately with the same privacy lane, hidden-folder and
+  excluded-subtree filters, and 15-page cap. Summary, concept and project prompts
+  weight observed post-ship outcomes (`## Outcomes & Feedback` in `_Templates/Project.md`)
+  above untested plans.
 
 ## Telegram
 
@@ -147,9 +157,9 @@ summary, the path and the body stay on the Mac.
 - **Agents** (`.claude/agents/`): `scout.md` (read-only explorer for `Inbox/`,
   `raw/` and `.wiki/`) and `librarian.md` (deep `.wiki/` curator enforcing
   `cloud_exclude`, conflict callouts and a 15-page edit cap per source).
-- **Slash commands** (`.wiki/_commands/` + `.claude/commands/`): `/decide`,
-  `/research`, `/weekly`, `/context`, `/lint`, `/reply` (Thread to Reply into
-  `Writings/Drafts/`), and `/trace` (end-to-end project traceability audit).
+- **Slash commands** (`.wiki/_commands/` + `.claude/commands/`): `/ingest`,
+  `/decide`, `/research`, `/weekly`, `/context`, `/lint`, `/reply` (Thread to Reply
+  into `Writings/Drafts/`), and `/trace` (end-to-end project traceability audit).
 
 ## Mobile
 

@@ -15,6 +15,7 @@ from the morning set (cron_wrapper.sh), where a sleeping Mac catches up on wake.
              19/11/2026 and the oldest fifteen were all from August
   crm        CRM.md flags (first MAX_FLAGS) and the last 24 hours of changes
   wiki       WIKI-CHANGES.md when under 36 hours old
+  attention  ATTENTION.md quiet stated priorities and unlisted active folders when under 36 hours old
   revisit    RESURFACE.md when under 7 days old
   drift      CONTEXT-DRIFT.md when it reports any
   actions    at most five, by rule: engine red, kill criteria due soon, flagged
@@ -51,7 +52,9 @@ PROMISE_DAYS = 2
 MAX_PROMISES = 10
 MAX_FLAGGED = 6
 MAX_FLAGS = 8
+MAX_ATTENTION = 5
 WIKI_HOURS = 36
+ATTENTION_HOURS = 36
 RESURFACE_DAYS = 7
 _DATE = re.compile(r"(\d{4}-\d{2}-\d{2})(?:[ T](\d{2}:\d{2}))?")
 
@@ -178,6 +181,36 @@ def wiki(today: datetime) -> tuple[list[str], str]:
     return out + section(text, t("concept_review.waiting_heading")), ""
 
 
+def attention(today: datetime) -> list[str]:
+    """Quiet stated priorities and unlisted active folders from ATTENTION.md."""
+    text = read("ATTENTION.md")
+    when = stamp(text)
+    if not text or not when or today - when > timedelta(hours=ATTENTION_HOURS):
+        return []
+    quiet = [
+        ln for ln in section(text, "## Attention Gaps: Stated Priorities With Zero Touches")
+        if ln.startswith("- ") and not ln.startswith("- Every stated active project") and ln.strip().lower() not in ("- none.", "- none")
+    ]
+    unstated = [
+        ln for ln in section(text, "## Inferred Activity Outside Stated Projects")
+        if ln.startswith("- ") and ln.strip().lower() not in ("- none.", "- none")
+    ]
+    if not quiet and not unstated:
+        return []
+    out: list[str] = []
+    if quiet:
+        out += [t("morning_briefing.attention_quiet"), *quiet[:MAX_ATTENTION]]
+        if len(quiet) > MAX_ATTENTION:
+            out.append(t("morning_briefing.more", n=len(quiet) - MAX_ATTENTION, file="_Agent-Context/ATTENTION.md"))
+    if unstated:
+        if out:
+            out.append("")
+        out += [t("morning_briefing.attention_unstated"), *unstated[:MAX_ATTENTION]]
+        if len(unstated) > MAX_ATTENTION:
+            out.append(t("morning_briefing.more", n=len(unstated) - MAX_ATTENTION, file="_Agent-Context/ATTENTION.md"))
+    return out
+
+
 def revisit(today: datetime) -> list[str]:
     text = read("RESURFACE.md")
     when = stamp(text)
@@ -236,6 +269,7 @@ def build(now: datetime | None = None) -> str:
              (t("morning_briefing.h_promises", days=PROMISE_DAYS), p),
              (t("morning_briefing.h_crm"), crm_lines),
              (t("morning_briefing.h_wiki"), wiki_lines),
+             (t("morning_briefing.h_attention"), attention(now)),
              (t("morning_briefing.h_revisit"), revisit(now)),
              (t("morning_briefing.h_research"), [research(now)] if research(now) else []),
              (t("morning_briefing.h_drift"), drift()),

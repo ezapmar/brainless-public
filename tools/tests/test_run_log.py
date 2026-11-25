@@ -153,6 +153,16 @@ class HealthFindings(unittest.TestCase):
         roll = [self.day(n, "wiki_prune") for n in (3, 10)]
         self.assertEqual(self.texts(roll), [])
 
+    def test_a_burst_day_does_not_make_a_weekly_job_look_daily(self):
+        # 200 setup runs on one day followed by weekly runs must still keep a
+        # multi-day cadence rather than flagging as silent after 2.9 days.
+        roll = [
+            self.day(10, "vault_archive", runs=200),
+            self.day(6, "vault_archive", runs=1),
+            self.day(3, "vault_archive", runs=1),
+        ]
+        self.assertEqual(self.texts(roll), [])
+
 
 if __name__ == "__main__":
     unittest.main()

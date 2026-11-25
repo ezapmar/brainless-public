@@ -147,11 +147,11 @@ class PruneVault(unittest.TestCase):
         return self.write(f"Inbox/CRM/{name}.md", body)
 
     def test_crm_ledger_moves_only_with_a_summary_and_two_quiet_weeks(self):
-        old = self.crm_ledger("Akbank", days_ago(60))
-        self.crm_ledger("Agonix", days_ago(41))          # no summary: unread
+        old = self.crm_ledger("AcmeBank", days_ago(60))
+        self.crm_ledger("BetaCo", days_ago(41))          # no summary: unread
         self.crm_ledger("Fresh", days_ago(3))            # too young
-        self.write(".wiki/summaries/inbox_crm_akbank.md",
-                   fm(lang="en", summary_en="x", source="Inbox/CRM/Akbank.md",
+        self.write(".wiki/summaries/inbox_crm_acmebank.md",
+                   fm(lang="en", summary_en="x", source="Inbox/CRM/AcmeBank.md",
                       compiled_at=f"{days_ago(59)}T00:00:00") + "s\n")
         self.write(".wiki/summaries/inbox_crm_fresh.md",
                    fm(lang="en", summary_en="x", source="Inbox/CRM/Fresh.md",
@@ -165,21 +165,21 @@ class PruneVault(unittest.TestCase):
     def test_crm_age_comes_from_the_last_event_not_the_mtime(self):
         # A git checkout rewrites mtimes; a ledger whose events are old must
         # still be seen as old, or nothing ever leaves Inbox after a clone.
-        p = self.crm_ledger("Mustbedam", days_ago(50))
+        p = self.crm_ledger("GammaCorp", days_ago(50))
         import os as _os
         now_ts = datetime.now().timestamp()
         _os.utime(p, (now_ts, now_ts))
-        self.write(".wiki/summaries/inbox_crm_mustbedam.md",
-                   fm(lang="en", summary_en="x", source="Inbox/CRM/Mustbedam.md",
+        self.write(".wiki/summaries/inbox_crm_gammacorp.md",
+                   fm(lang="en", summary_en="x", source="Inbox/CRM/GammaCorp.md",
                       compiled_at=f"{days_ago(49)}T00:00:00") + "s\n")
         self.assertEqual([m.src.name for m in self.wp.candidates(self.now, ["crm"])],
-                         ["Mustbedam.md"])
+                         ["GammaCorp.md"])
 
     def test_crm_move_retargets_the_summary_and_keeps_the_ledger_readable(self):
         d = days_ago(45)
-        old = self.crm_ledger("Colendi", d)
-        s = self.write(".wiki/summaries/inbox_crm_colendi.md",
-                       fm(lang="en", summary_en="x", source="Inbox/CRM/Colendi.md",
+        old = self.crm_ledger("Northbank", d)
+        s = self.write(".wiki/summaries/inbox_crm_northbank.md",
+                       fm(lang="en", summary_en="x", source="Inbox/CRM/Northbank.md",
                           compiled_at=f"{days_ago(44)}T00:00:00") + "s\n")
         moves = self.wp.candidates(self.now, ["crm"])
         rows, skipped = self.wp.apply(moves, self.now)
@@ -188,7 +188,7 @@ class PruneVault(unittest.TestCase):
         self.assertTrue(dst.exists())
         self.assertFalse(old.exists())
         self.assertIn("yeni anlaşma", dst.read_text(), "content is kept, nothing deleted")
-        self.assertIn(f"source: Archive/CRM/{d[:7]}/Colendi.md", s.read_text())
+        self.assertIn(f"source: Archive/CRM/{d[:7]}/Northbank.md", s.read_text())
         # Drained: the ledger is outside Inbox, so neither the stale count nor
         # the pending line sees it any more.
         self.assertNotIn(self.wp.INBOX, dst.parents)

@@ -20,6 +20,12 @@ retention:
 <!-- Why this project, at this moment? What's the forcing function? -->
 
 
+## Agent Role
+<!-- Optional project-local contract for AI sessions. Define what "done" looks like, the agent's standing role here, domain red lines, and how outputs are verified. For heavy multi-session projects, keep a concise CLAUDE.md in the project folder. -->
+- **Role:** 
+- **Red lines:** 
+- **Verification:** 
+
 ## Key Decisions
 <!-- Link to Decisions/ notes -->
 - 
@@ -38,6 +44,12 @@ retention:
      "If on <date> <condition> holds, then <consequence>" (stop, re-scope, escalate, archive).
      Tick the box when the criterion is resolved; a past date with an open box is a breach and turns red in the briefing. -->
 - [ ] 
+
+## Outcomes & Feedback
+<!-- Post-ship real-world reactions (customer replies, legal/editorial edits, auditor findings, launch results).
+     One dated line each: - YYYY-MM-DD | deliverable | observed reaction or outcome | lesson
+     Weighted above untested plans when the compiler updates .wiki/projects/ and .wiki/concepts/. -->
+- 
 
 ## Related Ideas
 - [[]]

@@ -74,6 +74,45 @@ class Morning(unittest.TestCase):
         self.assertNotIn("> footer", block)
         self.assertTrue(block.startswith(mb.START) and block.endswith(mb.END))
 
+    def test_attention_gaps_and_unlisted_folders_appear_when_fresh(self):
+        unlisted = "\n".join(f"- `Work/Extra {i}`: {i + 1} edited files (not listed in active projects)" for i in range(6))
+        self.write(
+            "ATTENTION.md",
+            "# Attention Audit (Stated vs Inferred)\n\n"
+            "> Generated automatically by `tools/attention_audit.py`. Window: last 7 days.\n"
+            "> status_checked: 2026-11-19 06:30\n\n"
+            f"## Inferred Activity Outside Stated Projects (6)\n{unlisted}\n\n"
+            "## Attention Gaps: Stated Priorities With Zero Touches (1)\n"
+            "- [[Second Brain System]] [Personal]: 0 touches in 7 days (last log 2026-10-08)\n",
+        )
+        block = mb.build(NOW)
+        self.assertIn(mb.t("morning_briefing.h_attention"), block)
+        self.assertIn(mb.t("morning_briefing.attention_quiet"), block)
+        self.assertIn("[[Second Brain System]]", block)
+        self.assertIn(mb.t("morning_briefing.attention_unstated"), block)
+        self.assertIn("Work/Extra 0", block)
+        self.assertNotIn("Work/Extra 5", block)
+        self.assertIn("_Agent-Context/ATTENTION.md", block)
+
+    def test_attention_section_is_silent_when_clean_or_stale(self):
+        self.write(
+            "ATTENTION.md",
+            "# Attention Audit (Stated vs Inferred)\n\n"
+            "> status_checked: 2026-11-19 06:30\n\n"
+            "## Inferred Activity Outside Stated Projects (0)\n- None.\n\n"
+            "## Attention Gaps: Stated Priorities With Zero Touches (0)\n"
+            "- Every stated active project saw activity in this window.\n",
+        )
+        self.assertEqual(mb.attention(NOW), [])
+        self.write(
+            "ATTENTION.md",
+            "# Attention Audit (Stated vs Inferred)\n\n"
+            "> status_checked: 2026-11-16 06:30\n\n"
+            "## Attention Gaps: Stated Priorities With Zero Touches (1)\n"
+            "- [[Old]] [Work]: 0 touches in 7 days\n",
+        )
+        self.assertEqual(mb.attention(NOW), [])
+
 
 if __name__ == "__main__":
     unittest.main()

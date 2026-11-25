@@ -129,6 +129,15 @@ class Gate(unittest.TestCase):
         self.assertIn(".wiki/new.md", ps.run_gate(unstage=False)["held"])
         self.assertEqual(self.staged(), {".wiki/new.md"})
 
+    def test_binary_staged_file_does_not_crash_gate(self):
+        # Raw PNG magic bytes (0x89...) used to raise UnicodeDecodeError under git diff --text
+        (self.repo / "image.png").write_bytes(b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\xff\xfe\xfd")
+        (self.repo / ".wiki" / "clean.md").write_text("temiz sayfa\n", encoding="utf-8")
+        self.git("add", "-A")
+        res = ps.run_gate()
+        self.assertEqual(res["held"], {})
+        self.assertEqual(self.staged(), {"image.png", ".wiki/clean.md"})
+
 
 class HealthRow(unittest.TestCase):
     def setUp(self):
